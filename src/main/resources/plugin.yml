@@ -1,0 +1,15 @@
+name: ParkourGauntlet
+version: '${version}'
+main: konqasasas.gauntlet.ParkourGauntletPlugin
+api-version: '26.3'
+author: konqasasas
+description: Parkour Gauntlet course creation tools.
+commands:
+  gauntlet:
+    description: Receive course creation tools
+    usage: /gauntlet kit
+    permission: gauntlet.admin
+permissions:
+  gauntlet.admin:
+    description: Use course creation tools
+    default: op

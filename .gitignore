@@ -1,0 +1,14 @@
+/.gradle/
+/build/
+.idea/
+*.iml
+.vscode/
+/run/
+*.log
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.download
+*.tmp
+.env
+.env.*
+!.env.example
