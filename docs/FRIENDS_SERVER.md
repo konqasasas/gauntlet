@@ -13,15 +13,8 @@
 
 ## Windowsファイアウォール
 
-`C:\mc\gauntlet\enable-friends-firewall.cmd` をダブルクリックし、Windowsの管理者確認を許可してください。
-Java 25のサーバー実行ファイルに対し、受信TCP `25575` だけの専用許可ルールを追加します。既存のJava許可ルールは変更しません。
-現時点では既存のJava 25許可ルールはPublicプロファイルに存在しますが、専用ルールの追加は未実行です。
-
-専用ルールを戻す場合:
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File C:\mc\gauntlet\enable-friends-firewall.ps1 -Remove
-```
+外から接続できない場合は、Windows DefenderファイアウォールでサーバーのJava実行ファイルに対する受信TCP `25575` の許可を確認します。
+ファイアウォール設定用の補助スクリプトはプラグインに不要なため削除しました。
 
 ## ルーター
 
