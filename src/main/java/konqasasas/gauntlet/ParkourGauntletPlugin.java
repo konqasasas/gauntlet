@@ -11,6 +11,8 @@ import org.bukkit.command.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.block.*;
+import org.bukkit.event.entity.EntityCombustByBlockEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.inventory.*;
@@ -23,7 +25,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private ToolItems tools;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
-    private final Set<UUID> adventureLavaPlayers=new HashSet<>();
+    private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
 
     @Override public void onEnable() {
         try {
@@ -42,7 +44,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     @Override public void onDisable() {
         if(state!=null) try { cleanup(state.allBlocks()); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }
-        lastUse.clear(); pendingRefills.clear(); adventureLavaPlayers.clear();
+        lastUse.clear(); pendingRefills.clear(); lavaExtinguish.clear();
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
         if(!(sender instanceof Player player)) { sender.sendMessage("ゲーム内で /gauntlet kit を実行してください。"); return true; }
@@ -152,15 +154,27 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         for(Player player:Bukkit.getOnlinePlayers()) extinguishAfterLava(player);
     }
     private void extinguishAfterLava(Player player) {
-        UUID id=player.getUniqueId();
-        if(player.getGameMode()!=GameMode.ADVENTURE || player.isDead()) {
-            adventureLavaPlayers.remove(id); return;
-        }
-        if(player.isInLava()) {
-            adventureLavaPlayers.add(id);
-        } else if(adventureLavaPlayers.remove(id) && player.getFireTicks()>0) {
+        boolean eligible=player.getGameMode()==GameMode.ADVENTURE && !player.isDead();
+        if(lavaExtinguish.shouldExtinguish(player.getUniqueId(),eligible,eligible&&player.isInLava(),Bukkit.getCurrentTick()) && player.getFireTicks()>0) {
             player.setFireTicks(0);
         }
+    }
+    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    public void combustedByBlock(EntityCombustByBlockEvent event) {
+        if(!(event.getEntity() instanceof Player player) || player.getGameMode()!=GameMode.ADVENTURE) return;
+        Block source=event.getCombuster();
+        if((source!=null && source.getType()==Material.LAVA) || (source==null && player.isInLava())) {
+            lavaExtinguish.contact(player.getUniqueId());
+        } else if(source!=null) {
+            // A subsequent fire block is a new source, not residual lava fire.
+            lavaExtinguish.forget(player.getUniqueId());
+        }
+    }
+    @EventHandler(priority=EventPriority.MONITOR)
+    public void lavaContactDamage(EntityDamageEvent event) {
+        if(!(event.getEntity() instanceof Player player) || player.getGameMode()!=GameMode.ADVENTURE) return;
+        if(event.getCause()==EntityDamageEvent.DamageCause.LAVA) lavaExtinguish.contact(player.getUniqueId());
+        else if(event.getCause()==EntityDamageEvent.DamageCause.FIRE) lavaExtinguish.forget(player.getUniqueId());
     }
 
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
@@ -196,7 +210,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         });
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
-        adventureLavaPlayers.remove(event.getPlayer().getUniqueId());
+        lavaExtinguish.forget(event.getPlayer().getUniqueId());
         lastUse.remove(event.getPlayer().getUniqueId());
         try { cleanup(state.blocks(event.getPlayer().getUniqueId())); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Logout cleanup incomplete; journal retained",e); }

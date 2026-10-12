@@ -134,7 +134,7 @@ public class ServerChecks {
             for(SimPlayer p:List.of(a,b)) {
                 invoke(plugin,"cleanup",blocks(state,p.id)); invoke(state,"removeCheckpoint",p.id);
                 clearUse(plugin,p.id); ((Set<?>)field(plugin,"pendingRefills")).remove(p.id);
-                ((Set<?>)field(plugin,"adventureLavaPlayers")).remove(p.id);
+                invoke(field(plugin,"lavaExtinguish"),"forget",p.id);
             }
             for(BlockState snapshot:original) snapshot.update(true,false);
             for(Block probe:probes) require(probe.getType().isAir(),"Probe cleanup failed");
