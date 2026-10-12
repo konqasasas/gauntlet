@@ -3,6 +3,7 @@ package konqasasas.gauntlet;
 import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
+import com.destroystokyo.paper.event.server.ServerTickEndEvent;
 import net.kyori.adventure.text.Component;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -22,6 +23,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private ToolItems tools;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
+    private final Set<UUID> adventureLavaPlayers=new HashSet<>();
 
     @Override public void onEnable() {
         try {
@@ -40,7 +42,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     @Override public void onDisable() {
         if(state!=null) try { cleanup(state.allBlocks()); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }
-        lastUse.clear(); pendingRefills.clear();
+        lastUse.clear(); pendingRefills.clear(); adventureLavaPlayers.clear();
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
         if(!(sender instanceof Player player)) { sender.sendMessage("ゲーム内で /gauntlet kit を実行してください。"); return true; }
@@ -143,6 +145,24 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         player.setSprinting(false); player.setVelocity(new Vector()); player.setFallDistance(0);
     }
 
+    @EventHandler
+    public void tickEnded(ServerTickEndEvent event) {
+        // Use the contact state after vanilla entity ticking, not the previous
+        // tick's state seen by the scheduler or a movement event.
+        for(Player player:Bukkit.getOnlinePlayers()) extinguishAfterLava(player);
+    }
+    private void extinguishAfterLava(Player player) {
+        UUID id=player.getUniqueId();
+        if(player.getGameMode()!=GameMode.ADVENTURE || player.isDead()) {
+            adventureLavaPlayers.remove(id); return;
+        }
+        if(player.isInLava()) {
+            adventureLavaPlayers.add(id);
+        } else if(adventureLavaPlayers.remove(id) && player.getFireTicks()>0) {
+            player.setFireTicks(0);
+        }
+    }
+
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void place(BlockPlaceEvent event) {
         if(tools.kind(event.getItemInHand())!=ToolItems.Kind.SCAFFOLD) return;
@@ -176,6 +196,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         });
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
+        adventureLavaPlayers.remove(event.getPlayer().getUniqueId());
         lastUse.remove(event.getPlayer().getUniqueId());
         try { cleanup(state.blocks(event.getPlayer().getUniqueId())); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Logout cleanup incomplete; journal retained",e); }

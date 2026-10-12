@@ -121,11 +121,20 @@ public class ServerChecks {
             invoke(plugin,"place",new BlockPlaceEvent(own,before,floor,a.inventory.getItem(1),a.player,true,EquipmentSlot.HAND));
             own.setType(Material.GOLD_BLOCK,false); clearUse(plugin,a.id); click(plugin,a,cp,EquipmentSlot.HAND);
             require(own.getType()==Material.GOLD_BLOCK && blocks(state,a.id).isEmpty(),"Cleanup overwrote a later builder edit");
+            a.mode=GameMode.ADVENTURE; a.fireTicks=100; a.inLava=false;
+            invoke(plugin,"extinguishAfterLava",a.player); require(a.fireTicks==100,"Ordinary fire was extinguished");
+            a.inLava=true; invoke(plugin,"extinguishAfterLava",a.player); require(a.fireTicks==100,"Fire inside lava was cleared");
+            b.mode=GameMode.ADVENTURE; b.fireTicks=100; b.inLava=true; invoke(plugin,"extinguishAfterLava",b.player);
+            a.inLava=false; invoke(plugin,"extinguishAfterLava",a.player);
+            require(a.fireTicks==0 && b.fireTicks==100,"Lava exit did not extinguish only the exiting player");
+            a.mode=GameMode.SURVIVAL; a.fireTicks=100; a.inLava=true; invoke(plugin,"extinguishAfterLava",a.player);
+            a.inLava=false; invoke(plugin,"extinguishAfterLava",a.player); require(a.fireTicks==100,"Survival lava behavior changed");
             logger.info("INTEGRATION_PASS actual Paper items + wildcard Adventure predicate (5 materials), real collision support, simulated player drop/click/place events, CP view, infinite 64, mode/offhand, rejected TP, owner isolation, later edit preservation; no Minecraft-client gameplay tested");
         } finally {
             for(SimPlayer p:List.of(a,b)) {
                 invoke(plugin,"cleanup",blocks(state,p.id)); invoke(state,"removeCheckpoint",p.id);
                 clearUse(plugin,p.id); ((Set<?>)field(plugin,"pendingRefills")).remove(p.id);
+                ((Set<?>)field(plugin,"adventureLavaPlayers")).remove(p.id);
             }
             for(BlockState snapshot:original) snapshot.update(true,false);
             for(Block probe:probes) require(probe.getType().isAir(),"Probe cleanup failed");
@@ -137,6 +146,7 @@ public class ServerChecks {
         final Inventory backing=Bukkit.createInventory(null,54);
         Location location; int selected; boolean ground=true,teleportAllowed=true,flying,sprinting;
         float fall; Vector velocity=new Vector(); GameMode mode=GameMode.ADVENTURE;
+        int fireTicks; boolean inLava;
         SimPlayer(Location location) {
             this.location=location;
             inventory=(PlayerInventory)Proxy.newProxyInstance(PlayerInventory.class.getClassLoader(),new Class[]{PlayerInventory.class},(proxy,m,args) -> {
@@ -161,6 +171,10 @@ public class ServerChecks {
                     case "getLocation" -> this.location.clone();
                     case "getWorld" -> this.location.getWorld();
                     case "isOnGround" -> ground;
+                    case "isDead" -> false;
+                    case "isInLava" -> inLava;
+                    case "getFireTicks" -> fireTicks;
+                    case "setFireTicks" -> { fireTicks=(int)args[0]; yield null; }
                     case "getBoundingBox" -> new BoundingBox(this.location.getX()-.3,this.location.getY(),this.location.getZ()-.3,this.location.getX()+.3,this.location.getY()+1.8,this.location.getZ()+.3);
                     case "getGameMode" -> mode;
                     case "setGameMode" -> { mode=(GameMode)args[0]; yield null; }
