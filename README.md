@@ -107,6 +107,24 @@ JAR: `build\libs\parkour-gauntlet-0.1.0.jar`
 
 サーバー: `run\paper-26.3`、配置先: `run\paper-26.3\plugins\parkour-gauntlet.jar`
 
+### HotSwap（再起動なしでコード変更を反映）
+
+開発中は JetBrains Runtime（JBR）でサーバーを起動すると、変更したクラスを稼働中のサーバーへ直接反映できます。プラグインの unload/load は行いません。
+
+```powershell
+# 初回のみ: JBR 25 を run\jbr-25 に取得（SHA-512検証あり）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\prepare-jbr.ps1
+# いつも通り配置してから HotSwap モードで起動
+powershell -NoProfile -ExecutionPolicy Bypass -File .\prepare-server.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\start-server.ps1 -Hotswap
+# コードを変更したら別ウィンドウで（コンパイル→変更クラスだけ反映）
+powershell -NoProfile -ExecutionPolicy Bypass -File .\hotswap.ps1
+```
+
+- メソッド本体の変更に加え、フィールド・メソッドの追加削除、新しいクラスの追加にも対応します。
+- `onEnable` で一度だけ行う処理（コマンド・リスナー登録、config 読み込み、スケジュール済みタスク）は再実行されません。`plugin.yml` やリソースの変更も対象外です。これらは `prepare-server.ps1` で配置し直して再起動してください。
+- 反映状況は `build\hotswap` に記録されます。配置済み JAR が更新されると自動でリセットされます。
+
 停止はサーバーコンソールの `stop`。この開発環境では次のローカル補助ツールでも停止できます。
 
 ```powershell

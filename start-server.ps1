@@ -1,9 +1,15 @@
 [CmdletBinding()]
-param()
+param([switch] $Hotswap)
 $ErrorActionPreference = 'Stop'
 $testDir = Join-Path $PSScriptRoot 'run\paper-26.3'
 $taskJdk = $env:GAUNTLET_JAVA_HOME
 if ([string]::IsNullOrWhiteSpace($taskJdk)) { $taskJdk = 'C:\Program Files\Java\jdk-25.0.4.1' }
+$jvmArgs = @()
+if ($Hotswap) {
+    $taskJdk = Join-Path $PSScriptRoot 'run\jbr-25'
+    if (-not (Test-Path -LiteralPath (Join-Path $taskJdk 'bin\java.exe'))) { throw 'Run .\prepare-jbr.ps1 first.' }
+    $jvmArgs = @('-XX:+AllowEnhancedClassRedefinition','-XX:+EnableDynamicAgentLoading')
+}
 $java = Join-Path $taskJdk 'bin\java.exe'
 if (-not (Test-Path -LiteralPath $java)) { throw 'Set GAUNTLET_JAVA_HOME to JDK 25.' }
 $jar = Join-Path $testDir 'paper-26.3-166.jar'
@@ -14,6 +20,6 @@ if (-not (Select-String -LiteralPath (Join-Path $testDir 'eula.txt') -Pattern '^
 if (Get-NetTCPConnection -State Listen -LocalPort 25575 -ErrorAction SilentlyContinue) { throw 'Port 25575 is already in use.' }
 Push-Location $testDir
 try {
-    & $java -Xms512M -Xmx2G '-Dterminal.jline=false' '-Dterminal.ansi=false' -jar $jar --nogui
+    & $java @jvmArgs -Xms512M -Xmx2G '-Dterminal.jline=false' '-Dterminal.ansi=false' -jar $jar --nogui
     if ($LASTEXITCODE -ne 0) { throw "Server exited with code $LASTEXITCODE" }
 } finally { Pop-Location }
