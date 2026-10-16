@@ -9,6 +9,7 @@ final class LavaExtinguishTracker {
     private record State(boolean touching,int expiresAt) {}
     private final Map<UUID,State> players=new HashMap<>();
     void contact(UUID player) { players.put(player,new State(true,0)); }
+    boolean hasContact(UUID player) { return players.containsKey(player); }
     boolean shouldExtinguish(UUID player,boolean eligible,boolean inLava,int tick) {
         if(!eligible) { forget(player); return false; }
         if(inLava) { contact(player); return false; }

@@ -17,14 +17,14 @@ public class LocalServerAgent {
         if(plugin==null) throw new IllegalStateException("ParkourGauntlet is not loaded");
         Runnable task=() -> {
             try {
-                if(operation.equals("check")) {
+                if(operation.equals("check") || operation.equals("features")) {
                     try(var checks=new URLClassLoader(new java.net.URL[]{new java.io.File(request[1]).toURI().toURL()},loader)) {
-                        checks.loadClass("ServerChecks").getMethod("run",Object.class).invoke(null,plugin);
+                        checks.loadClass(operation.equals("check") ? "ServerChecks" : "FeatureChecks").getMethod("run",Object.class).invoke(null,plugin);
                     }
                 } else if(operation.equals("stop")) {
                     var sender=Class.forName("org.bukkit.command.CommandSender",false,loader);
                     api.getMethod("dispatchCommand",sender,String.class).invoke(null,api.getMethod("getConsoleSender").invoke(null),"stop");
-                } else throw new IllegalArgumentException("check or stop only");
+                } else throw new IllegalArgumentException("check, features or stop only");
             } catch(Throwable e) { e.printStackTrace(); }
         };
         var scheduler=api.getMethod("getScheduler").invoke(null);

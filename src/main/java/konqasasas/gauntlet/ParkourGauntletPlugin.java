@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
 import com.destroystokyo.paper.event.server.ServerTickEndEvent;
+import konqasasas.gauntlet.course.*;
+import konqasasas.gauntlet.play.*;
 import net.kyori.adventure.text.Component;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -23,9 +25,13 @@ import org.bukkit.util.Vector;
 public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,CommandExecutor,TabCompleter {
     private StateStore state;
     private ToolItems tools;
+    private CourseEditor courses;
+    private Participants participants;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
+    private final Set<UUID> pendingLavaRetries=new HashSet<>();
+    private final Map<UUID,Integer> lavaRetryFailures=new HashMap<>();
 
     @Override public void onEnable() {
         try {
@@ -35,6 +41,27 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             getServer().getPluginManager().registerEvents(this,this);
             Objects.requireNonNull(getCommand("gauntlet")).setExecutor(this);
             getCommand("gauntlet").setTabCompleter(this);
+            var data=getDataFolder().toPath();
+            CourseStore courseStore=new CourseStore(data.resolve("courses"));
+            TemplateStore templateStore=new TemplateStore(data.resolve("templates.json"));
+            Scaffold scaffold=new Scaffold() {
+                @Override public ItemStack create() { return tools.create(ToolItems.Kind.SCAFFOLD); }
+                @Override public boolean is(ItemStack item) { return tools.kind(item)==ToolItems.Kind.SCAFFOLD; }
+                @Override public void clear(Player player) { clearExcept(player,Set.of()); }
+                @Override public Set<Object> placed(Player player) {
+                    return state.blocks(player.getUniqueId()).stream().map(b -> (Object)b.block()).collect(java.util.stream.Collectors.toUnmodifiableSet());
+                }
+                @Override public void clearExcept(Player player,Set<Object> keep) {
+                    try { cleanup(state.blocks(player.getUniqueId()).stream().filter(b -> !keep.contains(b.block())).toList()); }
+                    catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Scaffold cleanup incomplete; journal retained",e); }
+                }
+            };
+            CourseItems courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
+            participants=new Participants(this,courseStore,new RecordStore(data.resolve("records.jsonl")),
+                    new ReturnStore(data.resolve("participants.json")),scaffold,courseItems);
+            participants.start();
+            courses=new CourseEditor(this,courseStore,templateStore,courseItems,new NamespacedKey(this,"tool"),participants);
+            courses.start();
             getLogger().info("Parkour Gauntlet creation tools ready: /gauntlet kit (Paper 26.3)");
         } catch(IOException|RuntimeException e) {
             getLogger().log(Level.SEVERE,"Cannot initialize creation tools; existing state was preserved",e);
@@ -42,9 +69,12 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         }
     }
     @Override public void onDisable() {
+        if(courses!=null) courses.stop();
+        if(participants!=null) participants.stop();
         if(state!=null) try { cleanup(state.allBlocks()); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }
         lastUse.clear(); pendingRefills.clear(); lavaExtinguish.clear();
+        pendingLavaRetries.clear(); lavaRetryFailures.clear();
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
         if(!(sender instanceof Player player)) { sender.sendMessage("ゲーム内で /gauntlet kit を実行してください。"); return true; }
@@ -85,21 +115,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         } catch(IOException e) { failure(player,"CPを保存できませんでした。",e); }
     }
     private boolean hasPermanentSupport(Location location,BoundingBox feet) {
-        World world=location.getWorld(); double y=location.getY(); boolean supported=false;
-        for(int x=(int)Math.floor(feet.getMinX());x<=Math.floor(feet.getMaxX()-1e-6);x++)
-            for(int z=(int)Math.floor(feet.getMinZ());z<=Math.floor(feet.getMaxZ()-1e-6);z++)
-                // Fences/walls have collision tops above their block cell.
-                for(int by=(int)Math.floor(y-.03125)-1;by<=Math.floor(y);by++) {
-                    Block block=world.getBlockAt(x,by,z);
-                    for(BoundingBox shape:block.getCollisionShape().getBoundingBoxes()) {
-                        if(GroundGeometry.supports(feet.getMinX(),feet.getMaxX(),feet.getMinZ(),feet.getMaxZ(),y,
-                                x+shape.getMinX(),x+shape.getMaxX(),z+shape.getMinZ(),z+shape.getMaxZ(),by+shape.getMaxY())) {
-                            if(state.contains(key(block))) return false;
-                            supported=true;
-                        }
-                    }
-                }
-        return supported;
+        List<Block> support=GroundGeometry.supporting(location.getWorld(),feet,location.getY());
+        return !support.isEmpty() && support.stream().noneMatch(block -> state.contains(key(block)));
     }
 
     // Air clicks on these non-usable vanilla items are predictively cancelled;
@@ -124,23 +141,24 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             player.playSound(player.getLocation(),Sound.BLOCK_NOTE_BLOCK_PLING,SoundCategory.PLAYERS,1f,1f);
         }
     }
-    private void retry(Player player) {
+    private boolean retry(Player player) {
         Checkpoint cp=state.checkpoint(player.getUniqueId());
-        if(cp==null) { tell(player,"CPが未設定です。接地中にアメジストをQで設定してください。"); return; }
+        if(cp==null) { tell(player,"CPが未設定です。接地中にアメジストをQで設定してください。"); return false; }
         World world=Bukkit.getWorld(cp.world());
-        if(world==null) { tell(player,"CPのワールドが読み込まれていません。"); return; }
+        if(world==null) { tell(player,"CPのワールドが読み込まれていません。"); return false; }
         Location target=new Location(world,cp.x(),cp.y(),cp.z(),cp.yaw(),cp.pitch());
         int chunkX=target.getBlockX()>>4,chunkZ=target.getBlockZ()>>4;
         if(!world.isChunkLoaded(chunkX,chunkZ) && !world.loadChunk(chunkX,chunkZ,false)) {
-            tell(player,"CPのチャンクを読み込めませんでした。"); return;
+            tell(player,"CPのチャンクを読み込めませんでした。"); return false;
         }
         // Never clear the course trial if another plugin rejects this teleport.
-        if(!player.teleport(target,PlayerTeleportEvent.TeleportCause.PLUGIN)) { tell(player,"CPへの移動が拒否されました。"); return; }
+        if(!player.teleport(target,PlayerTeleportEvent.TeleportCause.PLUGIN)) { tell(player,"CPへの移動が拒否されました。"); return false; }
         stopMotion(player);
         try {
             cleanup(state.blocks(player.getUniqueId()));
             tools.refill(player); player.updateInventory();
         } catch(IOException|RuntimeException e) { failure(player,"足場の片付けが完了しませんでした。ログを確認してください。",e); }
+        return true;
     }
     private void stopMotion(Player player) {
         if(player.isFlying()) player.setFlying(false);
@@ -151,7 +169,34 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     public void tickEnded(ServerTickEndEvent event) {
         // Use the contact state after vanilla entity ticking, not the previous
         // tick's state seen by the scheduler or a movement event.
-        for(Player player:Bukkit.getOnlinePlayers()) extinguishAfterLava(player);
+        for(Player player:Bukkit.getOnlinePlayers()) {
+            returnFromLava(player);
+            extinguishAfterLava(player);
+        }
+    }
+    private void lavaContact(Player player) {
+        lavaExtinguish.contact(player.getUniqueId());
+        pendingLavaRetries.add(player.getUniqueId());
+    }
+    private void returnFromLava(Player player) {
+        // Participant runs have their own fail handling; never jump to the builder CP.
+        if(participants.active(player)) { pendingLavaRetries.remove(player.getUniqueId()); return; }
+        UUID id=player.getUniqueId(); boolean contact=pendingLavaRetries.remove(id);
+        if(player.getGameMode()!=GameMode.ADVENTURE || player.isDead()) {
+            lavaRetryFailures.remove(id); return;
+        }
+        if(!contact && !player.isInLava()) return;
+        lavaExtinguish.contact(id);
+        player.setFireTicks(0);
+        // Do not invent a checkpoint, clear blocks or spam the player if none exists.
+        if(state.checkpoint(id)==null) return;
+        int tick=Bukkit.getCurrentTick(); Integer lastFailure=lavaRetryFailures.get(id);
+        if(lastFailure!=null && tick-lastFailure<20) return;
+        // Retry only after vanilla has finished applying effects at the old
+        // position. Teleporting inside a damage/ignite callback can be undone
+        // by subsequent collision effects from that same movement.
+        if(retry(player)) lavaRetryFailures.remove(id);
+        else lavaRetryFailures.put(id,tick);
     }
     private void extinguishAfterLava(Player player) {
         boolean eligible=player.getGameMode()==GameMode.ADVENTURE && !player.isDead();
@@ -159,28 +204,34 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             player.setFireTicks(0);
         }
     }
-    @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void combustedByBlock(EntityCombustByBlockEvent event) {
-        if(!(event.getEntity() instanceof Player player) || player.getGameMode()!=GameMode.ADVENTURE) return;
+        if(!(event.getEntity() instanceof Player player) || player.getGameMode()!=GameMode.ADVENTURE || participants.active(player)) return;
         Block source=event.getCombuster();
         if((source!=null && source.getType()==Material.LAVA) || (source==null && player.isInLava())) {
-            lavaExtinguish.contact(player.getUniqueId());
+            lavaContact(player);
+            if(state.checkpoint(player.getUniqueId())!=null) event.setCancelled(true);
         } else if(source!=null) {
             // A subsequent fire block is a new source, not residual lava fire.
             lavaExtinguish.forget(player.getUniqueId());
         }
     }
-    @EventHandler(priority=EventPriority.MONITOR)
+    @EventHandler(priority=EventPriority.HIGHEST)
     public void lavaContactDamage(EntityDamageEvent event) {
-        if(!(event.getEntity() instanceof Player player) || player.getGameMode()!=GameMode.ADVENTURE) return;
-        if(event.getCause()==EntityDamageEvent.DamageCause.LAVA) lavaExtinguish.contact(player.getUniqueId());
+        if(!(event.getEntity() instanceof Player player) || player.getGameMode()!=GameMode.ADVENTURE || participants.active(player)) return;
+        if(event.getCause()==EntityDamageEvent.DamageCause.LAVA) {
+            lavaContact(player);
+            if(state.checkpoint(player.getUniqueId())!=null) event.setCancelled(true);
+        } else if(event.getCause()==EntityDamageEvent.DamageCause.FIRE_TICK && lavaExtinguish.hasContact(player.getUniqueId()) && state.checkpoint(player.getUniqueId())!=null) {
+            event.setCancelled(true);
+        }
         else if(event.getCause()==EntityDamageEvent.DamageCause.FIRE) lavaExtinguish.forget(player.getUniqueId());
     }
 
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void place(BlockPlaceEvent event) {
         if(tools.kind(event.getItemInHand())!=ToolItems.Kind.SCAFFOLD) return;
-        if(!allowed(event.getPlayer())) { event.setCancelled(true); return; }
+        if(!participants.active(event.getPlayer()) && !allowed(event.getPlayer())) { event.setCancelled(true); return; }
         try {
             state.add(new PlacedBlock(event.getPlayer().getUniqueId(),key(event.getBlockPlaced()),
                     event.getBlockReplacedState().getBlockData().getAsString(),event.getBlockPlaced().getBlockData().getAsString()));
@@ -211,6 +262,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
         lavaExtinguish.forget(event.getPlayer().getUniqueId());
+        pendingLavaRetries.remove(event.getPlayer().getUniqueId());
+        lavaRetryFailures.remove(event.getPlayer().getUniqueId());
         lastUse.remove(event.getPlayer().getUniqueId());
         try { cleanup(state.blocks(event.getPlayer().getUniqueId())); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Logout cleanup incomplete; journal retained",e); }

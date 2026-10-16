@@ -2,8 +2,7 @@ package konqasasas.gauntlet;
 
 import com.google.gson.*;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import konqasasas.gauntlet.io.AtomicFiles;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.util.*;
@@ -56,14 +55,7 @@ final class StateStore {
         save(checkpoints,next); blocks.clear(); blocks.putAll(next);
     }
     private void save(Map<UUID,Checkpoint> cps,Map<BlockKey,PlacedBlock> placed) throws IOException {
-        Files.createDirectories(file.toAbsolutePath().getParent());
         var cpList=cps.entrySet().stream().map(e -> new CpEntry(e.getKey(),e.getValue())).toList();
-        byte[] content=gson.toJson(new Saved(1,cpList,List.copyOf(placed.values()))).getBytes(StandardCharsets.UTF_8);
-        Path temporary=file.resolveSibling(file.getFileName()+".tmp");
-        try(var channel=FileChannel.open(temporary,StandardOpenOption.CREATE,StandardOpenOption.TRUNCATE_EXISTING,StandardOpenOption.WRITE)) {
-            ByteBuffer buffer=ByteBuffer.wrap(content); while(buffer.hasRemaining()) channel.write(buffer); channel.force(true);
-        }
-        try { Files.move(temporary,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING); }
-        catch(AtomicMoveNotSupportedException e) { Files.move(temporary,file,StandardCopyOption.REPLACE_EXISTING); }
+        AtomicFiles.write(file,gson.toJson(new Saved(1,cpList,List.copyOf(placed.values()))).getBytes(StandardCharsets.UTF_8));
     }
 }

@@ -9,6 +9,9 @@ commands:
     description: Receive course creation tools
     usage: /gauntlet kit
     permission: gauntlet.admin
+  course:
+    description: Open the course GUI
+    usage: /course [play <id>|practice <id>|leave]
 permissions:
   gauntlet.admin:
     description: Use course creation tools

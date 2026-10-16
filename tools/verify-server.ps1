@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('check','stop')][string] $Action = 'check')
+param([ValidateSet('check','features','stop')][string] $Action = 'check')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $runtime = Join-Path $projectRoot 'run\paper-26.3'
@@ -12,7 +12,8 @@ $classpath = $classpath.Replace('\','/')
 $argfile = Join-Path $output 'compile.args'
 $source1 = (Join-Path $PSScriptRoot 'LocalServerAgent.java').Replace('\','/')
 $source2 = (Join-Path $PSScriptRoot 'ServerChecks.java').Replace('\','/')
-[IO.File]::WriteAllLines($argfile,@('-cp',('"'+$classpath+'"'),'-d',('"'+$output.Replace('\','/')+'"'),('"'+$source1+'"'),('"'+$source2+'"')), (New-Object Text.UTF8Encoding($false)))
+$source3 = (Join-Path $PSScriptRoot 'FeatureChecks.java').Replace('\','/')
+[IO.File]::WriteAllLines($argfile,@('-cp',('"'+$classpath+'"'),'-d',('"'+$output.Replace('\','/')+'"'),('"'+$source1+'"'),('"'+$source2+'"'),('"'+$source3+'"')), (New-Object Text.UTF8Encoding($false)))
 & (Join-Path $jdk 'bin\javac.exe') "@$argfile"
 if ($LASTEXITCODE -ne 0) { throw 'Server check helper compilation failed.' }
 $manifest = Join-Path $output 'MANIFEST.MF'
@@ -25,12 +26,13 @@ $logPath = Join-Path $runtime 'logs\latest.log'
 $previousLines = @(Get-Content -LiteralPath $logPath).Count
 & (Join-Path $jdk 'bin\java.exe') -cp $agent LocalServerAgent $serverProcess $agent $Action
 if ($LASTEXITCODE -ne 0) { throw 'Server attach failed.' }
-if ($Action -eq 'check') {
+if ($Action -ne 'stop') {
+    $marker = if ($Action -eq 'features') { 'FEATURE' } else { 'INTEGRATION' }
     for ($attempt = 0; $attempt -lt 50; $attempt++) {
         $newLog = @(Get-Content -LiteralPath $logPath | Select-Object -Skip $previousLines) -join "`n"
-        if ($newLog -match 'INTEGRATION_CLEANUP_PASS') {
-            if ($newLog -notmatch 'INTEGRATION_PASS ') { throw "Integration check failed; inspect $logPath" }
-            Write-Host 'Integration checks and world/state cleanup passed. Minecraft-client gameplay remains untested.'
+        if ($newLog -match "${marker}_CLEANUP_PASS") {
+            if ($newLog -notmatch "${marker}_PASS ") { throw "$Action check failed; inspect $logPath" }
+            Write-Host "$Action checks and cleanup passed. Minecraft-client gameplay remains untested."
             exit 0
         }
         Start-Sleep -Milliseconds 200
