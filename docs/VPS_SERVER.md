@@ -155,7 +155,7 @@ Paper の `libraries` は起動時に取り直されます。動作を確認し�
 - **権限**：`ops.json` を見直し、運営以外に OP を付けないようにします。コース編集（`gauntlet.admin`）は OP 限定です。役割を分けるなら LuckPerms の導入を検討します。
 - **荒らし対策**：BAN・ミュート・チャットのログ確認の手順を決めます。FAWE と Multiverse のコマンドは OP 限定であることを確認します。
 - **翻訳**：MyMemory の無料枠は全員で共有します。`mymemory.email` を設定するか、LibreTranslate を検討します。
-- **表示**：`config.yml` の `server.address`（スコアボード）と `motd` を正式な値にします。
+- **表示**：サーバー名（`Catena Online`）と接続先（`mc.catenaonline.net`）は設定済みです。`server.properties` の `motd`（サーバー一覧の説明文）を公開向けの文にします。
 - **接続先**：独自ドメインの A レコード（例：`mc.example.com`）を VPS に向けると、IP を変えても参加者の設定が変わりません。
 - **規約**：課金要素を入れる場合は Minecraft のコミュニティ基準・利用規約を確認します。`log-ips=true` のままなら、IP を記録することを告知します。
 - **バックアップ**：手元への取得を定期的に行う（または外部ストレージへ自動転送する）運用にします。

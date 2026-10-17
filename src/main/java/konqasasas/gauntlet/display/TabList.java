@@ -31,7 +31,7 @@ public final class TabList implements Listener {
         this.plugin=plugin; this.display=display;
         FileConfiguration config=plugin.getConfig();
         MiniMessage mini=MiniMessage.miniMessage();
-        logo=mini.deserialize("<bold><gradient:#ffb347:#ff5f6d>◆ "+mini.escapeTags(config.getString("server.name","GAUNTLET"))+" ◆</gradient></bold>");
+        logo=mini.deserialize("<bold><gradient:#ffb347:#ff5f6d>◆ "+mini.escapeTags(config.getString("server.name","Catena Online"))+" ◆</gradient></bold>");
         pingGood=config.getInt("tab.ping-good",100); pingOk=config.getInt("tab.ping-ok",200);
         hintMillis=Math.max(1,config.getLong("tab.hint-seconds",20))*1000;
     }

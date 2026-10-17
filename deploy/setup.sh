@@ -118,7 +118,7 @@ allow-flight=false
 max-players=20
 view-distance=8
 simulation-distance=4
-motd=Parkour Gauntlet
+motd=Catena Online
 EOF
 fi
 if [[ ! -f $SERVER/eula.txt ]]; then
