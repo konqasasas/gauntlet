@@ -1,11 +1,11 @@
 # Parkour Gauntlet 設定（変更後はサーバーを再起動）
 
-# サーバーの表示（名前・IPは未定のため仮の値）
+# サーバーの表示（名前は未定のため仮の値）
 server:
   # TABのロゴ・スコアボードのタイトル
   name: "GAUNTLET"
   # スコアボードの最下行
-  address: "play.example.net"
+  address: "mc.catenaonline.net"
 
 # TAB
 tab:

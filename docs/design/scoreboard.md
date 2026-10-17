@@ -20,7 +20,7 @@
  Best: 87.5%          ← 自己最高の到達率。クリア済みなら「Clear ✓ 24.10s」
  Attempts: 241
 
- play.example.net
+ mc.catenaonline.net
 ```
 
 | 行 | 内容 |

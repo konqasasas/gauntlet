@@ -39,7 +39,7 @@ public final class Sidebar implements Listener {
 
     public Sidebar(JavaPlugin plugin,PlayerDisplay display,PlayerData data,Component title,Function<Player,CourseView> course) {
         this.plugin=plugin; this.display=display; this.data=data; this.title=title; this.course=course;
-        address=plugin.getConfig().getString("server.address","play.example.net");
+        address=plugin.getConfig().getString("server.address","mc.catenaonline.net");
     }
     public void start() {
         plugin.getServer().getPluginManager().registerEvents(this,plugin);
