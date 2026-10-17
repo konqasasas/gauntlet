@@ -1,0 +1,8 @@
+[Unit]
+Description=Discord alert for failed %i
+
+[Service]
+Type=oneshot
+User=minecraft
+Group=minecraft
+ExecStart=/usr/local/bin/gauntlet-notify --unit-failed %i

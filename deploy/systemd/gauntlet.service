@@ -3,6 +3,10 @@ Description=Parkour Gauntlet (Paper)
 Wants=network-online.target
 Requires=gauntlet.socket
 After=network-online.target gauntlet.socket
+# Alert once restarts have given up (5 failed starts within 10 minutes).
+StartLimitIntervalSec=600
+StartLimitBurst=5
+OnFailure=gauntlet-alert@%n.service
 
 [Service]
 Type=simple
@@ -23,6 +27,8 @@ TimeoutStopSec=180
 SuccessExitStatus=0 143
 Restart=on-failure
 RestartSec=15
+# Alerts on crashes (SERVICE_RESULT is not "success"); normal stops stay silent.
+ExecStopPost=-/usr/local/bin/gauntlet-notify --exited
 
 NoNewPrivileges=true
 PrivateTmp=true

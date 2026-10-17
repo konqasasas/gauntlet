@@ -156,10 +156,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -Web
    - **Reset Token** でトークンを表示して控えます。トークンはチャットや Git に貼らず、下の `configure` で直接入力します。
    - **Privileged Gateway Intents** の **SERVER MEMBERS INTENT** と **MESSAGE CONTENT INTENT** を ON にします。
 2. **OAuth2 → URL Generator** で、スコープに `bot` と `applications.commands` を選びます。権限には「チャンネルを見る」「メッセージを送信」「埋め込みリンク」「ファイルを添付」「メッセージ履歴を読む」「メッセージの管理」「チャンネルの管理」（トピック更新用）を選び、生成された URL からボットをサーバーに招待します。
-3. チャンネルを2つ作ります。
+3. チャンネルを3つ作ります。
    - **サーバーチャット**：全員が閲覧でき、一般メンバーは送信できない（ボットだけ送信できる）。
    - **コンソール**：運営ロールとボットだけが閲覧・送信できる。**ここに書いた内容はサーバーのコマンドとして実行されます。** 運営以外に見せないでください。
-4. Discord の設定 → 詳細設定 → **開発者モード** を ON にし、2つのチャンネルを右クリック →「ID をコピー」で ID を控えます。
+   - **サーバー監視**：運営ロールとボットが閲覧できる。チャンネルの設定 → 連携サービス → **ウェブフック** を作り、URL をコピーして控えます（下の「監視と通知」で使います。URL はトークンと同じく秘密です）。
+4. Discord の設定 → 詳細設定 → **開発者モード** を ON にし、3つのチャンネルを右クリック →「ID をコピー」で ID を控えます。
 
 ### VPS 側
 
@@ -182,6 +183,31 @@ sudo bash discord.sh configure    # トークンとチャンネル ID を入力 
 | コンソール | `op` / `deop` / `execute` / `?` は DiscordSRV の既定どおり実行不可 |
 
 設定ファイルは `/opt/gauntlet/server/plugins/DiscordSRV/` にあります。手で変えたときは `gauntlet-cmd discord reload`、または再起動で反映します。
+
+## 監視と通知
+
+| 起きたこと | 検知するもの | 通知先 |
+|---|---|---|
+| サーバーが異常終了した（15秒後に自動再起動） | systemd（`gauntlet-notify --exited`） | サーバー監視（Webhook） |
+| 自動再起動を5回繰り返しても起動しない | systemd（`OnFailure`） | サーバー監視（Webhook） |
+| サーバーが30秒以上応答しない（フリーズ） | DiscordSRV の watchdog | サーバー監視（`configure` で ID を入れた場合） |
+| 毎日のバックアップが失敗した | systemd（`OnFailure`） | サーバー監視（Webhook） |
+| VPS ごと止まった・ネットワークが切れた | 外部の監視サービス（下記） | サーバー監視（Webhook） |
+| 通常の起動・停止 | DiscordSRV | サーバーチャット |
+
+Webhook の URL は VPS で一度だけ登録します（入力は表示されません。テスト通知が届けば成功です）。
+
+```bash
+sudo gauntlet-notify --setup
+```
+
+### VPS ごと止まったとき（外部監視）
+
+VPS の中の仕組みは、VPS が止まると通知できません。外から監視するサービスを1つ使います。たとえば [UptimeRobot](https://uptimerobot.com/) の無料プランでは、5分ごとのポート監視と Discord への通知が使えます（個人・非商用向け。プランの条件は登録時に確認してください）。
+
+- 監視1：**Port** 監視、`mc.catenaonline.net`、ポート `25565`
+- 監視2：**HTTP(s)** 監視、`https://catenaonline.net/`
+- 通知先：Discord の連携に、サーバー監視チャンネルの Webhook URL を登録
 
 ## バックアップ
 

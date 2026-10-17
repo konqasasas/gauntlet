@@ -1,5 +1,6 @@
 [Unit]
 Description=Parkour Gauntlet backup
+OnFailure=gauntlet-alert@%n.service
 
 [Service]
 Type=oneshot

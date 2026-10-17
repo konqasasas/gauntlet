@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Post an alert to the Discord monitoring channel through a webhook.
+#   gauntlet-notify "<message>"            send a message (silently does nothing until configured)
+#   gauntlet-notify --unit-failed <unit>   used by gauntlet-alert@.service
+#   gauntlet-notify --exited               used by gauntlet.service ExecStopPost (reads $SERVICE_RESULT etc.)
+#   sudo gauntlet-notify --setup           enter the webhook URL and send a test message
+set -euo pipefail
+CONF=/etc/default/gauntlet-notify
+
+send() {
+  [[ -r $CONF ]] && . "$CONF"
+  [[ -n ${DISCORD_WEBHOOK_URL:-} ]] || return 0
+  local body
+  body="$(python3 -c 'import json,sys; print(json.dumps({"content": sys.argv[1], "allowed_mentions": {"parse": []}}, ensure_ascii=False))' "$1")"
+  curl -fsS -m 10 -H 'Content-Type: application/json' -d "$body" "$DISCORD_WEBHOOK_URL" > /dev/null
+}
+
+case "${1:-}" in
+  --setup)
+    [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+    read -rsp 'Discord webhook URL (not shown): ' url; echo
+    [[ $url =~ ^https://(discord\.com|discordapp\.com)/api/webhooks/[0-9]+/[A-Za-z0-9_-]+$ ]] \
+      || { echo 'That does not look like a Discord webhook URL.' >&2; exit 1; }
+    install -o root -g minecraft -m 0640 /dev/null "$CONF"
+    printf 'DISCORD_WEBHOOK_URL=%s\n' "$url" > "$CONF"
+    send ":white_check_mark: 監視通知のテストです（$(hostname)）"
+    echo 'Saved. A test message was sent to the channel.'
+    ;;
+  --unit-failed)
+    case "${2:-}" in
+      gauntlet.service) send ":rotating_light: **Minecraft サーバーが停止したままです。** 自動再起動を繰り返しても起動できませんでした。\`journalctl -u gauntlet -n 100\` を確認してください。" ;;
+      gauntlet-backup.service) send ":warning: **バックアップに失敗しました。** \`journalctl -u gauntlet-backup -n 50\` を確認してください。" ;;
+      *) send ":warning: **${2:-unknown} が失敗しました。**" ;;
+    esac
+    ;;
+  --exited)
+    # Set by systemd for ExecStopPost; "success" covers normal stops (including exit 143 on SIGTERM).
+    [[ ${SERVICE_RESULT:-success} == success ]] && exit 0
+    send ":warning: **Minecraft サーバーが異常終了しました**（${SERVICE_RESULT}: ${EXIT_CODE:-?} ${EXIT_STATUS:-?}）。15秒後に自動で再起動します。"
+    ;;
+  ''|-*) echo 'Usage: gauntlet-notify "<message>" | --setup' >&2; exit 2 ;;
+  *) send "$1" ;;
+esac

@@ -142,8 +142,15 @@ fi
 
 echo '== Services and helper commands'
 install -m 0644 "$HERE"/systemd/gauntlet.service "$HERE"/systemd/gauntlet.socket \
-  "$HERE"/systemd/gauntlet-backup.service "$HERE"/systemd/gauntlet-backup.timer /etc/systemd/system/
-install -m 0755 "$HERE"/bin/gauntlet-cmd "$HERE"/bin/gauntlet-backup "$HERE"/bin/gauntlet-deploy /usr/local/bin/
+  "$HERE"/systemd/gauntlet-backup.service "$HERE"/systemd/gauntlet-backup.timer \
+  "$HERE"/systemd/gauntlet-alert@.service /etc/systemd/system/
+install -m 0755 "$HERE"/bin/gauntlet-cmd "$HERE"/bin/gauntlet-backup "$HERE"/bin/gauntlet-deploy \
+  "$HERE"/bin/gauntlet-notify /usr/local/bin/
+# Webhook for alerts; filled in by: sudo gauntlet-notify --setup
+if [[ ! -f /etc/default/gauntlet-notify ]]; then
+  install -o root -g minecraft -m 0640 /dev/null /etc/default/gauntlet-notify
+  echo 'DISCORD_WEBHOOK_URL=' > /etc/default/gauntlet-notify
+fi
 sudoers="/etc/sudoers.d/gauntlet"
 echo "$ADMIN_USER ALL=(root) NOPASSWD: /usr/local/bin/gauntlet-deploy" > "$sudoers.tmp"
 visudo -cf "$sudoers.tmp"

@@ -46,14 +46,18 @@ configure() {
   read -rsp 'Bot token (not shown): ' token; echo
   read -rp 'Chat channel ID (Minecraft -> Discord): ' chat
   read -rp 'Console channel ID (staff only): ' console
-  [[ -n $token && $chat =~ ^[0-9]{17,20}$ && $console =~ ^[0-9]{17,20}$ ]] \
+  read -rp 'Monitoring channel ID for freeze alerts (Enter to use the chat channel): ' monitor
+  [[ -n $token && $chat =~ ^[0-9]{17,20}$ && $console =~ ^[0-9]{17,20}$ && ( -z $monitor || $monitor =~ ^[0-9]{17,20}$ ) ]] \
     || { echo 'Token is empty or a channel ID is not a 17-20 digit number.' >&2; exit 1; }
+  channels="{\"global\": \"$chat\"}"
+  # DiscordSRV's watchdog reports a frozen main thread to the "watchdog" channel.
+  [[ -n $monitor ]] && channels="{\"global\": \"$chat\", \"watchdog\": \"$monitor\"}"
 
   cp -p "$DIR/config.yml" "$DIR/config.yml.bak"
   cp -p "$DIR/messages.yml" "$DIR/messages.yml.bak"
   local c="$DIR/config.yml" m="$DIR/messages.yml"
   set_key "$c" BotToken "$(quote "$token")"
-  set_key "$c" Channels "{\"global\": \"$chat\"}"
+  set_key "$c" Channels "$channels"
   set_key "$c" DiscordConsoleChannelId "\"$console\""
   # Our chat prompts cancel Paper's AsyncChatEvent; listen to it so those inputs never reach Discord.
   set_key "$c" UseModernPaperChatEvent true
@@ -68,6 +72,7 @@ configure() {
   set_key "$m" DiscordChatChannelServerShutdownMessage "$(quote ':octagonal_sign: **サーバーが停止しました**')"
   set_key "$m" ChannelTopicUpdaterChatChannelTopicFormat "$(quote "%playercount%/%playermax%人がオンライン | 接続先 $ADDRESS | 更新 %date%")"
   set_key "$m" ChannelTopicUpdaterChatChannelTopicAtServerShutdownFormat "$(quote "サーバー停止中 | 接続先 $ADDRESS")"
+  set_key "$m" ServerWatchdogMessage "$(quote ':fire: <t:%timestamp%:R> %guildowner% サーバーが %timeout% 秒間応答していません（フリーズの可能性）')"
 
   chown minecraft:minecraft "$c" "$m" "$c.bak" "$m.bak"
   chmod 0640 "$c" "$c.bak"
