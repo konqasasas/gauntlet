@@ -1,6 +1,7 @@
 package konqasasas.gauntlet.play;
 
 import java.util.Set;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -14,4 +15,8 @@ public interface Scaffold {
     Set<Object> placed(Player player);
     /** Removes this player's scaffold blocks except the given ones. */
     void clearExcept(Player player,Set<Object> keep);
+    /** Removes only the given scaffold blocks of this player. */
+    void remove(Player player,Set<Object> blocks);
+    /** The opaque key of a block position, as used by placed(). */
+    Object key(Block block);
 }

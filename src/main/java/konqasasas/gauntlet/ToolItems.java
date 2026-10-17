@@ -4,20 +4,21 @@ import io.papermc.paper.block.BlockPredicate;
 import io.papermc.paper.datacomponent.DataComponentTypes;
 import io.papermc.paper.datacomponent.item.ItemAdventurePredicate;
 import java.util.*;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.TextDecoration;
+import konqasasas.gauntlet.i18n.Msg;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.*;
 import org.bukkit.persistence.PersistentDataType;
 
 final class ToolItems {
+    /** Names and descriptions: message keys editor.tool.<kind>.name/.lore (builder language). */
     enum Kind {
-        CHECKPOINT(Material.AMETHYST_SHARD,1,"チェックポイント"),
-        SCAFFOLD(Material.POLISHED_ANDESITE,64,"設置用ブロック"),
-        MODE(Material.SLIME_BALL,1,"ゲームモード切替");
-        final Material material; final int count; final String name;
-        Kind(Material material,int count,String name) { this.material=material; this.count=count; this.name=name; }
+        CHECKPOINT(Material.AMETHYST_SHARD,1),
+        SCAFFOLD(Material.POLISHED_ANDESITE,64),
+        MODE(Material.SLIME_BALL,1);
+        final Material material; final int count;
+        Kind(Material material,int count) { this.material=material; this.count=count; }
+        String key() { return "editor.tool."+name().toLowerCase(Locale.ROOT); }
     }
     private final NamespacedKey key;
     ToolItems(NamespacedKey key) { this.key=key; }
@@ -31,19 +32,14 @@ final class ToolItems {
     ItemStack create(Kind kind) {
         ItemStack item=new ItemStack(kind.material,kind.count);
         item.editMeta(meta -> {
-            meta.displayName(text(kind.name));
+            meta.displayName(Msg.text(Msg.CONSOLE,kind.key()+".name"));
             meta.getPersistentDataContainer().set(key,PersistentDataType.STRING,kind.name());
-            meta.lore(switch(kind) {
-                case CHECKPOINT -> List.of(text("Q：接地中の位置と視点を保存"),text("右クリック：足場を消してCPへ戻る"));
-                case SCAFFOLD -> List.of(text("設置しても64個を維持"),text("CPへ戻ると置いた足場を消去"));
-                case MODE -> List.of(text("右クリック：Adventure / Creative"));
-            });
+            meta.lore(Msg.lines(Msg.CONSOLE,kind.key()+".lore"));
         });
         if(kind==Kind.SCAFFOLD) item.setData(DataComponentTypes.CAN_PLACE_ON,
                 ItemAdventurePredicate.itemAdventurePredicate().addPredicate(BlockPredicate.predicate().build()).build());
         return item;
     }
-    private static Component text(String value) { return Component.text(value).decoration(TextDecoration.ITALIC,false); }
     boolean grant(Player player) {
         PlayerInventory inv=player.getInventory();
         Map<Kind,Integer> first=new EnumMap<>(Kind.class); List<Integer> duplicates=new ArrayList<>();

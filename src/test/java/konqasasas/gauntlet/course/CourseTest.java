@@ -16,13 +16,13 @@ class CourseTest {
     }
     @Test void problemsListWhatIsMissing() {
         Course course=Course.create("c",author,world);
-        assertEquals(List.of("範囲が未設定","スタート地点が未設定","ゴールが未設定"),course.problems());
+        assertEquals(List.of("problem.no-region","problem.no-start","problem.no-goal"),course.problems());
         course=course.withRegion(world,Region.of(0,0,0,9,9,9)).toggleGoal(new BlockPos(5,5,5));
-        assertEquals(List.of("スタート地点が未設定"),course.problems());
-        assertEquals(List.of("スタート地点が範囲の外"),course.withStart(new Spot(20,1,1,0,0)).problems());
+        assertEquals(List.of("problem.no-start"),course.problems());
+        assertEquals(List.of("problem.start-outside"),course.withStart(new Spot(20,1,1,0,0)).problems());
         course=course.withStart(new Spot(1,1,1,0,0));
         assertEquals(List.of(),course.problems());
-        assertEquals(List.of("範囲の外にゴールがある"),course.toggleGoal(new BlockPos(10,0,0)).problems());
+        assertEquals(List.of("problem.goal-outside"),course.toggleGoal(new BlockPos(10,0,0)).problems());
     }
     @Test void movingRegionToAnotherWorldDropsStart() {
         Course course=Course.create("c",author,world).withRegion(world,Region.of(0,0,0,9,9,9)).withStart(new Spot(1,1,1,0,0));
@@ -35,7 +35,7 @@ class CourseTest {
         Course course=Course.create("c",author,world).toggleGoal(new BlockPos(1,2,3)).toggleGoal(new BlockPos(4,5,6));
         assertTrue(course.isGoal(1,2,3)); assertTrue(course.isGoal(4,5,6)); assertFalse(course.isGoal(1,2,4));
         assertEquals(List.of(new BlockPos(4,5,6)),course.toggleGoal(new BlockPos(1,2,3)).goals());
-        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null).goals());
+        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null,null,null).goals());
     }
     @Test void timeLimitIsClampedAndStatusCycles() {
         Course course=Course.create("c",author,world);
@@ -50,5 +50,28 @@ class CourseTest {
         assertThrows(IllegalArgumentException.class,() -> Course.create("c",author,world).withName("x".repeat(33)));
         assertThrows(IllegalArgumentException.class,() -> new Spot(Double.NaN,0,0,0,0));
         assertThrows(IllegalArgumentException.class,() -> new Region(1,0,0,0,0,0));
+    }
+    @Test void onlyGameplayEditsChangeTheGame() {
+        Course base=Course.create("c",author,world).withRegion(world,Region.of(0,0,0,9,9,9));
+        assertTrue(base.sameGameplay(base.withName("Lava Stairs")));
+        assertTrue(base.sameGameplay(base.withStatus(CourseStatus.DONE)));
+        assertTrue(base.sameGameplay(base.edit().rank(1).stage(0).rev(7).build()));
+        assertFalse(base.sameGameplay(base.withTimeLimit(31)));
+        assertFalse(base.sameGameplay(base.withStart(new Spot(1,1,1,0,0))));
+        assertFalse(base.sameGameplay(base.edit().addRoutePoint(new RoutePoint(1,2,3)).build()));
+        assertFalse(base.sameGameplay(base.edit().loadout(2,ItemRef.scaffold()).build()));
+        assertEquals(0,base.rev());
+    }
+    @Test void numberingAndOldFourSlotLoadouts() {
+        Course c=Course.create("c",author,world);
+        assertNull(c.numbering());
+        assertEquals("Rank 1",c.edit().rank(1).build().numbering());
+        assertEquals("Rank 1 ‐ Stage 3",c.edit().rank(1).stage(3).build().numbering());
+        assertEquals("Rank 2 ‐ BOSS",c.edit().rank(2).stage(0).build().numbering());
+        assertNull(c.edit().rank(99).build().rank(),"Out of range numbers are dropped");
+        Course four=new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,
+                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null,null,null);
+        assertEquals(Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0)),four.loadout(),"The old fourth slot is dropped");
+        assertEquals(List.of(),four.route()); assertEquals(0,four.rev());
     }
 }

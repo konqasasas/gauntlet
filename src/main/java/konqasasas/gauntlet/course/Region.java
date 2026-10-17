@@ -15,5 +15,5 @@ public record Region(int minX,int minY,int minZ,int maxX,int maxY,int maxZ) {
         int bx=(int)Math.floor(x),by=(int)Math.floor(y),bz=(int)Math.floor(z);
         return bx>=minX && bx<=maxX && by>=minY && by<=maxY && bz>=minZ && bz<=maxZ;
     }
-    public String describe() { return sizeX()+"×"+sizeY()+"×"+sizeZ()+"（"+minX+", "+minY+", "+minZ+" 〜 "+maxX+", "+maxY+", "+maxZ+"）"; }
+    public String describe() { return sizeX()+"×"+sizeY()+"×"+sizeZ()+" ("+minX+", "+minY+", "+minZ+" ~ "+maxX+", "+maxY+", "+maxZ+")"; }
 }

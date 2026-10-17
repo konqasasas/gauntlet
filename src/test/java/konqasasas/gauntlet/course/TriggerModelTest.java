@@ -41,7 +41,7 @@ class TriggerModelTest {
         assertThrows(IllegalArgumentException.class,() -> TriggerAction.sound("x",5,1));
         TriggerAction sound=TriggerAction.sound("minecraft:block.bell.use",1,1).withSound(9,0);
         assertEquals(TriggerAction.MAX_VOLUME,sound.volume()); assertEquals(TriggerAction.MIN_PITCH,sound.pitch());
-        assertEquals(0,TriggerAction.Placement.SLOT1.slot()); assertEquals(3,TriggerAction.Placement.SLOT4.slot()); assertEquals(-1,TriggerAction.Placement.EMPTY.slot());
+        assertEquals(0,TriggerAction.Placement.SLOT1.slot()); assertEquals(2,TriggerAction.Placement.SLOT3.slot()); assertEquals(-1,TriggerAction.Placement.SLOT4.slot()); assertEquals(-1,TriggerAction.Placement.EMPTY.slot());
     }
     @Test void triggersLoadoutAndFailFlagsPersist() throws Exception {
         BlockPos plate=new BlockPos(2,1,2);
@@ -56,7 +56,7 @@ class TriggerModelTest {
         Course loaded=new CourseStore(dir).get("c");
         assertEquals(course,loaded);
         assertEquals(trigger,loaded.trigger(plate));
-        assertEquals(Arrays.asList(ItemRef.scaffold(),new ItemRef("tmace",1),null,null),loaded.loadout());
+        assertEquals(Arrays.asList(ItemRef.scaffold(),new ItemRef("tmace",1),null),loaded.loadout());
         assertFalse(loaded.failLava()); assertTrue(loaded.failOutside());
         assertEquals(List.of(),loaded.problems());
     }
@@ -67,8 +67,8 @@ class TriggerModelTest {
         assertEquals(1,withTrigger.triggers().size(),"Same position replaces");
         assertEquals(1,withTrigger.trigger(a.pos()).actions().size());
         assertEquals(List.of(),withTrigger.edit().removeTrigger(a.pos()).build().triggers());
-        assertEquals(List.of("範囲の外にトリガーがある"),course.edit().trigger(new Trigger(new BlockPos(20,0,0),List.of())).build().problems());
-        assertEquals(List.of("初期装備の1番が空（1番でQが使えない）"),course.edit().loadout(0,null).build().problems());
+        assertEquals(List.of("problem.trigger-outside"),course.edit().trigger(new Trigger(new BlockPos(20,0,0),List.of())).build().problems());
+        assertEquals(List.of("problem.no-slot1"),course.edit().loadout(0,null).build().problems());
         assertEquals(List.of(),withTrigger.edit().region(UUID.randomUUID(),Region.of(0,0,0,1,1,1)).build().triggers(),"Other world drops triggers");
         assertThrows(IllegalArgumentException.class,() -> new Trigger(a.pos(),Collections.nCopies(Trigger.MAX_ACTIONS+1,TriggerAction.sound("s",1,1))));
     }

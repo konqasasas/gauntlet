@@ -2,17 +2,20 @@ package konqasasas.gauntlet.course;
 
 /**
  * One action of a trigger. Flat record so it stays plain JSON; only the fields
- * of its type are set. Placement SLOT1..SLOT4 are hotbar slots 1-4, EMPTY is the
- * first empty slot among 2-4.
+ * of its type are set. Placement SLOT1..SLOT3 are hotbar slots 1-3, EMPTY is the
+ * first empty slot among 2-3. SLOT4 is from when courses had four item slots and
+ * now behaves like EMPTY. Display names are the message keys "placement.<NAME>".
  */
 public record TriggerAction(Type type,ItemRef item,Placement placement,boolean allLevels,String mob,Spot mobAt,
                             String sound,float volume,float pitch) {
     public enum Type { GIVE,REMOVE,MOB,SOUND }
     public enum Placement {
-        SLOT1("1番を上書き"),SLOT2("2番"),SLOT3("3番"),SLOT4("4番"),EMPTY("2〜4番の空き");
-        public final String label;
-        Placement(String label) { this.label=label; }
-        public int slot() { return this==EMPTY ? -1 : ordinal(); }
+        SLOT1,SLOT2,SLOT3,SLOT4,EMPTY;
+        /** Choices offered in the editor. */
+        public static final java.util.List<Placement> CHOICES=java.util.List.of(SLOT1,SLOT2,SLOT3,EMPTY);
+        public String key() { return "placement."+(this==SLOT4 ? EMPTY : this).name(); }
+        /** Hotbar index, or -1 for the first empty slot among 2-3. */
+        public int slot() { return this==EMPTY || this==SLOT4 ? -1 : ordinal(); }
     }
     public static final float MIN_VOLUME=0,MAX_VOLUME=4,MIN_PITCH=.5f,MAX_PITCH=2;
     public TriggerAction {

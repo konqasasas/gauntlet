@@ -6,26 +6,41 @@ import java.util.*;
  * One course definition. Region and start stay null until the builder sets them.
  * loadout[i] is hotbar slot i+1 (null = empty). Fields added later are null in
  * older files and get their defaults here.
+ *
+ * rev counts edits that change how the course plays (records are kept per rev).
+ * rank/stage are the temporary manual numbers shown as "Rank 1 ‐ Stage 3"
+ * (stage 0 = BOSS) until rank progression exists. route is the line used for the
+ * progress percentage.
  */
 public record Course(String id,String name,CourseStatus status,UUID author,UUID world,Region region,Spot start,
                      List<BlockPos> goals,int timeLimitSeconds,List<ItemRef> loadout,List<Trigger> triggers,
-                     Boolean failLava,Boolean failOutside) {
-    public static final int DEFAULT_TIME_LIMIT=30,MAX_TIME_LIMIT=600,MAX_NAME_LENGTH=32,COURSE_SLOTS=4;
+                     Boolean failLava,Boolean failOutside,Integer rev,Integer rank,Integer stage,List<RoutePoint> route) {
+    public static final int DEFAULT_TIME_LIMIT=30,MAX_TIME_LIMIT=600,MAX_NAME_LENGTH=32,COURSE_SLOTS=3,
+            MAX_RANK=13,MAX_STAGE=20,MAX_ROUTE_POINTS=200;
     public Course {
         if(!CourseStore.validId(id) || name==null || name.isBlank() || name.length()>MAX_NAME_LENGTH
                 || status==null || author==null || world==null || timeLimitSeconds<0 || timeLimitSeconds>MAX_TIME_LIMIT)
             throw new IllegalArgumentException("Invalid course "+id);
         goals=goals==null ? List.of() : List.copyOf(new LinkedHashSet<>(goals));
         if(loadout==null) { loadout=new ArrayList<>(Collections.nCopies(COURSE_SLOTS,null)); loadout.set(0,ItemRef.scaffold()); }
-        if(loadout.size()!=COURSE_SLOTS) throw new IllegalArgumentException("Loadout must have "+COURSE_SLOTS+" slots");
-        loadout=Collections.unmodifiableList(new ArrayList<>(loadout));
+        // Courses saved with four item slots: the fourth slot no longer exists.
+        List<ItemRef> slots=new ArrayList<>(loadout);
+        while(slots.size()>COURSE_SLOTS) slots.removeLast();
+        while(slots.size()<COURSE_SLOTS) slots.add(null);
+        loadout=Collections.unmodifiableList(slots);
         triggers=triggers==null ? List.of() : List.copyOf(triggers);
         if(triggers.stream().map(Trigger::pos).distinct().count()!=triggers.size()) throw new IllegalArgumentException("Duplicate trigger");
         failLava=failLava==null || failLava;
         failOutside=failOutside==null || failOutside;
+        rev=rev==null ? 0 : rev;
+        if(rev<0) throw new IllegalArgumentException("Negative revision");
+        if(rank!=null && (rank<1 || rank>MAX_RANK)) rank=null;
+        if(stage!=null && (stage<0 || stage>MAX_STAGE)) stage=null;
+        route=route==null ? List.of() : List.copyOf(route);
+        if(route.size()>MAX_ROUTE_POINTS) throw new IllegalArgumentException("Route too long");
     }
     public static Course create(String id,UUID author,UUID world) {
-        return new Course(id,id,CourseStatus.DRAFT,author,world,null,null,null,DEFAULT_TIME_LIMIT,null,null,null,null);
+        return new Course(id,id,CourseStatus.DRAFT,author,world,null,null,null,DEFAULT_TIME_LIMIT,null,null,null,null,0,null,null,null);
     }
 
     public Builder edit() { return new Builder(this); }
@@ -33,11 +48,11 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         private final Course base;
         private String name; private CourseStatus status; private UUID world; private Region region; private Spot start;
         private List<BlockPos> goals; private int timeLimit; private List<ItemRef> loadout; private List<Trigger> triggers;
-        private boolean failLava,failOutside;
+        private boolean failLava,failOutside; private int rev; private Integer rank,stage; private List<RoutePoint> route;
         private Builder(Course c) {
             base=c; name=c.name; status=c.status; world=c.world; region=c.region; start=c.start; goals=new ArrayList<>(c.goals);
             timeLimit=c.timeLimitSeconds; loadout=new ArrayList<>(c.loadout); triggers=new ArrayList<>(c.triggers);
-            failLava=c.failLava; failOutside=c.failOutside;
+            failLava=c.failLava; failOutside=c.failOutside; rev=c.rev; rank=c.rank; stage=c.stage; route=new ArrayList<>(c.route);
         }
         public Builder name(String v) { name=v; return this; }
         public Builder status(CourseStatus v) { status=v; return this; }
@@ -45,9 +60,13 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         public Builder timeLimit(int seconds) { timeLimit=Math.clamp(seconds,0,MAX_TIME_LIMIT); return this; }
         public Builder failLava(boolean v) { failLava=v; return this; }
         public Builder failOutside(boolean v) { failOutside=v; return this; }
+        public Builder rev(int v) { rev=v; return this; }
+        /** null clears the number. */
+        public Builder rank(Integer v) { rank=v; return this; }
+        public Builder stage(Integer v) { stage=v; return this; }
         /** Moving the region to another world drops everything positioned in the old world. */
         public Builder region(UUID regionWorld,Region v) {
-            if(!regionWorld.equals(world)) { start=null; goals.clear(); triggers.clear(); }
+            if(!regionWorld.equals(world)) { start=null; goals.clear(); triggers.clear(); route.clear(); }
             world=regionWorld; region=v; return this;
         }
         /** Adds the goal block, or removes it when already registered. */
@@ -58,8 +77,11 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
             triggers.removeIf(t -> t.pos().equals(trigger.pos())); triggers.add(trigger); return this;
         }
         public Builder removeTrigger(BlockPos pos) { triggers.removeIf(t -> t.pos().equals(pos)); return this; }
+        public Builder addRoutePoint(RoutePoint point) { route.add(point); return this; }
+        public Builder removeLastRoutePoint() { if(!route.isEmpty()) route.removeLast(); return this; }
+        public Builder clearRoute() { route.clear(); return this; }
         public Course build() {
-            return new Course(base.id,name,status,base.author,world,region,start,goals,timeLimit,loadout,triggers,failLava,failOutside);
+            return new Course(base.id,name,status,base.author,world,region,start,goals,timeLimit,loadout,triggers,failLava,failOutside,rev,rank,stage,route);
         }
     }
     public Course withName(String value) { return edit().name(value).build(); }
@@ -69,20 +91,32 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
     public Course toggleGoal(BlockPos goal) { return edit().toggleGoal(goal).build(); }
     public Course withTimeLimit(int seconds) { return edit().timeLimit(seconds).build(); }
 
+    /** Same course to play: everything except name, status, numbering and the revision itself. */
+    public boolean sameGameplay(Course other) {
+        return Objects.equals(world,other.world) && Objects.equals(region,other.region) && Objects.equals(start,other.start)
+                && goals.equals(other.goals) && timeLimitSeconds==other.timeLimitSeconds && loadout.equals(other.loadout)
+                && triggers.equals(other.triggers) && failLava.equals(other.failLava) && failOutside.equals(other.failOutside)
+                && route.equals(other.route);
+    }
+    /** "Rank 1 ‐ Stage 3", "Rank 1 ‐ BOSS", or null without a rank number. */
+    public String numbering() {
+        if(rank==null) return null;
+        return "Rank "+rank+(stage==null ? "" : stage==0 ? " ‐ BOSS" : " ‐ Stage "+stage);
+    }
     public boolean contains(Spot spot) { return region!=null && region.contains(spot.x(),spot.y(),spot.z()); }
     private boolean contains(BlockPos pos) { return region!=null && region.contains(pos.x(),pos.y(),pos.z()); }
     public boolean isGoal(int x,int y,int z) { return goals.contains(new BlockPos(x,y,z)); }
     public Trigger trigger(BlockPos pos) { return triggers.stream().filter(t -> t.pos().equals(pos)).findFirst().orElse(null); }
-    /** What still has to be set before the course can be played. */
+    /** What still has to be set before the course can be played, as message keys. */
     public List<String> problems() {
         List<String> problems=new ArrayList<>();
-        if(region==null) problems.add("範囲が未設定");
-        if(start==null) problems.add("スタート地点が未設定");
-        else if(region!=null && !contains(start)) problems.add("スタート地点が範囲の外");
-        if(goals.isEmpty()) problems.add("ゴールが未設定");
-        else if(region!=null && goals.stream().anyMatch(g -> !contains(g))) problems.add("範囲の外にゴールがある");
-        if(region!=null && triggers.stream().anyMatch(t -> !contains(t.pos()))) problems.add("範囲の外にトリガーがある");
-        if(loadout.getFirst()==null) problems.add("初期装備の1番が空（1番でQが使えない）");
+        if(region==null) problems.add("problem.no-region");
+        if(start==null) problems.add("problem.no-start");
+        else if(region!=null && !contains(start)) problems.add("problem.start-outside");
+        if(goals.isEmpty()) problems.add("problem.no-goal");
+        else if(region!=null && goals.stream().anyMatch(g -> !contains(g))) problems.add("problem.goal-outside");
+        if(region!=null && triggers.stream().anyMatch(t -> !contains(t.pos()))) problems.add("problem.trigger-outside");
+        if(loadout.getFirst()==null) problems.add("problem.no-slot1");
         return problems;
     }
 }

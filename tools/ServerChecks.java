@@ -198,6 +198,7 @@ public class ServerChecks {
                     case "getInventory" -> inventory;
                     case "hasPermission","isOp" -> true;
                     case "isOnline" -> false;
+                    case "locale" -> java.util.Locale.JAPAN;
                     case "getLocation" -> this.location.clone();
                     case "getWorld" -> this.location.getWorld();
                     case "isOnGround" -> ground;

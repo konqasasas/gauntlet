@@ -4,6 +4,8 @@ import io.papermc.paper.event.player.AsyncChatEvent;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import konqasasas.gauntlet.i18n.Msg;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -17,10 +19,11 @@ public final class ChatPrompts implements Listener {
     private final Plugin plugin;
     private final Map<UUID,Consumer<String>> pending=new ConcurrentHashMap<>();
     public ChatPrompts(Plugin plugin) { this.plugin=plugin; }
-    public void ask(Player player,String question,Consumer<String> answer) {
+    /** Asks the question (message key) and passes the next chat line to answer. */
+    public void ask(Player player,String questionKey,Consumer<String> answer,TagResolver... args) {
         player.closeInventory();
         pending.put(player.getUniqueId(),answer);
-        Icons.tell(player,question+"（チャットに入力。「キャンセル」で中止）");
+        player.sendMessage(Msg.text(player,"prefix").append(Msg.text(player,questionKey,args)).append(Msg.text(player,"editor.prompt.suffix")));
     }
     @EventHandler(priority=EventPriority.LOWEST)
     public void chat(AsyncChatEvent event) {
@@ -31,7 +34,7 @@ public final class ChatPrompts implements Listener {
         String text=PlainTextComponentSerializer.plainText().serialize(event.originalMessage()).strip();
         Bukkit.getScheduler().runTask(plugin,() -> {
             if(!player.isOnline()) return;
-            if(CANCEL.contains(text.toLowerCase(Locale.ROOT))) Icons.tell(player,"入力を中止しました。");
+            if(CANCEL.contains(text.toLowerCase(Locale.ROOT))) Msg.send(player,"editor.prompt.cancelled");
             else answer.accept(text);
         });
     }

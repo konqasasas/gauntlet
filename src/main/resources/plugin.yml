@@ -4,15 +4,30 @@ main: konqasasas.gauntlet.ParkourGauntletPlugin
 api-version: '26.3'
 author: konqasasas
 description: Parkour Gauntlet course creation tools.
+# Paper downloads these from Maven Central at startup (not shaded into the JAR).
+libraries:
+  - org.xerial:sqlite-jdbc:3.51.3.0
 commands:
   gauntlet:
     description: Receive course creation tools
-    usage: /gauntlet kit
+    usage: /gauntlet kit|reload lang
     permission: gauntlet.admin
   course:
     description: Open the course GUI
-    usage: /course [play <id>|practice <id>|leave]
+    usage: /course [play <id>|practice <id>|leave|undosave]
+  translate:
+    description: Chat translation settings
+    usage: /translate [on|off|lang <code>]
+  lang:
+    description: Interface language
+    usage: /lang [ja|en|auto]
+  settings:
+    description: Personal settings
+    usage: /settings [<key> <value>]
 permissions:
   gauntlet.admin:
     description: Use course creation tools
+    default: op
+  gauntlet.display.admin:
+    description: Show the [ADMIN] tag next to the name
     default: op

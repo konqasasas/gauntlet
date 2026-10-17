@@ -1,8 +1,8 @@
 package konqasasas.gauntlet.course;
 
+/** Display names are the message keys "status.<NAME>". */
 public enum CourseStatus {
-    DRAFT("下書き"),TESTING("テスト中"),DONE("完成");
-    public final String label;
-    CourseStatus(String label) { this.label=label; }
+    DRAFT,TESTING,DONE;
+    public String key() { return "status."+name(); }
     public CourseStatus next() { return values()[(ordinal()+1)%values().length]; }
 }

@@ -4,9 +4,15 @@ import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
 import com.destroystokyo.paper.event.server.ServerTickEndEvent;
+import konqasasas.gauntlet.chat.*;
 import konqasasas.gauntlet.course.*;
+import konqasasas.gauntlet.data.*;
+import konqasasas.gauntlet.display.*;
+import konqasasas.gauntlet.i18n.*;
+import konqasasas.gauntlet.lobby.Lobby;
 import konqasasas.gauntlet.play.*;
-import net.kyori.adventure.text.Component;
+import konqasasas.gauntlet.ui.*;
+import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.command.*;
@@ -25,8 +31,18 @@ import org.bukkit.util.Vector;
 public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,CommandExecutor,TabCompleter {
     private StateStore state;
     private ToolItems tools;
+    private Database database;
+    private PlayerData playerData;
+    private CourseStore courseStore;
+    private RunLog runs;
     private CourseEditor courses;
     private Participants participants;
+    private ChatTranslation chat;
+    private NameTags nameTags;
+    private Visibility visibility;
+    private Lobby lobby;
+    private TabList tabList;
+    private Sidebar sidebar;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
@@ -35,14 +51,24 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
 
     @Override public void onEnable() {
         try {
-            state=new StateStore(getDataFolder().toPath().resolve("state.json"));
+            saveDefaultConfig();
+            var data=getDataFolder().toPath();
+            Messages messages=Messages.load(getClassLoader(),data.resolve("lang"),getLogger());
+            database=Database.open(data.resolve("gauntlet.db"),getLogger());
+            LegacyImport.run(database,data,getLogger());
+            runs=new RunLog(database); runs.load();
+            playerData=new PlayerData(this,database);
+            Msg.init(messages,playerData::uiLanguage);
+            Sounds.init(playerData);
+            playerData.start();
+
+            state=new StateStore(data.resolve("state.json"));
             tools=new ToolItems(new NamespacedKey(this,"tool"));
             cleanup(state.allBlocks());
             getServer().getPluginManager().registerEvents(this,this);
             Objects.requireNonNull(getCommand("gauntlet")).setExecutor(this);
             getCommand("gauntlet").setTabCompleter(this);
-            var data=getDataFolder().toPath();
-            CourseStore courseStore=new CourseStore(data.resolve("courses"));
+            courseStore=new CourseStore(data.resolve("courses"));
             TemplateStore templateStore=new TemplateStore(data.resolve("templates.json"));
             Scaffold scaffold=new Scaffold() {
                 @Override public ItemStack create() { return tools.create(ToolItems.Kind.SCAFFOLD); }
@@ -55,44 +81,91 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
                     try { cleanup(state.blocks(player.getUniqueId()).stream().filter(b -> !keep.contains(b.block())).toList()); }
                     catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Scaffold cleanup incomplete; journal retained",e); }
                 }
+                @Override public void remove(Player player,Set<Object> blocks) {
+                    try { cleanup(state.blocks(player.getUniqueId()).stream().filter(b -> blocks.contains(b.block())).toList()); }
+                    catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Scaffold cleanup incomplete; journal retained",e); }
+                }
+                @Override public Object key(Block block) { return ParkourGauntletPlugin.key(block); }
             };
             CourseItems courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
-            participants=new Participants(this,courseStore,new RecordStore(data.resolve("records.jsonl")),
-                    new ReturnStore(data.resolve("participants.json")),scaffold,courseItems);
+            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems);
+
+            PlayerDisplay display=new PlayerDisplay(new Ranks());
+            nameTags=new NameTags(this,display,playerData,participants::active);
+            Teleports.beforeTeleport(nameTags::detach);
+            visibility=new Visibility(this,playerData,nameTags);
+            participants.visibility(visibility);
+            lobby=new Lobby(this,scaffold,visibility,participants::active);
+            tabList=new TabList(this,display);
+            sidebar=new Sidebar(this,display,playerData,tabList.logo(),this::courseView);
+
             participants.start();
             courses=new CourseEditor(this,courseStore,templateStore,courseItems,new NamespacedKey(this,"tool"),participants);
             courses.start();
-            getLogger().info("Parkour Gauntlet creation tools ready: /gauntlet kit (Paper 26.3)");
+            nameTags.start();
+            visibility.start();
+            lobby.start();
+            tabList.start();
+            sidebar.start();
+            getServer().getPluginManager().registerEvents(new ChatFormat(display),this);
+            chat=new ChatTranslation(this,playerData);
+            chat.start();
+            new SettingsCommands(this,playerData,visibility).start();
+            getLogger().info("Parkour Gauntlet ready: /gauntlet kit, /course (Paper 26.3)");
         } catch(IOException|RuntimeException e) {
-            getLogger().log(Level.SEVERE,"Cannot initialize creation tools; existing state was preserved",e);
+            getLogger().log(Level.SEVERE,"Cannot initialize Parkour Gauntlet; existing state was preserved",e);
             getServer().getPluginManager().disablePlugin(this);
         }
     }
     @Override public void onDisable() {
         if(courses!=null) courses.stop();
+        if(chat!=null) chat.stop();
+        if(lobby!=null) lobby.stop();
+        if(sidebar!=null) sidebar.stop();
+        if(tabList!=null) tabList.stop();
+        if(nameTags!=null) nameTags.stop();
+        if(visibility!=null) visibility.stop();
         if(participants!=null) participants.stop();
         if(state!=null) try { cleanup(state.allBlocks()); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }
+        if(playerData!=null) playerData.stop();
+        if(database!=null) database.close();
         lastUse.clear(); pendingRefills.clear(); lavaExtinguish.clear();
         pendingLavaRetries.clear(); lavaRetryFailures.clear();
     }
+    /** The course part of the sidebar, or null outside a course. */
+    private Sidebar.CourseView courseView(Player player) {
+        Participants.View view=participants.view(player); if(view==null) return null;
+        Course course=courseStore.get(view.course()); if(course==null) return null;
+        RunLog.Stats stats=runs.stats(course.id(),course.rev(),player.getUniqueId());
+        String best=stats.bestClearTicks()!=null ? "Clear ✓ "+RunClock.seconds(stats.bestClearTicks())+"s"
+                : stats.bestProgress()!=null && new RouteProgress(course.route()).usable() ? RouteProgress.percent(stats.bestProgress(),false)+"%" : "—";
+        return new Sidebar.CourseView(course.numbering()==null ? course.id() : course.numbering(),course.name(),best,stats.attempts());
+    }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
-        if(!(sender instanceof Player player)) { sender.sendMessage("ゲーム内で /gauntlet kit を実行してください。"); return true; }
+        if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("lang")) {
+            try { Msg.reload(Messages.load(getClassLoader(),getDataFolder().toPath().resolve("lang"),getLogger())); Msg.send(sender,"editor.lang.reloaded"); }
+            catch(IOException e) { Msg.send(sender,"editor.lang.reload-failed",Msg.arg("error",String.valueOf(e.getMessage()))); getLogger().log(Level.SEVERE,"Cannot reload language files",e); }
+            return true;
+        }
+        if(!(sender instanceof Player player)) { Msg.send(sender,"editor.kit.console"); return true; }
         if(!allowed(player)) return true;
-        if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"/gauntlet kit で制作アイテムを受け取れます。"); return true; }
-        if(!tools.grant(player)) tell(player,"インベントリに空きを作ってください。");
-        else tell(player,"制作アイテムを渡しました。アメジストをQでCP設定、右クリックでリトライ。");
+        if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"editor.kit.usage"); return true; }
+        if(!tools.grant(player)) tell(player,"editor.kit.full");
+        else tell(player,"editor.kit.given");
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
-        return args.length==1 && "kit".startsWith(args[0].toLowerCase(Locale.ROOT)) ? List.of("kit") : List.of();
+        if(args.length==1) return List.of("kit","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang");
+        return List.of();
     }
     private boolean allowed(Player player) {
         if(player.hasPermission("gauntlet.admin")) return true;
-        tell(player,"このアイテムは運営用です。"); return false;
+        tell(player,"editor.kit.admin-only"); return false;
     }
-    private void tell(Player player,String message) { player.sendMessage(Component.text("[Gauntlet] "+message)); }
-    private static BlockKey key(Block block) { return new BlockKey(block.getWorld().getUID(),block.getX(),block.getY(),block.getZ()); }
+    private void tell(Player player,String key,TagResolver... args) { Msg.send(player,key,args); }
+    static BlockKey key(Block block) { return new BlockKey(block.getWorld().getUID(),block.getX(),block.getY(),block.getZ()); }
 
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void drop(PlayerDropItemEvent event) {
@@ -104,15 +177,13 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     }
     private void saveCheckpoint(Player player) {
         Location location=player.getLocation();
-        if(!player.isOnGround() || !hasPermanentSupport(location,player.getBoundingBox())) {
-            tell(player,"CPは接地中の通常の足場で設定してください。設置用ブロックの上では設定できません。"); return;
-        }
+        if(!player.isOnGround() || !hasPermanentSupport(location,player.getBoundingBox())) { tell(player,"editor.cp.not-ground"); return; }
         try {
             state.checkpoint(player.getUniqueId(),new Checkpoint(location.getWorld().getUID(),location.getX(),location.getY(),location.getZ(),location.getYaw(),location.getPitch()));
-            tell(player,"CPを設定しました。位置と視点を保存しました。");
-            player.playSound(location,Sound.ENTITY_EXPERIENCE_ORB_PICKUP,SoundCategory.PLAYERS,1f,1f);
+            tell(player,"editor.cp.set");
+            Sounds.system(player,Sound.ENTITY_EXPERIENCE_ORB_PICKUP,1f,1f);
             getLogger().info("CP_SET player="+player.getUniqueId()+" world="+location.getWorld().getName()+" position="+location.getX()+","+location.getY()+","+location.getZ()+" yaw="+location.getYaw()+" pitch="+location.getPitch());
-        } catch(IOException e) { failure(player,"CPを保存できませんでした。",e); }
+        } catch(IOException e) { failure(player,"editor.cp.save-failed",e); }
     }
     private boolean hasPermanentSupport(Location location,BoundingBox feet) {
         List<Block> support=GroundGeometry.supporting(location.getWorld(),feet,location.getY());
@@ -137,27 +208,25 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(kind==ToolItems.Kind.CHECKPOINT) retry(player);
         else {
             GameMode mode=player.getGameMode()==GameMode.CREATIVE ? GameMode.ADVENTURE : GameMode.CREATIVE;
-            player.setGameMode(mode); tell(player,"ゲームモード："+mode.name());
-            player.playSound(player.getLocation(),Sound.BLOCK_NOTE_BLOCK_PLING,SoundCategory.PLAYERS,1f,1f);
+            player.setGameMode(mode); tell(player,"editor.mode.changed",Msg.arg("mode",mode.name()));
+            Sounds.system(player,Sound.BLOCK_NOTE_BLOCK_PLING,1f,1f);
         }
     }
     private boolean retry(Player player) {
         Checkpoint cp=state.checkpoint(player.getUniqueId());
-        if(cp==null) { tell(player,"CPが未設定です。接地中にアメジストをQで設定してください。"); return false; }
+        if(cp==null) { tell(player,"editor.cp.none"); return false; }
         World world=Bukkit.getWorld(cp.world());
-        if(world==null) { tell(player,"CPのワールドが読み込まれていません。"); return false; }
+        if(world==null) { tell(player,"editor.cp.world-unloaded"); return false; }
         Location target=new Location(world,cp.x(),cp.y(),cp.z(),cp.yaw(),cp.pitch());
         int chunkX=target.getBlockX()>>4,chunkZ=target.getBlockZ()>>4;
-        if(!world.isChunkLoaded(chunkX,chunkZ) && !world.loadChunk(chunkX,chunkZ,false)) {
-            tell(player,"CPのチャンクを読み込めませんでした。"); return false;
-        }
+        if(!world.isChunkLoaded(chunkX,chunkZ) && !world.loadChunk(chunkX,chunkZ,false)) { tell(player,"editor.cp.chunk"); return false; }
         // Never clear the course trial if another plugin rejects this teleport.
-        if(!player.teleport(target,PlayerTeleportEvent.TeleportCause.PLUGIN)) { tell(player,"CPへの移動が拒否されました。"); return false; }
+        if(!Teleports.to(player,target)) { tell(player,"editor.cp.denied"); return false; }
         stopMotion(player);
         try {
             cleanup(state.blocks(player.getUniqueId()));
             tools.refill(player); player.updateInventory();
-        } catch(IOException|RuntimeException e) { failure(player,"足場の片付けが完了しませんでした。ログを確認してください。",e); }
+        } catch(IOException|RuntimeException e) { failure(player,"editor.cp.cleanup-failed",e); }
         return true;
     }
     private void stopMotion(Player player) {
@@ -231,12 +300,13 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void place(BlockPlaceEvent event) {
         if(tools.kind(event.getItemInHand())!=ToolItems.Kind.SCAFFOLD) return;
-        if(!participants.active(event.getPlayer()) && !allowed(event.getPlayer())) { event.setCancelled(true); return; }
+        Player player=event.getPlayer();
+        if(!participants.active(player) && !lobby.managed(player) && !allowed(player)) { event.setCancelled(true); return; }
         try {
-            state.add(new PlacedBlock(event.getPlayer().getUniqueId(),key(event.getBlockPlaced()),
+            state.add(new PlacedBlock(player.getUniqueId(),key(event.getBlockPlaced()),
                     event.getBlockReplacedState().getBlockData().getAsString(),event.getBlockPlaced().getBlockData().getAsString()));
-            tools.refill(event.getPlayer()); refillSoon(event.getPlayer());
-        } catch(IOException|RuntimeException e) { event.setCancelled(true); failure(event.getPlayer(),"足場を記録できないため設置を拒否しました。",e); }
+            tools.refill(player); refillSoon(player);
+        } catch(IOException|RuntimeException e) { event.setCancelled(true); failure(player,"editor.scaffold.record-failed",e); }
     }
     private void refillSoon(Player player) {
         if(!pendingRefills.add(player.getUniqueId())) return;
@@ -286,7 +356,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         }
         state.remove(completed); return restored;
     }
-    private void failure(Player player,String message,Exception e) {
-        tell(player,message); getLogger().log(Level.SEVERE,message,e);
+    private void failure(Player player,String key,Exception e) {
+        tell(player,key); getLogger().log(Level.SEVERE,Msg.plain(player,key),e);
     }
 }

@@ -6,5 +6,5 @@ public record Spot(double x,double y,double z,float yaw,float pitch) {
         if(!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z) || !Float.isFinite(yaw) || !Float.isFinite(pitch))
             throw new IllegalArgumentException("Invalid spot");
     }
-    public String describe() { return String.format("%.2f, %.2f, %.2f（向き %.1f / %.1f）",x,y,z,yaw,pitch); }
+    public String describe() { return String.format("%.2f, %.2f, %.2f (%.1f / %.1f)",x,y,z,yaw,pitch); }
 }

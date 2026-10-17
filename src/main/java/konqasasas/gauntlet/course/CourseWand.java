@@ -1,8 +1,8 @@
 package konqasasas.gauntlet.course;
 
-import java.util.List;
-import konqasasas.gauntlet.ui.Icons;
+import konqasasas.gauntlet.i18n.Msg;
 import org.bukkit.*;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -15,8 +15,8 @@ final class CourseWand {
         if(item==null || item.getType()!=Material.BREEZE_ROD) return false;
         return TAG.equals(item.getItemMeta().getPersistentDataContainer().get(key,PersistentDataType.STRING));
     }
-    ItemStack create() {
-        ItemStack item=Icons.icon(Material.BREEZE_ROD,"範囲指定の杖",List.of("左クリック：1点目","右クリック：2点目","手に持つと範囲とスタートを表示"));
+    ItemStack create(Player player) {
+        ItemStack item=Msg.icon(player,Material.BREEZE_ROD,"editor.wand.item");
         item.editMeta(meta -> meta.getPersistentDataContainer().set(key,PersistentDataType.STRING,TAG));
         return item;
     }

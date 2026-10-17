@@ -84,6 +84,15 @@ public class FeatureChecks {
             require(carted.size()==2 && Bukkit.getEntity(carted.getFirst()) instanceof Minecart,"Vehicle with passenger not tracked: "+carted.size());
             call(mobs,"remove",new ArrayList<>(spawned));
             for(UUID id:spawned) require(Bukkit.getEntity(id)==null || !Bukkit.getEntity(id).isValid(),"Leftover mob "+id);
+            // Real translation engine call (network). Uses a few characters of the free quota.
+            Object service=field(field(plugin,"chat"),"service");
+            if((boolean)call(service,"enabled")) {
+                var future=(java.util.concurrent.CompletableFuture<?>)call(service,"translate","hello everyone, let's play together","ja");
+                Object result=future.get(15,java.util.concurrent.TimeUnit.SECONDS);
+                String translated=(String)call(result,"text"),source=(String)call(result,"source");
+                require(!translated.isBlank() && !translated.contains("hello") && source.startsWith("en"),"Unexpected translation: "+translated+" / "+source);
+                logger.info("FEATURE_TRANSLATE engine="+call(service,"engine")+" result="+translated);
+            }
             logger.info("FEATURE_PASS template mace Wind Burst/unbreakable/tag, scaffold ref, pasted summon SNBT, mob tag/remove/snapshot respawn, passengers tracked, minecart vehicle tracked, no untracked leftovers");
         } finally {
             try { call(mobs,"remove",new ArrayList<>(spawned)); } catch(Exception ignored) {}

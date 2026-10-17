@@ -1,0 +1,40 @@
+# Parkour Gauntlet 設定（変更後はサーバーを再起動）
+
+# サーバーの表示（名前・IPは未定のため仮の値）
+server:
+  # TABのロゴ・スコアボードのタイトル
+  name: "GAUNTLET"
+  # スコアボードの最下行
+  address: "play.example.net"
+
+# TAB
+tab:
+  # Pingの色分け（ミリ秒）。good未満は緑、ok未満は黄、それ以上は赤
+  ping-good: 100
+  ping-ok: 200
+  # ヒントの切り替え間隔（秒）。文言は lang/*.yml の tab.hints
+  hint-seconds: 20
+
+# ロビー
+lobby:
+  # ロビーとして扱うワールド名。空なら無効。
+  # 有効にすると、このワールドにいるAdventure/Survivalのプレイヤーは所持品が
+  # ロビー用のホットバー（1番：ブロック、8番：プレイヤー表示）に置き換わる
+  world: ""
+  # ロビーで置いたブロックが消えるまでの秒数
+  block-seconds: 10
+
+# チャット翻訳
+translation:
+  # 翻訳エンジン: mymemory / libretranslate / none
+  engine: mymemory
+  # 1回の翻訳を待つ最大時間（ミリ秒）。超えたら原文と[翻訳]ボタンで表示する
+  timeout-ms: 2500
+  mymemory:
+    # 連絡用メールアドレス。書くと無料枠が1日5,000文字から50,000文字に増える
+    email: ""
+  libretranslate:
+    # 自前で立てたLibreTranslateサーバーのURL
+    url: "http://localhost:5000"
+    # サーバー側でAPIキーを有効にした場合のみ
+    api-key: ""

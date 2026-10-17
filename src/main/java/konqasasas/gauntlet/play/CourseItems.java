@@ -2,7 +2,9 @@ package konqasasas.gauntlet.play;
 
 import java.util.Base64;
 import konqasasas.gauntlet.course.*;
+import konqasasas.gauntlet.i18n.Msg;
 import org.bukkit.*;
+import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
@@ -41,12 +43,13 @@ public final class CourseItems {
         if(scaffold.is(item)) return ItemRef.scaffold();
         return ItemRef.fromTag(item.getItemMeta().getPersistentDataContainer().get(key,PersistentDataType.STRING));
     }
-    public String name(ItemRef ref) {
-        if(ref==null) return "空";
-        if(ref.isScaffold()) return "設置用ブロック";
+    /** Name for the editor (template names are written by builders and not translated). */
+    public String name(CommandSender viewer,ItemRef ref) {
+        if(ref==null) return Msg.plain(viewer,"editor.item.empty");
+        if(ref.isScaffold()) return Msg.plain(viewer,"item.scaffold.name");
         TemplateStore.Template t=templates.get(ref.template());
-        String base=t==null ? "削除されたテンプレート("+ref.template()+")" : t.name();
-        return ref.level()>0 ? base+" ウィンドバースト"+"ⅠⅡⅢ".charAt(ref.level()-1) : base;
+        String base=t==null ? Msg.plain(viewer,"editor.item.deleted",Msg.arg("id",ref.template())) : t.name();
+        return ref.level()>0 ? base+" "+Msg.plain(viewer,"editor.item.wind-burst",Msg.arg("level","ⅠⅡⅢ".charAt(ref.level()-1))) : base;
     }
     public boolean exists(ItemRef ref) { return ref.isScaffold() || templates.get(ref.template())!=null; }
 }
