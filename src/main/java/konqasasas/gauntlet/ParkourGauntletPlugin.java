@@ -139,8 +139,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         Course course=courseStore.get(view.course()); if(course==null) return null;
         RunLog.Stats stats=runs.stats(course.id(),course.rev(),player.getUniqueId());
         String best=stats.bestClearTicks()!=null ? "Clear ✓ "+RunClock.seconds(stats.bestClearTicks())+"s"
-                : stats.bestProgress()!=null && new RouteProgress(course.route()).usable() ? RouteProgress.percent(stats.bestProgress(),false)+"%" : "—";
-        return new Sidebar.CourseView(course.numbering()==null ? course.id() : course.numbering(),course.name(),best,stats.attempts());
+                : stats.bestProgress()!=null && new RouteProgress(course.route()).usable() ? RouteProgress.percent(stats.bestProgress(),false) : "—";
+        return new Sidebar.CourseView(course.name(),best,stats.attempts());
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
         if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("lang")) {

@@ -67,5 +67,7 @@ public final class Messages {
         if(value==null && warned.add(key) && logger!=null) logger.warning("Missing message key: "+key);
         return value;
     }
+    /** Whether any language has the key (no warning when it does not). */
+    public boolean has(String key) { return catalogs.values().stream().anyMatch(keys -> keys.containsKey(key)); }
     public Set<String> keys(String lang) { return catalogs.getOrDefault(lang,Map.of()).keySet(); }
 }

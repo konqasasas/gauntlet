@@ -44,9 +44,10 @@ public final class RouteProgress {
     }
     /** 0..1 */
     public double fraction(double distance) { return usable() ? Math.clamp(distance/total,0,1) : 0; }
-    /** Whole percent, at most 99 unless the goal was reached. */
-    public static int percent(double fraction,boolean cleared) {
-        return cleared ? 100 : Math.min(99,(int)Math.floor(fraction*100+1e-9));
+    /** "63.4%": one decimal, rounded down, at most 99.9% unless the goal was reached. */
+    public static String percent(double fraction,boolean cleared) {
+        int tenths=cleared ? 1000 : Math.min(999,(int)Math.floor(fraction*1000+1e-9));
+        return tenths/10+"."+tenths%10+"%";
     }
     private static double sq(double v) { return v*v; }
 }

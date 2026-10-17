@@ -21,8 +21,8 @@ import org.bukkit.scoreboard.*;
  * name tags (NameTags draws them instead).
  */
 public final class Sidebar implements Listener {
-    /** What the course part shows; best is already formatted ("87%", "Clear ✓ 24.10s", "—"). */
-    public record CourseView(String numbering,String name,String best,int attempts) {}
+    /** What the course part shows; best is already formatted ("87%", "Clear ✓ 24.10s" or "—"). */
+    public record CourseView(String name,String best,int attempts) {}
     private static final long UPDATE_TICKS=10;
     private static final int MAX_LINES=15;
     private static final String HIDE_TEAM="gauntlet_names";
@@ -80,7 +80,8 @@ public final class Sidebar implements Listener {
         List<Component> lines=lines(player);
         List<Component> before=shown.getOrDefault(player.getUniqueId(),List.of());
         for(int i=0;i<MAX_LINES;i++) {
-            String entry="#"+i;
+            // Entries starting with # are hidden from the sidebar by the client.
+            String entry="line"+i;
             if(i>=lines.size()) { if(i<before.size()) board.resetScores(entry); continue; }
             if(i<before.size() && lines.get(i).equals(before.get(i))) continue;
             Score score=objective.getScore(entry);
@@ -98,17 +99,17 @@ public final class Sidebar implements Listener {
         lines.add(Component.empty());
         CourseView view=course.apply(player);
         if(view!=null) {
-            lines.add(Component.text("───────────",NamedTextColor.DARK_GRAY));
-            lines.add(Component.text(view.numbering(),NamedTextColor.GOLD));
-            lines.add(value(Component.text(view.name())));
-            lines.add(Component.text("Best  ",NamedTextColor.GRAY).append(Component.text(view.best(),NamedTextColor.WHITE)));
-            lines.add(Component.text("Attempts  ",NamedTextColor.GRAY).append(Component.text(view.attempts(),NamedTextColor.WHITE)));
+            lines.add(Component.text("───────────",NamedTextColor.GRAY));
+            lines.add(heading("Course")); lines.add(value(Component.text(view.name())));
+            lines.add(heading("Best").append(Component.text(" "+view.best(),NamedTextColor.WHITE)));
+            lines.add(heading("Attempts").append(Component.text(" "+view.attempts(),NamedTextColor.WHITE)));
             lines.add(Component.empty());
         }
         lines.add(Component.text(address,NamedTextColor.YELLOW));
         return lines;
     }
-    private static Component heading(String text) { return Component.text(text,NamedTextColor.GRAY); }
+    /** Headings in a strong color: gray was hard to read on the light sidebar background. */
+    private static Component heading(String text) { return Component.text(text+":",NamedTextColor.GOLD); }
     private static Component value(Component text) { return Component.text(" ").append(text.colorIfAbsent(NamedTextColor.WHITE)); }
     /** "12.5h" */
     public static String hours(long millis) { return String.format(Locale.ROOT,"%.1fh",millis/3_600_000.0); }

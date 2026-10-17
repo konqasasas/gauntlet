@@ -58,7 +58,6 @@ public final class Visibility implements Listener {
         apply(viewer);
         PlayerInventory inventory=viewer.getInventory();
         for(int slot=0;slot<inventory.getSize();slot++) if(is(inventory.getItem(slot))) inventory.setItem(slot,item(viewer));
-        Msg.actionBar(viewer,shown ? "hotbar.visibility.shown" : "hotbar.visibility.hidden");
     }
 
     @EventHandler(priority=EventPriority.MONITOR)

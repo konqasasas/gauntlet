@@ -195,11 +195,6 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(27,Msg.icon(player,Material.ARROW,"editor.back-to-list"),e -> openList(player));
         menu.button(28,Msg.icon(player,Material.LEAD,"editor.edit.route",Msg.arg("count",course.route().size()),
                 Msg.arg("length",String.format(Locale.ROOT,"%.1f",new RouteProgress(course.route()).total()))),e -> editRoute(player,id,e));
-        menu.button(29,Msg.icon(player,Material.EXPERIENCE_BOTTLE,"editor.edit.rank",
-                Msg.arg("current",course.rank()==null ? Msg.text(player,"editor.unset") : Component.text(course.rank()))),e -> adjustRank(player,id,e));
-        menu.button(30,Msg.icon(player,Material.OAK_SIGN,"editor.edit.stage",
-                Msg.arg("current",course.stage()==null ? Msg.text(player,"editor.unset") : Component.text(course.stage()==0 ? "BOSS" : String.valueOf(course.stage())))),
-                e -> adjustStage(player,id,e));
         menu.button(31,Msg.icon(player,Material.NETHER_STAR,course.problems().isEmpty() ? "editor.edit.play" : "editor.edit.play-blocked"),
                 e -> { if(admin(player)) participants.enter(player,id,e.isRightClick()); });
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.edit.delete"),e -> openDelete(player,id));
@@ -277,24 +272,6 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         RoutePoint point=new RoutePoint(at.getX(),at.getY()+.9,at.getZ());
         update(player,id,c -> c.edit().addRoutePoint(point).build());
         tell(player,"editor.route.added",Msg.arg("index",course.route().size()+1),Msg.arg("point",point.describe()));
-    }
-    /** Left: +1, right: -1, Shift: clear. Temporary manual numbering until ranks exist. */
-    private void adjustRank(Player player,String id,InventoryClickEvent event) {
-        update(player,id,c -> {
-            if(event.isShiftClick()) return c.edit().rank(null).build();
-            int current=c.rank()==null ? 0 : c.rank();
-            int next=Math.clamp(current+(event.isRightClick() ? -1 : 1),1,Course.MAX_RANK);
-            return c.edit().rank(next).build();
-        });
-    }
-    /** Left: +1, right: -1 (0 = BOSS), Shift: clear. */
-    private void adjustStage(Player player,String id,InventoryClickEvent event) {
-        update(player,id,c -> {
-            if(event.isShiftClick()) return c.edit().stage(null).build();
-            int current=c.stage()==null ? (event.isRightClick() ? 1 : 0) : c.stage();
-            int next=Math.clamp(current+(event.isRightClick() ? -1 : 1),0,Course.MAX_STAGE);
-            return c.edit().stage(next).build();
-        });
     }
     private void teleportToStart(Player player,String id) {
         Course course=store.get(id); if(course==null) return;

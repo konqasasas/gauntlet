@@ -3,7 +3,6 @@ package konqasasas.gauntlet.play;
 import com.destroystokyo.paper.event.server.ServerTickEndEvent;
 import io.papermc.paper.event.packet.ClientTickEndEvent;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.*;
 import java.util.logging.Level;
 import konqasasas.gauntlet.course.*;
@@ -15,7 +14,6 @@ import konqasasas.gauntlet.ui.*;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
-import net.kyori.adventure.title.Title;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.Block;
@@ -41,6 +39,7 @@ import org.bukkit.util.Vector;
  * Hotbar: 1-3 course items, 5 switch official/practice, 6 flight (practice),
  * 8 player visibility. Q with slot 1 = back to the start / save point,
  * F = save (practice). Leaving: another course, or /course leave.
+ * Status goes to the action bar (no titles); results of actions go to chat.
  */
 public final class Participants implements Listener {
     private static final String ADMIN="gauntlet.admin";
@@ -49,8 +48,6 @@ public final class Participants implements Listener {
     private static final int SILENCE_LIMIT=20;
     /** Server-clock cap on the time limit, for clients that stop reporting ticks. */
     private static final double WALL_CLOCK_MARGIN=1.5;
-    /** How many times the controls are explained on entering each mode. */
-    private static final int HINT_TIMES=3;
     private static final int MODE_SLOT=4,FLIGHT_SLOT=5;
     private enum SystemItem { MODE,FLIGHT }
     private record Save(Location at,ItemStack[] contents,List<PotionEffect> effects,Set<BlockPos> fired,Set<Object> scaffold,
@@ -134,16 +131,6 @@ public final class Participants implements Listener {
         if(!toStart(player,course)) { end(player); return; }
         reset(player,session,course);
         Msg.send(player,practice ? "play.enter.practice" : "play.enter.official",Msg.arg("course",course.name()));
-        explain(player,practice);
-    }
-    /** The controls, shown the first few times in each mode. */
-    private void explain(Player player,boolean practice) {
-        String key=practice ? "hint.practice" : "hint.official";
-        if(data.counter(player.getUniqueId(),key)>=HINT_TIMES) return;
-        data.increment(player.getUniqueId(),key);
-        Msg.sendLines(player,key);
-        player.showTitle(Title.title(Component.empty(),Msg.text(player,key+"-title"),
-                Title.Times.times(Duration.ofMillis(200),Duration.ofSeconds(3),Duration.ofMillis(500))));
     }
     public void leave(Player player) {
         if(sessions.containsKey(player.getUniqueId())) { end(player); Msg.send(player,"play.leave.done"); }
@@ -167,7 +154,7 @@ public final class Participants implements Listener {
     private void restore(Player player) {
         ReturnStore.Saved saved=returns.get(player.getUniqueId()); if(saved==null) return;
         try {
-            player.getInventory().setContents(ItemStack.deserializeItemsFromBytes(Base64.getDecoder().decode(saved.inventory())));
+            Inventories.apply(player.getInventory(),ItemStack.deserializeItemsFromBytes(Base64.getDecoder().decode(saved.inventory())));
             player.setGameMode(GameMode.valueOf(saved.gameMode()));
             player.setAllowFlight(saved.allowFlight() || player.getGameMode()==GameMode.CREATIVE || player.getGameMode()==GameMode.SPECTATOR);
             World world=Bukkit.getWorld(saved.world());
@@ -201,29 +188,30 @@ public final class Participants implements Listener {
         heal(player);
         for(PotionEffect effect:player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
         PlayerInventory inventory=player.getInventory();
-        inventory.clear();
+        // Replace slot by slot (no clearing), so unchanged items do not bounce.
+        ItemStack[] contents=new ItemStack[inventory.getSize()];
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) {
             ItemRef ref=course.loadout().get(slot);
-            if(ref!=null) inventory.setItem(slot,courseItem(player,session,slot,items.create(ref)));
+            if(ref!=null) contents[slot]=courseItem(player,session,slot,items.create(ref));
         }
+        systemItems(player,session,contents);
+        Inventories.apply(inventory,contents);
         inventory.setHeldItemSlot(0);
         restartClock(session,0);
-        systemItems(player,session);
     }
     private void restartClock(Session session,double along) {
         session.clock.reset(); session.unmeasured=false; session.goalReached=false; session.flew=false;
         session.pendingFail=null; session.lastClientTick=Bukkit.getCurrentTick();
         session.along=along; session.furthest=along;
     }
-    /** Course item as handed out: the scaffold gets a localized name; slot 1 explains Q (and F). */
+    /** Course item as handed out: the scaffold gets a localized name; slot 1 lists Q (and F) in its description. */
     private ItemStack courseItem(Player player,Session session,int slot,ItemStack item) {
         if(item==null) return null;
         boolean block=scaffold.is(item);
         if(!block && slot!=0) return item;
-        Component base=(block ? Msg.text(player,"item.scaffold.name") : item.effectiveName()).decoration(TextDecoration.ITALIC,false);
         String mode=session.practice ? "practice" : "official";
         item.editMeta(meta -> {
-            meta.customName(slot==0 ? base.append(Msg.text(player,"play.slot1."+mode)) : base);
+            if(block) meta.customName(Msg.text(player,"item.scaffold.name").decoration(TextDecoration.ITALIC,false));
             List<Component> lore=new ArrayList<>();
             if(block) lore.addAll(Msg.lines(player,"item.scaffold.lore"));
             if(slot==0) lore.addAll(Msg.lines(player,"play.slot1.lore."+mode));
@@ -240,26 +228,17 @@ public final class Participants implements Listener {
         else if(toStart(player,course)) reset(player,session,course);
     }
     private void fail(Player player,Session session,Course course,RunRecord.Reason reason) {
-        Double progress=session.practice ? (session.route.usable() ? session.route.fraction(session.along) : null) : session.progress();
         record(player,session,RunRecord.Result.FAIL,reason);
-        if(data.get(player,Settings.FAIL_TITLE)) {
-            Component main=progress==null ? Component.empty() : Msg.text(player,"play.fail.percent",Msg.arg("percent",RouteProgress.percent(progress,false)+"%"));
-            Component sub=Msg.text(player,"play.fail.reason",Msg.arg("reason",Msg.text(player,"reason."+reason.name())));
-            RunLog.Stats stats=runs.stats(course.id(),session.rev,player.getUniqueId());
-            if(!session.practice && progress!=null && stats.bestProgress()!=null)
-                sub=sub.append(Msg.text(player,"play.fail.best",Msg.arg("best",RouteProgress.percent(stats.bestProgress(),stats.clears()>0)+"%")));
-            player.showTitle(Title.title(main,sub,Title.Times.times(Duration.ZERO,Duration.ofMillis(900),Duration.ofMillis(250))));
-        }
         Sounds.system(player,Sound.ENTITY_VILLAGER_NO,.7f,1f);
         if(session.practice && session.save!=null) load(player,session);
         else if(toStart(player,course)) reset(player,session,course);
     }
     private void save(Player player,Session session) {
         if(!session.practice) return;
-        if(session.goalReached) { Msg.actionBar(player,"play.save.after-goal"); return; }
+        if(session.goalReached) { Msg.send(player,"play.save.after-goal"); return; }
         Location at=player.getLocation();
         if(!player.isOnGround() || player.isFlying() || GroundGeometry.supporting(at.getWorld(),player.getBoundingBox(),at.getY()).isEmpty()) {
-            Msg.actionBar(player,"play.save.not-ground"); return;
+            Msg.send(player,"play.save.not-ground"); return;
         }
         // Whole inventory, so an equipped elytra (armor slot) comes back too.
         ItemStack[] contents=Arrays.stream(player.getInventory().getContents()).map(i -> i==null ? null : i.clone()).toArray(ItemStack[]::new);
@@ -269,7 +248,7 @@ public final class Participants implements Listener {
         session.previousSave=session.save;
         session.save=new Save(at.clone(),contents,List.copyOf(player.getActivePotionEffects()),Set.copyOf(session.fired),scaffold.placed(player),savedMobs,session.along);
         Sounds.system(player,Sound.ENTITY_EXPERIENCE_ORB_PICKUP,1f,1f);
-        Msg.actionBar(player,"play.save.done");
+        Msg.send(player,"play.save.done");
     }
     /** Goes back to the save before the last one (/course undosave). */
     public void undoSave(Player player) {
@@ -287,7 +266,7 @@ public final class Participants implements Listener {
         // Scaffold placed before saving stays; anything placed afterwards goes.
         scaffold.clearExcept(player,save.scaffold());
         // Replaces everything, including any stray item returned by a cancelled drop.
-        player.getInventory().setContents(Arrays.stream(save.contents()).map(i -> i==null ? null : i.clone()).toArray(ItemStack[]::new));
+        Inventories.apply(player.getInventory(),Arrays.stream(save.contents()).map(i -> i==null ? null : i.clone()).toArray(ItemStack[]::new));
         for(PotionEffect effect:player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
         player.addPotionEffects(save.effects());
         session.fired.clear(); session.fired.addAll(save.fired());
@@ -303,7 +282,6 @@ public final class Participants implements Listener {
         session.practice=!session.practice; session.save=null; session.previousSave=null;
         if(toStart(player,course)) reset(player,session,course);
         Msg.send(player,session.practice ? "play.mode.practice" : "play.mode.official");
-        explain(player,session.practice);
     }
     private void toggleFlight(Player player,Session session) {
         if(!session.practice) return;
@@ -311,7 +289,6 @@ public final class Participants implements Listener {
         player.setAllowFlight(allow);
         if(!allow && player.isFlying()) player.setFlying(false);
         systemItems(player,session);
-        Msg.actionBar(player,allow ? "play.flight.on" : "play.flight.off");
     }
     /**
      * Logs a running official attempt. Waiting/finished/practice attempts are not
@@ -337,15 +314,14 @@ public final class Participants implements Listener {
         session.furthest=session.route.total(); session.along=session.route.total();
         long ticks=session.clock.elapsed(); Component time=time(player,ticks);
         if(session.practice) {
-            Component segment=!timed ? Component.empty() : session.flew || session.unmeasured ? Msg.text(player,"play.segment.invalid")
+            Component segment=session.flew || session.unmeasured ? Msg.text(player,"play.segment.invalid")
                     : Msg.text(player,"play.segment.time",Msg.arg("time",time),Msg.arg("ticks",ticks));
-            player.showTitle(Title.title(Msg.text(player,"play.goal.practice"),segment));
             if(timed) Msg.send(player,"play.segment.chat",Msg.arg("segment",segment));
         } else if(!timed) {
-            player.showTitle(Title.title(Msg.text(player,"play.goal.title"),Component.empty()));
+            // Reached without the clock running: nothing to record.
         } else if(session.unmeasured) {
-            append(player,session,RunRecord.Result.INVALID,null,ticks,1.0);
-            player.showTitle(Title.title(Msg.text(player,"play.goal.title"),Msg.text(player,"play.goal.unmeasured")));
+            append(player,session,RunRecord.Result.INVALID,null,ticks,session.route.usable() ? 1.0 : null);
+            Msg.send(player,"play.goal.unmeasured");
         } else {
             RunLog.Stats before=runs.stats(course.id(),session.rev,player.getUniqueId());
             append(player,session,RunRecord.Result.CLEAR,null,ticks,session.route.usable() ? 1.0 : null);
@@ -353,7 +329,6 @@ public final class Participants implements Listener {
             Component comparison=best==null ? Msg.text(player,"play.goal.first-clear")
                     : ticks<best ? Msg.text(player,"play.goal.new-best",Msg.arg("diff",time(player,best-ticks)))
                     : Msg.text(player,"play.goal.best",Msg.arg("best",time(player,best)),Msg.arg("diff",time(player,ticks-best)));
-            player.showTitle(Title.title(Msg.text(player,best==null ? "play.goal.first-title" : "play.goal.title"),time));
             Msg.send(player,"play.goal.chat",Msg.arg("course",course.name()),Msg.arg("time",time),Msg.arg("ticks",ticks),Msg.arg("comparison",comparison));
         }
         Sounds.system(player,Sound.UI_TOAST_CHALLENGE_COMPLETE,1f,1f);
@@ -389,7 +364,7 @@ public final class Participants implements Listener {
                 int slot=action.placement().slot();
                 if(slot<0) for(int i=1;i<Course.COURSE_SLOTS && slot<0;i++) { ItemStack there=inventory.getItem(i); if(there==null || there.getType().isAir()) slot=i; }
                 if(slot<0) { builderWarning(player,"editor.warn.no-empty-slot"); return; }
-                inventory.setItem(slot,courseItem(player,session,slot,item));
+                Inventories.put(inventory,slot,courseItem(player,session,slot,item));
             }
             case REMOVE -> {
                 for(int slot=0;slot<inventory.getSize();slot++) {
@@ -476,26 +451,37 @@ public final class Participants implements Listener {
         }
     }
     private void showStatus(Player player,Session session,Course course) {
-        if(session.unmeasured && !session.goalReached) { Msg.actionBar(player,"play.status.unmeasured"); return; }
+        if(session.unmeasured && !session.goalReached) { Msg.actionBar(player,"play.bar.unmeasured"); return; }
         Component elapsed=time(player,session.clock.elapsed());
-        String percent=!session.route.usable() ? "" : "  ·  "+RouteProgress.percent(
-                session.route.fraction(session.practice ? session.along : session.furthest),session.goalReached)+"%";
+        // Practice shows where you are now; the official run shows the furthest reached.
+        Component percent=!session.route.usable() ? null : Msg.text(player,"play.bar.percent",Msg.arg("percent",RouteProgress.percent(
+                session.route.fraction(session.practice ? session.along : session.furthest),session.goalReached)));
+        List<Component> parts=new ArrayList<>();
         if(session.practice) {
-            Component state=session.goalReached ? Msg.text(player,"play.status.practice.goal")
+            parts.add(Msg.text(player,"play.bar.practice"));
+            parts.add(session.goalReached ? Msg.text(player,"play.bar.practice.goal")
                     : switch(session.clock.phase()) {
-                        case WAITING -> Msg.text(player,"play.status.practice.waiting");
-                        case RUNNING -> Msg.text(player,session.flew ? "play.status.practice.flew" : "play.status.practice.running",Msg.arg("time",elapsed));
-                        case FINISHED -> Msg.text(player,"play.status.practice.finished",Msg.arg("time",elapsed));
-                    };
-            Msg.actionBar(player,"play.status.practice",Msg.arg("state",state),Msg.arg("progress",percent),
-                    Msg.arg("save",session.save==null ? Msg.text(player,"play.status.practice.no-save") : Component.empty()),
-                    Msg.arg("flight",player.getAllowFlight() ? Msg.text(player,"play.status.practice.flight") : Component.empty()));
-            return;
+                        case WAITING -> Msg.text(player,"play.bar.practice.waiting");
+                        case RUNNING -> Msg.text(player,"play.bar.practice.running",Msg.arg("time",elapsed));
+                        case FINISHED -> Msg.text(player,"play.bar.practice.finished",Msg.arg("time",elapsed));
+                    });
+            if(percent!=null) parts.add(percent);
+            parts.add(Msg.text(player,"play.bar.to-save"));
+            parts.add(Msg.text(player,"play.bar.save"));
+        } else {
+            Component limit=course.timeLimitSeconds()==0 ? Component.empty()
+                    : Msg.text(player,"play.bar.limit",Msg.arg("limit",Msg.text(player,"time.seconds",Msg.arg("value",course.timeLimitSeconds()))));
+            if(session.goalReached) parts.add(Msg.text(player,"play.bar.goal",Msg.arg("time",elapsed)));
+            else if(session.clock.phase()==RunClock.Phase.WAITING) parts.add(Msg.text(player,"play.bar.waiting",Msg.arg("limit",limit)));
+            else parts.add(Msg.text(player,"play.bar.time",Msg.arg("time",elapsed),Msg.arg("limit",limit)));
+            if(percent!=null && session.clock.phase()!=RunClock.Phase.WAITING) parts.add(percent);
+            parts.add(Msg.text(player,"play.bar.retry"));
         }
-        String limit=course.timeLimitSeconds()==0 ? "" : " / "+Msg.plain(player,"time.seconds",Msg.arg("value",course.timeLimitSeconds()));
-        if(session.goalReached) Msg.actionBar(player,"play.status.goal",Msg.arg("time",elapsed),Msg.arg("progress",percent));
-        else if(session.clock.phase()==RunClock.Phase.WAITING) Msg.actionBar(player,"play.status.waiting",Msg.arg("limit",limit));
-        else Msg.actionBar(player,"play.status.running",Msg.arg("time",elapsed),Msg.arg("limit",limit),Msg.arg("progress",percent));
+        player.sendActionBar(bar(player,parts));
+    }
+    /** Parts joined with the light gray "|" separator. */
+    private static Component bar(Player player,List<Component> parts) {
+        return Component.join(net.kyori.adventure.text.JoinConfiguration.separator(Msg.text(player,"play.bar.separator")),parts);
     }
     private static void stopMotion(Player player) {
         if(player.isFlying()) player.setFlying(false);
@@ -578,17 +564,27 @@ public final class Participants implements Listener {
             case FLIGHT -> toggleFlight(player,session);
         }
     }
-    private void systemItems(Player player,Session session) {
-        PlayerInventory inventory=player.getInventory();
-        for(int slot=Course.COURSE_SLOTS;slot<9;slot++) inventory.setItem(slot,null);
-        inventory.setItem(MODE_SLOT,session.practice
-                ? systemItem(player,SystemItem.MODE,Material.GOLD_INGOT,"play.item.to-official")
-                : systemItem(player,SystemItem.MODE,Material.FEATHER,"play.item.to-practice"));
+    /** Fills hotbar slots 4-9 of contents: 5 mode switch, 6 flight (practice), 8 visibility. */
+    private void systemItems(Player player,Session session,ItemStack[] contents) {
+        for(int slot=Course.COURSE_SLOTS;slot<9;slot++) contents[slot]=null;
+        // Official: sugar switches to practice. Practice: redstone switches back.
+        contents[MODE_SLOT]=session.practice
+                ? systemItem(player,SystemItem.MODE,Material.REDSTONE,"play.item.mode-practice")
+                : systemItem(player,SystemItem.MODE,Material.SUGAR,"play.item.mode-official");
         if(session.practice) {
             boolean flight=player.getAllowFlight();
-            inventory.setItem(FLIGHT_SLOT,systemItem(player,SystemItem.FLIGHT,flight ? Material.ELYTRA : Material.PHANTOM_MEMBRANE,flight ? "play.item.flight-on" : "play.item.flight-off"));
+            ItemStack feather=systemItem(player,SystemItem.FLIGHT,Material.FEATHER,flight ? "play.item.flight-on" : "play.item.flight-off");
+            feather.editMeta(meta -> meta.setEnchantmentGlintOverride(flight));
+            contents[FLIGHT_SLOT]=feather;
         }
-        if(visibility!=null) inventory.setItem(Visibility.SLOT,visibility.item(player));
+        if(visibility!=null) contents[Visibility.SLOT]=visibility.item(player);
+    }
+    /** Updates only the system slots, in place. */
+    private void systemItems(Player player,Session session) {
+        PlayerInventory inventory=player.getInventory();
+        ItemStack[] contents=new ItemStack[9];
+        systemItems(player,session,contents);
+        for(int slot=Course.COURSE_SLOTS;slot<9;slot++) Inventories.put(inventory,slot,contents[slot]);
     }
     @EventHandler(priority=EventPriority.LOW)
     public void inventoryClick(InventoryClickEvent event) {

@@ -14,7 +14,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
 /**
- * TAB: header (logo, tagline, online count), names with rank badge in rank
+ * TAB: header (logo), names with rank badge in rank
  * order, footer (own ping, rotating hint). Header and footer are per viewer
  * (language, ping).
  */
@@ -48,16 +48,13 @@ public final class TabList implements Listener {
     public void join(PlayerJoinEvent event) { Bukkit.getScheduler().runTask(plugin,this::update); }
 
     private void update() {
-        int online=Bukkit.getOnlinePlayers().size();
         long slot=System.currentTimeMillis()/hintMillis;
         for(Player player:Bukkit.getOnlinePlayers()) {
             Component name=display.full(player);
             if(!name.equals(player.playerListName())) player.playerListName(name);
             int order=display.listOrder(player);
             if(player.getPlayerListOrder()!=order) player.setPlayerListOrder(order);
-            Component header=Component.text().append(logo).appendNewline()
-                    .append(Msg.text(player,"tab.tagline")).appendNewline()
-                    .append(Msg.text(player,"tab.online",Msg.arg("count",online))).build();
+            Component header=logo;
             Component footer=Component.text().append(Msg.text(player,"tab.ping",Msg.arg("ping",ping(player.getPing())))).build();
             List<Component> hints=Msg.lines(player,"tab.hints");
             if(!hints.isEmpty()) footer=footer.appendNewline().append(hints.get((int)(slot%hints.size())));

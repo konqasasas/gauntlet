@@ -35,7 +35,7 @@ class CourseTest {
         Course course=Course.create("c",author,world).toggleGoal(new BlockPos(1,2,3)).toggleGoal(new BlockPos(4,5,6));
         assertTrue(course.isGoal(1,2,3)); assertTrue(course.isGoal(4,5,6)); assertFalse(course.isGoal(1,2,4));
         assertEquals(List.of(new BlockPos(4,5,6)),course.toggleGoal(new BlockPos(1,2,3)).goals());
-        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null,null,null).goals());
+        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null).goals());
     }
     @Test void timeLimitIsClampedAndStatusCycles() {
         Course course=Course.create("c",author,world);
@@ -55,23 +55,17 @@ class CourseTest {
         Course base=Course.create("c",author,world).withRegion(world,Region.of(0,0,0,9,9,9));
         assertTrue(base.sameGameplay(base.withName("Lava Stairs")));
         assertTrue(base.sameGameplay(base.withStatus(CourseStatus.DONE)));
-        assertTrue(base.sameGameplay(base.edit().rank(1).stage(0).rev(7).build()));
+        assertTrue(base.sameGameplay(base.edit().rev(7).build()));
         assertFalse(base.sameGameplay(base.withTimeLimit(31)));
         assertFalse(base.sameGameplay(base.withStart(new Spot(1,1,1,0,0))));
-        assertFalse(base.sameGameplay(base.edit().addRoutePoint(new RoutePoint(1,2,3)).build()));
         assertFalse(base.sameGameplay(base.edit().loadout(2,ItemRef.scaffold()).build()));
+        assertFalse(base.sameGameplay(base.edit().addRoutePoint(new RoutePoint(1,2,3)).build()));
         assertEquals(0,base.rev());
     }
-    @Test void numberingAndOldFourSlotLoadouts() {
-        Course c=Course.create("c",author,world);
-        assertNull(c.numbering());
-        assertEquals("Rank 1",c.edit().rank(1).build().numbering());
-        assertEquals("Rank 1 ‐ Stage 3",c.edit().rank(1).stage(3).build().numbering());
-        assertEquals("Rank 2 ‐ BOSS",c.edit().rank(2).stage(0).build().numbering());
-        assertNull(c.edit().rank(99).build().rank(),"Out of range numbers are dropped");
+    @Test void oldFourSlotLoadouts() {
         Course four=new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,
-                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null,null,null);
+                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null);
         assertEquals(Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0)),four.loadout(),"The old fourth slot is dropped");
-        assertEquals(List.of(),four.route()); assertEquals(0,four.rev());
+        assertEquals(0,four.rev()); assertEquals(List.of(),four.route());
     }
 }

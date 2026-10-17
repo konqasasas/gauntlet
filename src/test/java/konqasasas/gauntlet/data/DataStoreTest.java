@@ -66,7 +66,7 @@ class DataStoreTest {
     }
     @Test void settingsParseOnlyAllowedValues() {
         assertEquals(50,Settings.SOUND_SYSTEM.parse("50")); assertNull(Settings.SOUND_SYSTEM.parse("55")); assertNull(Settings.SOUND_SYSTEM.parse("x"));
-        assertEquals(Boolean.FALSE,Settings.FAIL_TITLE.parse("false")); assertNull(Settings.FAIL_TITLE.parse("maybe"));
+        assertEquals(Boolean.TRUE,Settings.TRANSLATE_AUTO.parse("true")); assertNull(Settings.TRANSLATE_AUTO.parse("maybe"));
         assertEquals("ja",Settings.UI_LANG.parse("ja")); assertNull(Settings.UI_LANG.parse("ko"));
         assertEquals("zh-TW",Settings.TRANSLATE_LANG.parse("zh-TW")); assertEquals("ui",Settings.TRANSLATE_LANG.parse("ui"));
         assertSame(Settings.SOUND_COURSE,Settings.byKey("SOUND.COURSE"));

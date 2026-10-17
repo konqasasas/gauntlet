@@ -5,6 +5,7 @@ import java.util.function.Predicate;
 import konqasasas.gauntlet.display.Visibility;
 import konqasasas.gauntlet.i18n.Msg;
 import konqasasas.gauntlet.play.Scaffold;
+import konqasasas.gauntlet.ui.Inventories;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
@@ -77,11 +78,12 @@ public final class Lobby implements Listener {
     }
     private void layOut(Player player) {
         PlayerInventory inventory=player.getInventory();
-        inventory.clear();
+        ItemStack[] contents=new ItemStack[inventory.getSize()];
         ItemStack block=scaffold.create();
         block.editMeta(meta -> { meta.displayName(Msg.text(player,"lobby.block.name")); meta.lore(Msg.lines(player,"lobby.block.lore")); });
-        inventory.setItem(BLOCK_SLOT,block);
-        inventory.setItem(Visibility.SLOT,visibility.item(player));
+        contents[BLOCK_SLOT]=block;
+        contents[Visibility.SLOT]=visibility.item(player);
+        Inventories.apply(inventory,contents);
     }
 
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)

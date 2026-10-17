@@ -4,34 +4,18 @@
 # 一覧（リスト）は1行ずつ表示される。
 
 prefix: "<gray>[Gauntlet]</gray> "
-time.seconds: "<value>秒"
+time.seconds: "<value>s"
 
 # ---- 参加者モード ----
 item.scaffold.name: "設置用ブロック"
 item.scaffold.lore:
   - "<gray>置いても64個のまま"
   - "<gray>戻ると置いたブロックは消える"
-play.slot1.official: "<dark_gray> ‐ </dark_gray><yellow>[<key:key.drop>] リトライ</yellow>"
-play.slot1.practice: "<dark_gray> ‐ </dark_gray><aqua>[<key:key.drop>] セーブ地点へ　[<key:key.swapOffhand>] セーブ</aqua>"
 play.slot1.lore.official:
   - "<yellow>[<key:key.drop>]</yellow><gray> スタートへ戻る（計測中ならリタイア）"
-  - "<gray>5番：練習へ切り替え　8番：ほかのプレイヤーの表示"
 play.slot1.lore.practice:
   - "<yellow>[<key:key.drop>]</yellow><gray> セーブ地点へ戻る（セーブがなければスタート）"
   - "<yellow>[<key:key.swapOffhand>]</yellow><gray> 地面の上でセーブ"
-  - "<gray>5番：本番へ　6番：飛行"
-hint.official:
-  - "<gold>本番の操作</gold>"
-  - "<yellow>1番を持って [<key:key.drop>]</yellow>：スタートへ戻る"
-  - "<yellow>5番</yellow>：練習へ切り替え　<yellow>8番</yellow>：ほかのプレイヤーの表示"
-  - "<gray>動くと計測が始まります。別のコースを選ぶと自動で抜けます。"
-hint.official-title: "<yellow>[<key:key.drop>]</yellow> でリトライ"
-hint.practice:
-  - "<aqua>練習の操作</aqua>"
-  - "<yellow>[<key:key.swapOffhand>]</yellow>：地面の上でセーブ（1つ前のセーブには /course undosave で戻せる）"
-  - "<yellow>1番を持って [<key:key.drop>]</yellow>：セーブ地点へ戻る"
-  - "<yellow>5番</yellow>：本番へ　<yellow>6番</yellow>：飛行のオン／オフ"
-hint.practice-title: "<yellow>[<key:key.swapOffhand>]</yellow> セーブ　<yellow>[<key:key.drop>]</yellow> 戻る"
 
 play.enter.not-found: "コース <id> が見つかりません。"
 play.enter.incomplete: "コース <id> は未設定の項目があります：<problems>"
@@ -47,27 +31,15 @@ play.leave.restore-failed: "所持品の復元が完了していません。/cou
 play.teleport.chunk: "移動先のチャンクを読み込めませんでした。"
 play.teleport.denied: "移動が拒否されました。"
 play.course-changed: "コースが削除・変更されたため終了しました。"
-play.fail.percent: "<red><bold><percent>"
-play.fail.reason: "<red>失敗：<reason>"
-play.fail.best: "<gray>　Best <best>"
-reason.LAVA: "マグマ"
-reason.OUT: "範囲外"
-reason.TIMEOUT: "時間切れ"
-reason.DEATH: "死亡"
 play.save.after-goal: "<red>ゴール後はセーブできません"
 play.save.not-ground: "<red>地面の上でセーブしてください"
 play.save.done: "<aqua>セーブしました"
 play.undo.not-practice: "練習中だけ使えます。"
 play.undo.none: "戻せるセーブがありません。"
 play.undo.done: "1つ前のセーブに戻しました。"
-play.mode.practice: "練習モードにしました。"
-play.mode.official: "本番にしました。記録が残ります。"
-play.flight.on: "<aqua>飛行：オン（ジャンプ2回で飛ぶ。飛んだ区間のタイムは無効）"
-play.flight.off: "<aqua>飛行：オフ"
-play.goal.practice: "<aqua>ゴール（練習）"
-play.goal.title: "<gold>クリア！"
-play.goal.first-title: "<bold><gradient:#ffe259:#ffa751>初クリア！</gradient></bold>"
-play.goal.unmeasured: "<red>計測不能のため記録なし"
+play.mode.practice: "練習に切り替えました。"
+play.mode.official: "本番に切り替えました。記録が残ります。"
+play.goal.unmeasured: "<red>ゴール：計測不能のため記録なし"
 play.goal.first-clear: "<gold>初クリア！"
 play.goal.new-best: "<green>自己ベスト更新！（-<diff>）"
 play.goal.best: "<gray>自己ベスト <best>（+<diff>）"
@@ -75,24 +47,32 @@ play.goal.chat: "「<course>」タイム <time>（<ticks> tick）　<comparison>
 play.segment.time: "区間タイム <time>（<ticks> tick）"
 play.segment.invalid: "区間タイム：無効（飛行または計測不能）"
 play.segment.chat: "練習：<segment>"
-play.status.unmeasured: "<red>計測不能：クライアントのtick通知が届いていません"
-play.status.waiting: "<gray>動くと計測開始<limit>　·　[<key:key.drop>] リトライ"
-play.status.running: "⏱ <time><limit><progress>"
-play.status.goal: "<gold>クリア <time><progress>　·　[<key:key.drop>] リトライ"
-play.status.practice: "<aqua>練習　<state><progress><save><flight>　·　[<key:key.drop>] セーブ地点へ　[<key:key.swapOffhand>] セーブ"
-play.status.practice.waiting: "動くと区間計測開始"
-play.status.practice.running: "区間 <time>"
-play.status.practice.flew: "区間 <time>（飛行あり・無効）"
-play.status.practice.finished: "区間 <time>（確定）"
-play.status.practice.goal: "ゴール"
-play.status.practice.no-save: "　·　セーブなし"
-play.status.practice.flight: "　·　飛行オン"
-play.item.to-practice.name: "練習へ切り替え"
-play.item.to-practice.lore:
-  - "<gray>右クリック：スタートから練習（記録なし）"
-play.item.to-official.name: "本番へ切り替え"
-play.item.to-official.lore:
-  - "<gray>右クリック：スタートから本番（記録あり）"
+
+# アクションバー。部品を play.bar.separator でつなぐ
+play.bar.separator: " <gray>|</gray> "
+play.bar.unmeasured: "<red>計測不能：クライアントのtick通知が届いていません"
+play.bar.waiting: "<gray>動くと計測開始"
+play.bar.time: "<white><time></white><limit>"
+play.bar.limit: "<gray> / <limit>"
+play.bar.goal: "<gold>クリア <time>"
+play.bar.percent: "<white><percent>"
+play.bar.retry: "<yellow>[<key:key.drop>]</yellow> <gray>リトライ"
+play.bar.practice: "<aqua>練習"
+play.bar.practice.waiting: "<gray>動くと区間計測開始"
+play.bar.practice.running: "<white>区間 <time>"
+play.bar.practice.finished: "<white>区間 <time></white> <gray>（確定）"
+play.bar.practice.goal: "<gold>ゴール"
+play.bar.to-save: "<yellow>[<key:key.drop>]</yellow> <gray>セーブ地点へ"
+play.bar.save: "<yellow>[<key:key.swapOffhand>]</yellow> <gray>セーブ"
+
+play.item.mode-official.name: "練習／本番を切り替え"
+play.item.mode-official.lore:
+  - "<gray>現在：<white>本番</white>（記録あり）"
+  - "<gray>右クリック：練習に切り替える（スタートから）"
+play.item.mode-practice.name: "練習／本番を切り替え"
+play.item.mode-practice.lore:
+  - "<gray>現在：<white>練習</white>（記録なし）"
+  - "<gray>右クリック：本番に切り替える（スタートから）"
 play.item.flight-on.name: "飛行：オン"
 play.item.flight-on.lore:
   - "<gray>右クリック：切り替え（飛んだ区間のタイムは無効）"
@@ -107,22 +87,18 @@ hotbar.visibility.on.lore:
 hotbar.visibility.off.name: "<gray>プレイヤー表示：オフ"
 hotbar.visibility.off.lore:
   - "<gray>右クリック：ほかのプレイヤーを表示する"
-hotbar.visibility.shown: "<green>ほかのプレイヤーを表示しました"
-hotbar.visibility.hidden: "<gray>ほかのプレイヤーを隠しました"
 lobby.block.name: "ブロック"
 lobby.block.lore:
   - "<gray>どこにでも置ける"
   - "<gray>置いたブロックはしばらくすると消える"
 
 # ---- TAB ----
-tab.tagline: "<gray>ブロックを置いて突破するパルクール"
-tab.online: "<gray>オンライン <white><count></white>人"
 tab.ping: "<gray>Ping <ping>"
 tab.hints:
-  - "<yellow>ヒント</yellow> <gray>ブロックは空中でも置ける！"
-  - "<yellow>ヒント</yellow> <gray>本番中は1番を持ってQでいつでもリトライ"
-  - "<yellow>ヒント</yellow> <gray>練習ではFでセーブ、Qでセーブ地点へ"
-  - "<yellow>ヒント</yellow> <gray>/settings で言語や音量を変えられる"
+  - "<yellow>Tips</yellow> <gray>ブロックは空中でも置ける！"
+  - "<yellow>Tips</yellow> <gray>本番中は1番を持ってQでいつでもリトライ"
+  - "<yellow>Tips</yellow> <gray>練習ではFでセーブ、Qでセーブ地点へ"
+  - "<yellow>Tips</yellow> <gray>/settings で言語や音量を変えられる"
 
 # ---- コースの状態など ----
 problem.no-region: "範囲が未設定"
@@ -147,8 +123,6 @@ setting.translate_lang.name: "翻訳先"
 setting.translate_lang.desc: "チャット翻訳の言語。初期値は表示言語と同じ"
 setting.translate_auto.name: "自動翻訳"
 setting.translate_auto.desc: "オンで外国語のチャットを自動で翻訳する"
-setting.fail.title.name: "失敗時のタイトル"
-setting.fail.title.desc: "失敗したときに画面中央へ到達率を出す"
 setting.sound.system.name: "システム音の音量"
 setting.sound.system.desc: "CP・クリア・失敗などの合図の音"
 setting.sound.course.name: "コースの演出音の音量"
@@ -281,9 +255,9 @@ editor.edit.start.lore:
 editor.edit.time.name: "制限時間"
 editor.edit.time.lore:
   - "<gray>現在：<current>"
-  - "<gray>左クリック：+1秒　右クリック：-1秒"
-  - "<gray>Shift＋クリック：±10秒"
-  - "<gray>0秒で制限なし"
+  - "<gray>左クリック：+1s　右クリック：-1s"
+  - "<gray>Shift＋クリック：±10s"
+  - "<gray>0sで制限なし"
 editor.edit.status.name: "状態：<status>"
 editor.edit.status.lore:
   - "<gray>クリックで切り替え"
@@ -324,15 +298,6 @@ editor.edit.route.lore:
   - "<gray>右クリック：最後の点を削除"
   - "<gray>Shift＋右クリック：すべて削除"
   - "<gray>スタートからゴールまで、通るべき道に沿って点を置く"
-editor.edit.rank.name: "ランク番号（仮）"
-editor.edit.rank.lore:
-  - "<gray>現在：<current>"
-  - "<gray>左クリック：+1　右クリック：-1　Shift：未設定に戻す"
-  - "<gray>スコアボードの「Rank 1 ‐ Stage 3」に使う"
-editor.edit.stage.name: "ステージ番号（仮）"
-editor.edit.stage.lore:
-  - "<gray>現在：<current>"
-  - "<gray>左クリック：+1　右クリック：-1（0でBOSS）　Shift：未設定に戻す"
 editor.edit.play.name: "参加者モードで遊ぶ"
 editor.edit.play.lore:
   - "<gray>左クリック：本番（記録が残る）"
@@ -431,7 +396,7 @@ editor.loadout.slot-other:
   - "<gray>空でもよい"
 editor.loadout.empty.name: "<slot>番：空"
 editor.loadout.pick-title: "<slot>番の初期装備"
-editor.loadout.system.name: "4〜9番"
+editor.loadout.system.name: "4〜9番・キー"
 editor.loadout.system.lore:
   - "<gray>4：空き"
   - "<gray>5：本番／練習の切り替え"

@@ -8,15 +8,13 @@ import java.util.*;
  * older files and get their defaults here.
  *
  * rev counts edits that change how the course plays (records are kept per rev).
- * rank/stage are the temporary manual numbers shown as "Rank 1 ‐ Stage 3"
- * (stage 0 = BOSS) until rank progression exists. route is the line used for the
- * progress percentage.
+ * route is the line used for the progress percentage. Fields of older files that
+ * no longer exist (rank, stage) are ignored.
  */
 public record Course(String id,String name,CourseStatus status,UUID author,UUID world,Region region,Spot start,
                      List<BlockPos> goals,int timeLimitSeconds,List<ItemRef> loadout,List<Trigger> triggers,
-                     Boolean failLava,Boolean failOutside,Integer rev,Integer rank,Integer stage,List<RoutePoint> route) {
-    public static final int DEFAULT_TIME_LIMIT=30,MAX_TIME_LIMIT=600,MAX_NAME_LENGTH=32,COURSE_SLOTS=3,
-            MAX_RANK=13,MAX_STAGE=20,MAX_ROUTE_POINTS=200;
+                     Boolean failLava,Boolean failOutside,Integer rev,List<RoutePoint> route) {
+    public static final int DEFAULT_TIME_LIMIT=30,MAX_TIME_LIMIT=600,MAX_NAME_LENGTH=32,COURSE_SLOTS=3,MAX_ROUTE_POINTS=200;
     public Course {
         if(!CourseStore.validId(id) || name==null || name.isBlank() || name.length()>MAX_NAME_LENGTH
                 || status==null || author==null || world==null || timeLimitSeconds<0 || timeLimitSeconds>MAX_TIME_LIMIT)
@@ -34,13 +32,11 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         failOutside=failOutside==null || failOutside;
         rev=rev==null ? 0 : rev;
         if(rev<0) throw new IllegalArgumentException("Negative revision");
-        if(rank!=null && (rank<1 || rank>MAX_RANK)) rank=null;
-        if(stage!=null && (stage<0 || stage>MAX_STAGE)) stage=null;
         route=route==null ? List.of() : List.copyOf(route);
         if(route.size()>MAX_ROUTE_POINTS) throw new IllegalArgumentException("Route too long");
     }
     public static Course create(String id,UUID author,UUID world) {
-        return new Course(id,id,CourseStatus.DRAFT,author,world,null,null,null,DEFAULT_TIME_LIMIT,null,null,null,null,0,null,null,null);
+        return new Course(id,id,CourseStatus.DRAFT,author,world,null,null,null,DEFAULT_TIME_LIMIT,null,null,null,null,0,null);
     }
 
     public Builder edit() { return new Builder(this); }
@@ -48,11 +44,11 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         private final Course base;
         private String name; private CourseStatus status; private UUID world; private Region region; private Spot start;
         private List<BlockPos> goals; private int timeLimit; private List<ItemRef> loadout; private List<Trigger> triggers;
-        private boolean failLava,failOutside; private int rev; private Integer rank,stage; private List<RoutePoint> route;
+        private boolean failLava,failOutside; private int rev; private List<RoutePoint> route;
         private Builder(Course c) {
             base=c; name=c.name; status=c.status; world=c.world; region=c.region; start=c.start; goals=new ArrayList<>(c.goals);
             timeLimit=c.timeLimitSeconds; loadout=new ArrayList<>(c.loadout); triggers=new ArrayList<>(c.triggers);
-            failLava=c.failLava; failOutside=c.failOutside; rev=c.rev; rank=c.rank; stage=c.stage; route=new ArrayList<>(c.route);
+            failLava=c.failLava; failOutside=c.failOutside; rev=c.rev; route=new ArrayList<>(c.route);
         }
         public Builder name(String v) { name=v; return this; }
         public Builder status(CourseStatus v) { status=v; return this; }
@@ -61,9 +57,6 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         public Builder failLava(boolean v) { failLava=v; return this; }
         public Builder failOutside(boolean v) { failOutside=v; return this; }
         public Builder rev(int v) { rev=v; return this; }
-        /** null clears the number. */
-        public Builder rank(Integer v) { rank=v; return this; }
-        public Builder stage(Integer v) { stage=v; return this; }
         /** Moving the region to another world drops everything positioned in the old world. */
         public Builder region(UUID regionWorld,Region v) {
             if(!regionWorld.equals(world)) { start=null; goals.clear(); triggers.clear(); route.clear(); }
@@ -81,7 +74,7 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         public Builder removeLastRoutePoint() { if(!route.isEmpty()) route.removeLast(); return this; }
         public Builder clearRoute() { route.clear(); return this; }
         public Course build() {
-            return new Course(base.id,name,status,base.author,world,region,start,goals,timeLimit,loadout,triggers,failLava,failOutside,rev,rank,stage,route);
+            return new Course(base.id,name,status,base.author,world,region,start,goals,timeLimit,loadout,triggers,failLava,failOutside,rev,route);
         }
     }
     public Course withName(String value) { return edit().name(value).build(); }
@@ -91,17 +84,12 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
     public Course toggleGoal(BlockPos goal) { return edit().toggleGoal(goal).build(); }
     public Course withTimeLimit(int seconds) { return edit().timeLimit(seconds).build(); }
 
-    /** Same course to play: everything except name, status, numbering and the revision itself. */
+    /** Same course to play: everything except name, status and the revision itself. */
     public boolean sameGameplay(Course other) {
         return Objects.equals(world,other.world) && Objects.equals(region,other.region) && Objects.equals(start,other.start)
                 && goals.equals(other.goals) && timeLimitSeconds==other.timeLimitSeconds && loadout.equals(other.loadout)
                 && triggers.equals(other.triggers) && failLava.equals(other.failLava) && failOutside.equals(other.failOutside)
                 && route.equals(other.route);
-    }
-    /** "Rank 1 ‐ Stage 3", "Rank 1 ‐ BOSS", or null without a rank number. */
-    public String numbering() {
-        if(rank==null) return null;
-        return "Rank "+rank+(stage==null ? "" : stage==0 ? " ‐ BOSS" : " ‐ Stage "+stage);
     }
     public boolean contains(Spot spot) { return region!=null && region.contains(spot.x(),spot.y(),spot.z()); }
     private boolean contains(BlockPos pos) { return region!=null && region.contains(pos.x(),pos.y(),pos.z()); }

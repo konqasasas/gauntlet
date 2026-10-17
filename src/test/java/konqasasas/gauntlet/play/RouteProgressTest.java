@@ -22,9 +22,10 @@ class RouteProgressTest {
         // Near the end of the trip the return leg is found.
         assertEquals(60,route.locate(2,0,2,58),1e-9);
     }
-    @Test void percentStopsAt99UntilTheGoal() {
-        assertEquals(99,RouteProgress.percent(.999,false)); assertEquals(100,RouteProgress.percent(.999,true));
-        assertEquals(63,RouteProgress.percent(.63,false)); assertEquals(0,RouteProgress.percent(0,false));
+    @Test void percentHasOneDecimalAndStopsBelow100UntilTheGoal() {
+        assertEquals("99.9%",RouteProgress.percent(.99999,false)); assertEquals("100.0%",RouteProgress.percent(.999,true));
+        assertEquals("63.4%",RouteProgress.percent(.6349,false)); assertEquals("63.0%",RouteProgress.percent(.63,false));
+        assertEquals("0.0%",RouteProgress.percent(0,false));
     }
     @Test void tooShortRoutesAreNotUsable() {
         assertFalse(new RouteProgress(List.of()).usable());

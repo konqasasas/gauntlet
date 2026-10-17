@@ -64,7 +64,7 @@ public final class Msg {
     public static ItemStack icon(CommandSender viewer,Material material,String key,List<Component> extra,TagResolver... args) {
         ItemStack item=new ItemStack(material);
         List<Component> lore=new ArrayList<>();
-        if(messages.template(lang(viewer),key+".lore")!=null) lore.addAll(lines(viewer,key+".lore",args));
+        if(messages.has(key+".lore")) lore.addAll(lines(viewer,key+".lore",args));
         extra.forEach(line -> lore.add(line.decorationIfAbsent(TextDecoration.ITALIC,TextDecoration.State.FALSE)));
         item.editMeta(meta -> { meta.displayName(text(viewer,key+".name",args)); meta.lore(lore); });
         return item;

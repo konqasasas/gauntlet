@@ -87,9 +87,13 @@ final class CourseMobs implements Listener {
         tracked.add(entity.getUniqueId()); spawned.add(entity.getUniqueId());
         for(Entity passenger:entity.getPassengers()) adopt(passenger,spawned);
     }
+    /** Passengers first; each one is lifted 100 blocks before removal, which looks cleaner on clients than removing in place. */
     private void removeTree(Entity entity) {
         for(Entity passenger:entity.getPassengers()) removeTree(passenger);
-        tracked.remove(entity.getUniqueId()); entity.remove();
+        tracked.remove(entity.getUniqueId());
+        if(entity.isInsideVehicle()) entity.leaveVehicle();
+        entity.teleport(entity.getLocation().add(0,100,0));
+        entity.remove();
     }
     private static String plain(double value) { return BigDecimal.valueOf(value).toPlainString(); }
 }
