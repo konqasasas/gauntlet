@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
-# Install an uploaded plugin JAR and restart the server. Called by deploy.ps1 through sudo:
+# Install an uploaded plugin JAR and restart the server. Called through sudo by deploy.ps1
+# (file already uploaded) or by gauntlet-ci for GitHub Actions (JAR on standard input):
 #   sudo /usr/local/bin/gauntlet-deploy /opt/gauntlet/incoming/<file>.jar
+#   sudo /usr/local/bin/gauntlet-deploy --stdin < <file>.jar
 set -euo pipefail
 INCOMING=/opt/gauntlet/incoming
 DEST=/opt/gauntlet/server/plugins/parkour-gauntlet.jar
 OLD=/opt/gauntlet/backups/jars
+MAX_BYTES=$((50 * 1024 * 1024))
 
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
-src="$(realpath -e -- "${1:?Usage: gauntlet-deploy <jar in $INCOMING>}")"
+if [[ ${1:-} == --stdin ]]; then
+  upload="$(mktemp -p "$INCOMING" --suffix=.jar ci-XXXXXX)"
+  trap 'rm -f -- "$upload"' EXIT
+  head -c $((MAX_BYTES + 1)) > "$upload"
+  (( $(stat -c %s "$upload") <= MAX_BYTES )) || { echo 'Upload is larger than 50 MB.' >&2; exit 1; }
+  set -- "$upload"
+fi
+src="$(realpath -e -- "${1:?Usage: gauntlet-deploy <jar in $INCOMING> | --stdin}")"
 # Only accept regular .jar files directly inside the upload directory.
 [[ $(dirname "$src") == "$INCOMING" && $src == *.jar && -f $src && ! -L $1 ]] \
   || { echo "Refusing $1: must be a .jar directly in $INCOMING" >&2; exit 1; }

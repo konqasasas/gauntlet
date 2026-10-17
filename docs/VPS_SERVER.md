@@ -122,6 +122,42 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
 
 ビルド（テストを含む）→ VPS へ転送 → サーバーを停止 → JAR を差し替え → 起動、の順に行います。差し替え前の JAR は `/opt/gauntlet/backups/jars` に残ります。接続先は `-Target` か環境変数 `GAUNTLET_VPS` で変えられます（既定は `gauntlet-vps`）。
 
+### GitHub Actions から反映する
+
+`.github/workflows/build.yml` は、main への push と Pull Request のたびにビルドとテストを行います。VPS への反映は、GitHub の **Actions → Build and deploy → Run workflow** で、反映するもの（`plugin` / `web` / `both`）を選んで実行したときだけ行います。プラグインの反映はサーバーを再起動するので、遊んでいる人がいない時間に実行します。
+
+GitHub に預けるのは、デプロイ専用の鍵です。VPS 側で `gauntlet-ci` に制限されるため、この鍵では JAR とサイトの受け取り以外（ログインやコマンド実行）はできません。
+
+1. Windows でデプロイ専用の鍵を作ります（GitHub が使うのでパスフレーズは付けません）。
+
+   ```powershell
+   ssh-keygen -t ed25519 -f $HOME\.ssh\gauntlet-ci -N '""' -C gauntlet-ci
+   ```
+
+2. 公開鍵を VPS に登録します。
+
+   ```powershell
+   $pub = (Get-Content $HOME\.ssh\gauntlet-ci.pub -Raw).Trim()
+   ssh gauntlet-vps "gauntlet-ci --authorize '$pub'"
+   ```
+
+3. VPS のホスト鍵を控えます（`ssh gauntlet-vps` で一度接続したあとに実行します）。
+
+   ```powershell
+   ssh-keygen -F 153.115.7.32 -f $HOME\.ssh\known_hosts | Select-String -NotMatch '^#'
+   ```
+
+4. GitHub のリポジトリの **Settings → Secrets and variables → Actions → New repository secret** で、次の4つを登録します。
+
+   | 名前 | 値 |
+   |---|---|
+   | `VPS_HOST` | `153.115.7.32` |
+   | `VPS_USER` | `konqa` |
+   | `VPS_SSH_KEY` | `$HOME\.ssh\gauntlet-ci`（`.pub` ではない方）の中身をすべて |
+   | `VPS_KNOWN_HOSTS` | 手順3で表示された行をすべて |
+
+`VPS_SSH_KEY` は秘密鍵です。GitHub の Secrets 以外には貼らないでください。鍵を取り消すときは、VPS の `~/.ssh/authorized_keys` から `gauntlet-ci` の行を消します。
+
 ## Web サイト（`catenaonline.net`）
 
 `web/` の静的ページを nginx で配信し、Let's Encrypt で HTTPS にします。証明書は certbot が自動で更新します。

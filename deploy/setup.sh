@@ -145,7 +145,7 @@ install -m 0644 "$HERE"/systemd/gauntlet.service "$HERE"/systemd/gauntlet.socket
   "$HERE"/systemd/gauntlet-backup.service "$HERE"/systemd/gauntlet-backup.timer \
   "$HERE"/systemd/gauntlet-alert@.service /etc/systemd/system/
 install -m 0755 "$HERE"/bin/gauntlet-cmd "$HERE"/bin/gauntlet-backup "$HERE"/bin/gauntlet-deploy \
-  "$HERE"/bin/gauntlet-notify /usr/local/bin/
+  "$HERE"/bin/gauntlet-notify "$HERE"/bin/gauntlet-ci /usr/local/bin/
 # Webhook for alerts; filled in by: sudo gauntlet-notify --setup
 if [[ ! -f /etc/default/gauntlet-notify ]]; then
   install -o root -g minecraft -m 0640 /dev/null /etc/default/gauntlet-notify

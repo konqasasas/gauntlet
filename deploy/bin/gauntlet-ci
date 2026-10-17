@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Forced command for the GitHub Actions deploy key. The key can only do these two things:
+#   ssh <admin>@<vps> deploy-plugin < parkour-gauntlet.jar   install the JAR and restart the server
+#   tar -cf - . | ssh <admin>@<vps> deploy-web                replace the site files
+# Register the key (as the admin user, not root):
+#   gauntlet-ci --authorize "ssh-ed25519 AAAA... gauntlet-ci"
+set -euo pipefail
+SITE=/var/www/catenaonline.net
+
+if [[ ${1:-} == --authorize ]]; then
+  key="${2:?Usage: gauntlet-ci --authorize \"<public key line>\"}"
+  [[ $key =~ ^ssh-ed25519\ [A-Za-z0-9+/=]+(\ .*)?$ ]] || { echo 'Expected one ssh-ed25519 public key line.' >&2; exit 1; }
+  install -d -m 0700 "$HOME/.ssh"
+  line="restrict,command=\"/usr/local/bin/gauntlet-ci\" $key"
+  grep -qxF "$line" "$HOME/.ssh/authorized_keys" 2>/dev/null || echo "$line" >> "$HOME/.ssh/authorized_keys"
+  chmod 0600 "$HOME/.ssh/authorized_keys"
+  echo 'Deploy key registered (restricted to gauntlet-ci).'
+  exit 0
+fi
+
+case "${SSH_ORIGINAL_COMMAND:-}" in
+  deploy-plugin)
+    exec sudo -n /usr/local/bin/gauntlet-deploy --stdin
+    ;;
+  deploy-web)
+    [[ -d $SITE && -w $SITE ]] || { echo "$SITE is missing or not writable. Run web-setup.sh first." >&2; exit 1; }
+    staging="$(mktemp -d "$SITE/.upload-XXXXXX")"
+    trap 'rm -rf "$staging"' EXIT
+    # GNU tar drops leading "/" and refuses members containing "..".
+    tar -x --no-same-owner --no-same-permissions -C "$staging" -f -
+    [[ -f $staging/index.html ]] || { echo 'Upload has no index.html; site left unchanged.' >&2; exit 1; }
+    find "$SITE" -mindepth 1 -maxdepth 1 ! -path "$staging" -exec rm -rf {} +
+    find "$staging" -mindepth 1 -maxdepth 1 -exec mv -t "$SITE" {} +
+    chmod -R u=rwX,go=rX "$SITE"
+    echo "Site updated: $SITE"
+    ;;
+  *)
+    echo "Not allowed: ${SSH_ORIGINAL_COMMAND:-<interactive login>}" >&2
+    exit 1
+    ;;
+esac
