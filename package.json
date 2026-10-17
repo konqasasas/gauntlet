@@ -1,0 +1,16 @@
+{
+  "name": "dialog-custom-gui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minecraft Java 26.3 / Paper向け、Dialog + リソースパック（core shaderなし）のGUIエディター",
+  "scripts": {
+    "start": "node server.mjs",
+    "cli": "node cli.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@napi-rs/canvas": "1.0.9"
+  }
+}

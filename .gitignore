@@ -1,0 +1,7 @@
+node_modules/
+exports/
+preview-*.png
+# 取得した Minecraft の資源（node tools/fetch-vanilla.mjs で作り直せる。再配布しない）
+data/vanilla/
+# Undo 履歴（大きく、作業中だけのもの）
+data/history.json
