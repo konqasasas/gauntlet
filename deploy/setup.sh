@@ -26,7 +26,8 @@ fi
 echo '== Packages'
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get -y upgrade
+# Keep locally modified config files (e.g. cloud-init's sshd settings) instead of prompting.
+apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade
 apt-get -y install ca-certificates curl gnupg ufw fail2ban unattended-upgrades sqlite3 zstd unzip
 
 echo '== Java 25 (Eclipse Temurin)'
@@ -58,8 +59,11 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 EOF
+# Ubuntu 24.04 starts sshd per connection via ssh.socket, so /run/sshd may not exist yet
+# and ssh.service may be inactive; new connections read the new config either way.
+install -d -m 0755 /run/sshd
 sshd -t
-systemctl reload ssh
+systemctl try-reload-or-restart ssh.service
 
 echo '== Firewall'
 ufw default deny incoming
@@ -155,3 +159,6 @@ Done. Before closing this root session, open a NEW terminal and check:
   ssh $ADMIN_USER@<this server>      (root login is now disabled)
 Then accept the EULA in $SERVER/eula.txt and run: sudo systemctl start gauntlet
 EOF
+if [[ -f /var/run/reboot-required ]]; then
+  echo 'Updates need a reboot. After checking the new SSH login, run: sudo reboot'
+fi
