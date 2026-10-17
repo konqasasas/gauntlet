@@ -1,0 +1,34 @@
+[Unit]
+Description=Parkour Gauntlet (Paper)
+Wants=network-online.target
+Requires=gauntlet.socket
+After=network-online.target gauntlet.socket
+
+[Service]
+Type=simple
+User=minecraft
+Group=minecraft
+UMask=0007
+WorkingDirectory=/opt/gauntlet/server
+EnvironmentFile=/etc/default/gauntlet
+# Console input comes from the FIFO in gauntlet.socket (see gauntlet-cmd).
+Sockets=gauntlet.socket
+StandardInput=socket
+StandardOutput=journal
+StandardError=journal
+ExecStart=/usr/bin/java -Xms${JAVA_MEM} -Xmx${JAVA_MEM} $JAVA_FLAGS -Dterminal.jline=false -Dterminal.ansi=false -jar ${PAPER_JAR} --nogui
+# Paper saves worlds and disables plugins on SIGTERM; give it time to finish.
+KillSignal=SIGTERM
+TimeoutStopSec=180
+SuccessExitStatus=0 143
+Restart=on-failure
+RestartSec=15
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/gauntlet
+
+[Install]
+WantedBy=multi-user.target

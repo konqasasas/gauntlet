@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Send one console command to the running server and print the log lines it produced.
+#   gauntlet-cmd whitelist add <name>
+set -euo pipefail
+FIFO=/run/gauntlet.stdin
+LOG=/opt/gauntlet/server/logs/latest.log
+
+(( $# )) || { echo 'Usage: gauntlet-cmd <command...>' >&2; exit 2; }
+systemctl is-active --quiet gauntlet.service || { echo 'Server is not running.' >&2; exit 1; }
+before=$(wc -l < "$LOG" 2>/dev/null || echo 0)
+printf '%s\n' "$*" > "$FIFO"
+sleep 1
+tail -n +"$((before + 1))" "$LOG" 2>/dev/null || true

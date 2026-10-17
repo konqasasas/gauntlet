@@ -210,6 +210,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\hotswap.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\verify-server.ps1 -Action stop
 ```
 
+## VPSサーバー
+
+本番は XServer VPS（Ubuntu 24.04）で動かします。初回構築・移行・`deploy.ps1` による反映・バックアップ・一般公開時の確認項目は [docs/VPS_SERVER.md](docs/VPS_SERVER.md) を参照してください。
+
 ## 保存と制約
 
 CPと設置履歴は `run\paper-26.3\plugins\ParkourGauntlet\state.json` に保存します。

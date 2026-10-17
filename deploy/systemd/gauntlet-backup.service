@@ -1,0 +1,11 @@
+[Unit]
+Description=Parkour Gauntlet backup
+
+[Service]
+Type=oneshot
+User=minecraft
+Group=minecraft
+UMask=0027
+ExecStart=/usr/local/bin/gauntlet-backup
+Nice=10
+IOSchedulingClass=idle

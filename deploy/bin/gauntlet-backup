@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Archive the server directory to /opt/gauntlet/backups/gauntlet-<time>.tar.zst.
+# While the server runs, world saving is paused and the SQLite database is copied with
+# sqlite3 .backup so the archive is consistent. Run by gauntlet-backup.timer as minecraft.
+set -euo pipefail
+SERVER=/opt/gauntlet/server
+DEST=/opt/gauntlet/backups
+KEEP_DAYS="${KEEP_DAYS:-14}"
+FIFO=/run/gauntlet.stdin
+LOG="$SERVER/logs/latest.log"
+DB_REL=plugins/ParkourGauntlet/gauntlet.db
+
+running=0
+systemctl is-active --quiet gauntlet.service && running=1
+paused=0
+work="$(mktemp -d "$DEST/.work-XXXXXX")"
+cleanup() {
+  rm -rf "$work"
+  if (( paused )); then printf 'save-on\n' > "$FIFO"; fi
+}
+trap cleanup EXIT
+
+if (( running )); then
+  before=$(wc -l < "$LOG")
+  printf 'save-off\nsave-all flush\n' > "$FIFO"
+  paused=1
+  for _ in $(seq 120); do
+    grep -q 'Saved the game' < <(tail -n +"$((before + 1))" "$LOG") && break
+    sleep 1
+  done
+fi
+
+if [[ -f $SERVER/$DB_REL ]]; then
+  mkdir -p "$work/$(dirname "$DB_REL")"
+  sqlite3 "$SERVER/$DB_REL" ".timeout 10000" ".backup '$work/$DB_REL'"
+fi
+
+archive="$DEST/gauntlet-$(date +%Y%m%d-%H%M%S).tar.zst"
+tarball="$work/backup.tar"
+set +e
+tar -cf "$tarball" \
+  --exclude=./libraries --exclude=./cache --exclude=./versions --exclude=./logs \
+  --exclude="./$DB_REL" --exclude="./$DB_REL-wal" --exclude="./$DB_REL-shm" --exclude="./$DB_REL-journal" \
+  --warning=no-file-changed \
+  -C "$SERVER" .
+status=$?
+set -e
+# 1 = some file changed while reading; the world itself is paused, so this is acceptable.
+(( status <= 1 )) || { echo "tar failed ($status)" >&2; exit "$status"; }
+if (( paused )); then printf 'save-on\n' > "$FIFO"; paused=0; fi
+
+# Appended separately so the excludes above do not drop the consistent copy.
+if [[ -f $work/$DB_REL ]]; then tar -rf "$tarball" -C "$work" "./$DB_REL"; fi
+zstd -q -T0 -o "$archive.part" "$tarball"
+mv "$archive.part" "$archive"
+find "$DEST" -maxdepth 1 -name 'gauntlet-*.tar.zst' -mtime +"$KEEP_DAYS" -delete
+find "$DEST/jars" -maxdepth 1 -name '*.jar' -mtime +"$KEEP_DAYS" -delete 2>/dev/null || true
+echo "Backup written: $archive ($(du -h "$archive" | cut -f1))"

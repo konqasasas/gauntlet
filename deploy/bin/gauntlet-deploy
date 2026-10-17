@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Install an uploaded plugin JAR and restart the server. Called by deploy.ps1 through sudo:
+#   sudo /usr/local/bin/gauntlet-deploy /opt/gauntlet/incoming/<file>.jar
+set -euo pipefail
+INCOMING=/opt/gauntlet/incoming
+DEST=/opt/gauntlet/server/plugins/parkour-gauntlet.jar
+OLD=/opt/gauntlet/backups/jars
+
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+src="$(realpath -e -- "${1:?Usage: gauntlet-deploy <jar in $INCOMING>}")"
+# Only accept regular .jar files directly inside the upload directory.
+[[ $(dirname "$src") == "$INCOMING" && $src == *.jar && -f $src && ! -L $1 ]] \
+  || { echo "Refusing $1: must be a .jar directly in $INCOMING" >&2; exit 1; }
+entries="$(unzip -Z1 "$src" 2>/dev/null)" || { echo "$src is not a JAR." >&2; exit 1; }
+grep -qx 'plugin.yml' <<< "$entries" || { echo "$src has no plugin.yml." >&2; exit 1; }
+
+systemctl stop gauntlet.service
+if [[ -f $DEST ]]; then
+  install -o minecraft -g minecraft -m 0640 "$DEST" "$OLD/parkour-gauntlet-$(date +%Y%m%d-%H%M%S).jar"
+fi
+install -o minecraft -g minecraft -m 0640 "$src" "$DEST"
+rm -f -- "$src"
+systemctl start gauntlet.service
+echo "Installed $(basename "$src") and restarted gauntlet.service."

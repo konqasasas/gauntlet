@@ -1,0 +1,10 @@
+[Unit]
+Description=Parkour Gauntlet console input
+PartOf=gauntlet.service
+
+[Socket]
+ListenFIFO=/run/gauntlet.stdin
+SocketUser=minecraft
+SocketGroup=minecraft
+SocketMode=0660
+RemoveOnStop=true
