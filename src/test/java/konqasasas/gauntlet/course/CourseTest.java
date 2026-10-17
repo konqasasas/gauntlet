@@ -35,7 +35,7 @@ class CourseTest {
         Course course=Course.create("c",author,world).toggleGoal(new BlockPos(1,2,3)).toggleGoal(new BlockPos(4,5,6));
         assertTrue(course.isGoal(1,2,3)); assertTrue(course.isGoal(4,5,6)); assertFalse(course.isGoal(1,2,4));
         assertEquals(List.of(new BlockPos(4,5,6)),course.toggleGoal(new BlockPos(1,2,3)).goals());
-        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null).goals());
+        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null,null).goals());
     }
     @Test void timeLimitIsClampedAndStatusCycles() {
         Course course=Course.create("c",author,world);
@@ -60,11 +60,21 @@ class CourseTest {
         assertFalse(base.sameGameplay(base.withStart(new Spot(1,1,1,0,0))));
         assertFalse(base.sameGameplay(base.edit().loadout(2,ItemRef.scaffold()).build()));
         assertFalse(base.sameGameplay(base.edit().addRoutePoint(new RoutePoint(1,2,3)).build()));
+        assertFalse(base.sameGameplay(base.edit().togglePlaceable(new BlockPos(1,2,3)).build()));
         assertEquals(0,base.rev());
+    }
+    @Test void placeableCellsRestrictPlacementOnlyWhenRegistered() {
+        Course c=Course.create("c",author,world).withRegion(world,Region.of(0,0,0,9,9,9));
+        assertTrue(c.canPlace(50,50,50),"No cells: anywhere");
+        Course one=c.edit().togglePlaceable(new BlockPos(1,1,1)).build();
+        assertTrue(one.canPlace(1,1,1)); assertFalse(one.canPlace(1,2,1));
+        assertEquals(List.of(),one.edit().togglePlaceable(new BlockPos(1,1,1)).build().placeable(),"Placing the marker again removes the cell");
+        assertEquals(List.of("problem.placeable-outside"),one.edit().togglePlaceable(new BlockPos(20,0,0)).build().problems().stream()
+                .filter(p -> p.startsWith("problem.placeable")).toList());
     }
     @Test void oldFourSlotLoadouts() {
         Course four=new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,
-                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null);
+                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null,null);
         assertEquals(Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0)),four.loadout(),"The old fourth slot is dropped");
         assertEquals(0,four.rev()); assertEquals(List.of(),four.route());
     }

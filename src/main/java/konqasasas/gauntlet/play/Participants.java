@@ -506,6 +506,17 @@ public final class Participants implements Listener {
         Session session=sessions.get(event.getPlayer().getUniqueId());
         if(session!=null && !control(event.getPlayer().getInventory().getItemInMainHand())) session.clock.action();
     }
+    /** Courses with placeable cells: placing anywhere else is cancelled and fails the attempt (after the tick). */
+    @EventHandler(priority=EventPriority.HIGH,ignoreCancelled=true)
+    public void placeOutside(BlockPlaceEvent event) {
+        Session session=sessions.get(event.getPlayer().getUniqueId());
+        if(session==null || session.goalReached) return;
+        Course course=courses.get(session.course);
+        var block=event.getBlockPlaced();
+        if(course==null || course.canPlace(block.getX(),block.getY(),block.getZ())) return;
+        event.setCancelled(true);
+        session.pendingFail=RunRecord.Reason.PLACE;
+    }
     @EventHandler(priority=EventPriority.MONITOR,ignoreCancelled=true)
     public void place(BlockPlaceEvent event) {
         Session session=sessions.get(event.getPlayer().getUniqueId());

@@ -49,6 +49,11 @@ public final class Lobby implements Listener {
     }
     public void stop() { if(task!=null) task.cancel(); blocks.clear(); }
     public boolean enabled() { return !world.isEmpty(); }
+    /** The lobby world's spawn, or null when the lobby is off or its world is not loaded. */
+    public Location spawn() {
+        World lobby=world.isEmpty() ? null : Bukkit.getWorld(world);
+        return lobby==null ? null : lobby.getSpawnLocation();
+    }
     /** In the lobby world, outside a course, in Adventure or Survival. */
     public boolean managed(Player player) {
         if(world.isEmpty() || !player.getWorld().getName().equals(world) || inCourse.test(player)) return false;

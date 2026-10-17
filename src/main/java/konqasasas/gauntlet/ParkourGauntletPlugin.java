@@ -43,6 +43,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private Lobby lobby;
     private TabList tabList;
     private Sidebar sidebar;
+    private PlaceableDisplays placeable;
+    private InvisibleGear invisibleGear;
+    private DialogMenu menu;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
@@ -102,15 +105,26 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             participants.start();
             courses=new CourseEditor(this,courseStore,templateStore,courseItems,new NamespacedKey(this,"tool"),participants);
             courses.start();
+            // Players in a course see its cells; builders see the course they hold the wand or marker for.
+            placeable=new PlaceableDisplays(this,courseStore,p -> {
+                Participants.View view=participants.view(p);
+                return view!=null ? view.course() : courses.shownCourse(p);
+            });
+            placeable.start();
             nameTags.start();
             visibility.start();
             lobby.start();
             tabList.start();
             sidebar.start();
             getServer().getPluginManager().registerEvents(new ChatFormat(display),this);
+            getServer().getPluginManager().registerEvents(new PlayerContact(),this);
+            invisibleGear=new InvisibleGear();
+            getServer().getPluginManager().registerEvents(invisibleGear,this);
             chat=new ChatTranslation(this,playerData);
             chat.start();
             new SettingsCommands(this,playerData,visibility).start();
+            menu=new DialogMenu(this,playerData,lobby,participants);
+            menu.start();
             getLogger().info("Parkour Gauntlet ready: /gauntlet kit, /course (Paper 26.3)");
         } catch(IOException|RuntimeException e) {
             getLogger().log(Level.SEVERE,"Cannot initialize Parkour Gauntlet; existing state was preserved",e);
@@ -118,6 +132,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         }
     }
     @Override public void onDisable() {
+        if(placeable!=null) placeable.stop();
+        if(invisibleGear!=null) invisibleGear.stop();
         if(courses!=null) courses.stop();
         if(chat!=null) chat.stop();
         if(lobby!=null) lobby.stop();
@@ -148,6 +164,10 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             catch(IOException e) { Msg.send(sender,"editor.lang.reload-failed",Msg.arg("error",String.valueOf(e.getMessage()))); getLogger().log(Level.SEVERE,"Cannot reload language files",e); }
             return true;
         }
+        if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("menu")) {
+            Msg.send(sender,menu!=null && menu.reload() ? "editor.menu.reloaded" : "editor.menu.reload-failed");
+            return true;
+        }
         if(!(sender instanceof Player player)) { Msg.send(sender,"editor.kit.console"); return true; }
         if(!allowed(player)) return true;
         if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"editor.kit.usage"); return true; }
@@ -157,7 +177,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         if(args.length==1) return List.of("kit","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
-        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang");
+        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu");
         return List.of();
     }
     private boolean allowed(Player player) {

@@ -17,8 +17,9 @@ import org.bukkit.scoreboard.*;
 /**
  * The sidebar, one scoreboard per player (always shown). Headings are English
  * only. The course part is shown only during a course, so a video shows which
- * course is being played. Each board also holds the team that hides vanilla
- * name tags (NameTags draws them instead).
+ * course is being played. Each board also holds the team with every player:
+ * it hides vanilla name tags (NameTags draws them instead), turns off pushing
+ * between players, and keeps invisible players fully invisible to each other.
  */
 public final class Sidebar implements Listener {
     /** What the course part shows; best is already formatted ("87%", "Clear ✓ 24.10s" or "—"). */
@@ -66,6 +67,9 @@ public final class Sidebar implements Listener {
         objective.numberFormat(NumberFormat.blank());
         Team team=board.registerNewTeam(HIDE_TEAM);
         team.setOption(Team.Option.NAME_TAG_VISIBILITY,Team.OptionStatus.NEVER);
+        team.setOption(Team.Option.COLLISION_RULE,Team.OptionStatus.NEVER);
+        // Teammates would otherwise see each other's invisibility as translucent.
+        team.setCanSeeFriendlyInvisibles(false);
         for(Player other:Bukkit.getOnlinePlayers()) team.addEntry(other.getName());
         boards.put(player.getUniqueId(),board); shown.remove(player.getUniqueId());
         player.setScoreboard(board);

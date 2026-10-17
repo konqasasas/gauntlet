@@ -40,6 +40,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     final ChatPrompts prompts;
     final Participants participants;
     private final CourseWand wand;
+    private final PlaceMarker marker;
     private final Selections selections=new Selections();
     private final ItemMenus itemMenus;
     private final TriggerMenus triggerMenus;
@@ -49,7 +50,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
 
     public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,CourseItems items,NamespacedKey toolKey,Participants participants) {
         this.plugin=plugin; this.store=store; this.templates=templates; this.items=items; this.participants=participants;
-        wand=new CourseWand(toolKey); prompts=new ChatPrompts(plugin);
+        wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey); prompts=new ChatPrompts(plugin);
         itemMenus=new ItemMenus(this); triggerMenus=new TriggerMenus(this,itemMenus);
     }
     public void start() {
@@ -195,6 +196,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(27,Msg.icon(player,Material.ARROW,"editor.back-to-list"),e -> openList(player));
         menu.button(28,Msg.icon(player,Material.LEAD,"editor.edit.route",Msg.arg("count",course.route().size()),
                 Msg.arg("length",String.format(Locale.ROOT,"%.1f",new RouteProgress(course.route()).total()))),e -> editRoute(player,id,e));
+        menu.button(29,Msg.icon(player,Material.LIME_WOOL,"editor.edit.placeable",Msg.arg("count",course.placeable().size())),e -> placeableButton(player,id,e));
         menu.button(31,Msg.icon(player,Material.NETHER_STAR,course.problems().isEmpty() ? "editor.edit.play" : "editor.edit.play-blocked"),
                 e -> { if(admin(player)) participants.enter(player,id,e.isRightClick()); });
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.edit.delete"),e -> openDelete(player,id));
@@ -257,6 +259,16 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         int delta=(event.isShiftClick() ? 10 : 1)*(event.isRightClick() ? -1 : 1);
         update(player,id,c -> c.withTimeLimit(c.timeLimitSeconds()+delta));
     }
+    /** Click: receive the marker. Shift+right: remove every placeable cell. */
+    private void placeableButton(Player player,String id,InventoryClickEvent event) {
+        if(event.isRightClick() && event.isShiftClick()) {
+            update(player,id,c -> c.edit().clearPlaceable().build()); tell(player,"editor.placeable.cleared"); return;
+        }
+        if(!admin(player)) return;
+        for(ItemStack item:player.getInventory().getContents()) if(marker.is(item)) { tell(player,"editor.marker.already"); return; }
+        if(!player.getInventory().addItem(marker.create(player)).isEmpty()) tell(player,"editor.kit.full");
+        else tell(player,"editor.marker.given");
+    }
     /** Left: add the current position, right: remove the last point, Shift+right: clear. */
     private void editRoute(Player player,String id,InventoryClickEvent event) {
         Course course=store.get(id); if(course==null) return;
@@ -318,6 +330,25 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         Selections.Selected selected=selections.selected(player.getUniqueId());
         tell(player,"editor.wand.corner",Msg.arg("index",index+1),Msg.arg("pos",block.getX()+", "+block.getY()+", "+block.getZ()),
                 Msg.arg("size",selected==null ? "" : "  "+selected.region().sizeX()+"×"+selected.region().sizeY()+"×"+selected.region().sizeZ()));
+    }
+    /** The marker is never placed: the cell is registered (or unregistered) and stays air. */
+    @EventHandler(priority=EventPriority.HIGHEST)
+    public void markerPlace(org.bukkit.event.block.BlockPlaceEvent event) {
+        if(!marker.is(event.getItemInHand())) return;
+        event.setCancelled(true);
+        Player player=event.getPlayer(); Block block=event.getBlockPlaced();
+        if(!admin(player)) return;
+        String id=editing.get(player.getUniqueId());
+        Course course=id==null ? null : store.get(id);
+        if(course==null) { tell(player,"editor.placeable.no-course"); return; }
+        if(!block.getWorld().getUID().equals(course.world()) || course.region()==null || !course.region().contains(block.getX(),block.getY(),block.getZ())) {
+            tell(player,"editor.placeable.outside",Msg.arg("name",course.name())); return;
+        }
+        BlockPos cell=new BlockPos(block.getX(),block.getY(),block.getZ());
+        boolean removing=course.placeable().contains(cell);
+        if(save(player,id,c -> c.edit().togglePlaceable(cell).build()))
+            Msg.actionBar(player,removing ? "editor.placeable.removed" : "editor.placeable.added",Msg.arg("pos",cell.describe()),
+                    Msg.arg("count",course.placeable().size()+(removing ? -1 : 1)));
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void wandBreak(BlockBreakEvent event) {
@@ -385,6 +416,12 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     static String worldName(Player player,Course course) {
         World world=Bukkit.getWorld(course.world());
         return world==null ? Msg.plain(player,"editor.world-not-loaded",Msg.arg("id",course.world())) : world.getName();
+    }
+    /** The course whose outlines and placeable cells this builder sees: the last opened one, while holding the wand or marker. */
+    public String shownCourse(Player player) {
+        ItemStack hand=player.getInventory().getItemInMainHand();
+        if(!wand.is(hand) && !marker.is(hand)) return null;
+        return editing.get(player.getUniqueId());
     }
     void failure(Player player,String key,Exception e,TagResolver... args) {
         tell(player,key,args); plugin.getLogger().log(Level.SEVERE,Msg.plain(player,key,args),e);

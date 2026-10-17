@@ -16,8 +16,8 @@ import org.joml.*;
 
 /**
  * Names above heads: a TextDisplay riding each player (the vanilla name tag is
- * hidden by the sidebar's team). Not shown during a course, to the player
- * themself, or to viewers who hide other players. The displays are never saved.
+ * hidden by the sidebar's team). Not shown during a course, while invisible, to
+ * the player themself, or to viewers who hide other players. Never saved.
  *
  * A player with a passenger cannot change worlds, so the display is taken off
  * before plugin teleports, commands and portals, and put back by the next sync.
@@ -53,7 +53,7 @@ public final class NameTags implements Listener {
     private void sync() {
         for(Player player:Bukkit.getOnlinePlayers()) {
             UUID id=player.getUniqueId();
-            boolean want=!hidden.test(player) && player.getGameMode()!=GameMode.SPECTATOR && !player.isDead() && player.isValid();
+            boolean want=!hidden.test(player) && !InvisibleGear.invisible(player) && player.getGameMode()!=GameMode.SPECTATOR && !player.isDead() && player.isValid();
             TextDisplay current=displays.get(id);
             if(!want) { if(current!=null) remove(id); continue; }
             if(current==null || !current.isValid() || !player.getPassengers().contains(current)) { remove(id); create(player); continue; }
