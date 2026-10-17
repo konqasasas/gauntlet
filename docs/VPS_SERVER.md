@@ -27,7 +27,7 @@ ssh-keygen -t ed25519 -f $HOME\.ssh\gauntlet-vps
 ## 2. XServer で VPS を作る
 
 1. OS に **Ubuntu 24.04** を選び、「SSH Key」に上の公開鍵を登録して作成します。
-2. パネルの **パケットフィルター設定** で、SSH（22）と **TCP 25565** だけを許可します。Minecraft 用の項目があればそれを選び、なければ手動で追加します。
+2. パネルの **パケットフィルター設定** で、SSH（22）・**TCP 25565**（Minecraft）・**TCP 80 / 443**（Web サイト）だけを許可します。Minecraft 用や Web 用の項目があればそれを選び、なければ手動で追加します。
 3. VPS の IPv4 アドレスを控えます。
 
 SSH が通らなくなったときは、パネルの「コンソール」からログインできます。
@@ -52,7 +52,7 @@ Host gauntlet-vps
 
 ```powershell
 cd C:\mc\gauntlet
-scp -r deploy gauntlet-vps-root:/root/
+scp -r deploy web gauntlet-vps-root:/root/
 ssh gauntlet-vps-root
 ```
 
@@ -97,7 +97,7 @@ sudo systemctl start gauntlet
 journalctl -u gauntlet -f
 ```
 
-`Done` が出たら、Minecraft から `<VPSのIPv4>`（ポート省略で 25565）に接続します。
+`Done` が出たら、Minecraft から `mc.catenaonline.net`（ポート省略で 25565）に接続します。
 
 ## 日常の操作
 
@@ -121,6 +121,67 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
 ```
 
 ビルド（テストを含む）→ VPS へ転送 → サーバーを停止 → JAR を差し替え → 起動、の順に行います。差し替え前の JAR は `/opt/gauntlet/backups/jars` に残ります。接続先は `-Target` か環境変数 `GAUNTLET_VPS` で変えられます（既定は `gauntlet-vps`）。
+
+## Web サイト（`catenaonline.net`）
+
+`web/` の静的ページを nginx で配信し、Let's Encrypt で HTTPS にします。証明書は certbot が自動で更新します。
+
+1. XServer ドメインの DNS レコード設定に、A レコードを2件追加します（`mc` の A レコードはそのまま）。
+
+   | ホスト名 | 種別 | 内容 |
+   |---|---|---|
+   | `catenaonline.net`（空欄） | A | VPS の IPv4 |
+   | `www` | A | VPS の IPv4 |
+
+2. パケットフィルターで TCP 80 / 443 が許可されていることを確認します。
+3. VPS 上で実行します。`LE_EMAIL` には証明書の期限切れ通知を受け取るアドレスを指定します。実行すると、そのアドレスで Let's Encrypt の利用規約に同意したことになります。
+
+   ```bash
+   cd /root/deploy && sudo ADMIN_USER=konqa LE_EMAIL=<連絡先メール> bash web-setup.sh
+   ```
+
+ページを更新したら、Windows から反映します（ビルドやサーバーの再起動はしません）。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -Web
+```
+
+## Discord 連携（DiscordSRV）
+
+ゲーム内チャットを Discord に流し（Discord からゲームへは流さない）、ボットのステータスとチャンネルトピックにオンライン人数を出し、運営用チャンネルからコンソールを操作します。
+
+### Discord 側の準備
+
+1. <https://discord.com/developers/applications> でアプリケーションを作り、**Bot** を開きます。
+   - **Reset Token** でトークンを表示して控えます。トークンはチャットや Git に貼らず、下の `configure` で直接入力します。
+   - **Privileged Gateway Intents** の **SERVER MEMBERS INTENT** と **MESSAGE CONTENT INTENT** を ON にします。
+2. **OAuth2 → URL Generator** で、スコープに `bot` と `applications.commands` を選びます。権限には「チャンネルを見る」「メッセージを送信」「埋め込みリンク」「ファイルを添付」「メッセージ履歴を読む」「メッセージの管理」「チャンネルの管理」（トピック更新用）を選び、生成された URL からボットをサーバーに招待します。
+3. チャンネルを2つ作ります。
+   - **サーバーチャット**：全員が閲覧でき、一般メンバーは送信できない（ボットだけ送信できる）。
+   - **コンソール**：運営ロールとボットだけが閲覧・送信できる。**ここに書いた内容はサーバーのコマンドとして実行されます。** 運営以外に見せないでください。
+4. Discord の設定 → 詳細設定 → **開発者モード** を ON にし、2つのチャンネルを右クリック →「ID をコピー」で ID を控えます。
+
+### VPS 側
+
+```bash
+cd /root/deploy        # または deploy/ を送り直した場所
+sudo bash discord.sh install      # DiscordSRV を検証付きで導入し、再起動（設定ファイルが作られる）
+sudo bash discord.sh configure    # トークンとチャンネル ID を入力 → 設定を反映して再起動
+```
+
+`configure` で変える設定は次のとおりです（元の設定は `config.yml.bak` / `messages.yml.bak` に残ります）。
+
+| 設定 | 値 |
+|---|---|
+| Discord → ゲーム | 無効（`DiscordChatChannelDiscordToMinecraft: false`） |
+| チャットのイベント | Paper の `AsyncChatEvent`（コース ID などの入力待ちのチャットを Discord に流さない） |
+| メンション | ゲーム内チャットから Discord のユーザー・ロールを通知しない |
+| ボットのステータス | `○人がプレイ中` と `mc.catenaonline.net` を交互に表示 |
+| チャンネルトピック | 人数と接続先（10分ごと。停止中は「サーバー停止中」） |
+| 起動・停止の通知 | サーバーチャットに日本語で通知 |
+| コンソール | `op` / `deop` / `execute` / `?` は DiscordSRV の既定どおり実行不可 |
+
+設定ファイルは `/opt/gauntlet/server/plugins/DiscordSRV/` にあります。手で変えたときは `gauntlet-cmd discord reload`、または再起動で反映します。
 
 ## バックアップ
 
@@ -154,8 +215,9 @@ Paper の `libraries` は起動時に取り直されます。動作を確認し�
 - **入場**：`server.properties` の `white-list=false` / `enforce-whitelist=false`、`max-players` を決めます。`online-mode=true`・`enforce-secure-profile=true` はそのままにします。
 - **権限**：`ops.json` を見直し、運営以外に OP を付けないようにします。コース編集（`gauntlet.admin`）は OP 限定です。役割を分けるなら LuckPerms の導入を検討します。
 - **荒らし対策**：BAN・ミュート・チャットのログ確認の手順を決めます。FAWE と Multiverse のコマンドは OP 限定であることを確認します。
-- **翻訳**：MyMemory の無料枠は全員で共有します。`mymemory.email` を設定するか、LibreTranslate を検討します。
+- **翻訳**：MyMemory の無料枠（連絡用メール設定済みで1日50,000文字）は全員で共有します。足りなければ LibreTranslate を検討します。
 - **表示**：サーバー名（`Catena Online`）と接続先（`mc.catenaonline.net`）は設定済みです。`server.properties` の `motd`（サーバー一覧の説明文）を公開向けの文にします。
-- **接続先**：独自ドメインの A レコード（例：`mc.example.com`）を VPS に向けると、IP を変えても参加者の設定が変わりません。
+- **Web サイト**：`web/index.html` の「現在は運営メンバーのみ参加できます」を書き換え、Discord の招待リンクなどを載せます。
+- **Discord**：サーバーチャットの閲覧範囲と、コンソールチャンネルの権限を見直します。
 - **規約**：課金要素を入れる場合は Minecraft のコミュニティ基準・利用規約を確認します。`log-ips=true` のままなら、IP を記録することを告知します。
 - **バックアップ**：手元への取得を定期的に行う（または外部ストレージへ自動転送する）運用にします。

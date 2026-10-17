@@ -2,11 +2,23 @@
 param(
     # SSH destination: a Host alias from ~/.ssh/config or user@address. Defaults to $env:GAUNTLET_VPS, then 'gauntlet-vps'.
     [string] $Target,
-    [switch] $SkipBuild
+    [switch] $SkipBuild,
+    # Upload web/ to the site root instead of deploying the plugin.
+    [switch] $Web,
+    [string] $Domain = 'catenaonline.net'
 )
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($Target)) { $Target = $env:GAUNTLET_VPS }
 if ([string]::IsNullOrWhiteSpace($Target)) { $Target = 'gauntlet-vps' }
+
+if ($Web) {
+    $site = Join-Path $PSScriptRoot 'web'
+    & scp -q -r "$site\*" "${Target}:/var/www/$Domain/"
+    if ($LASTEXITCODE -ne 0) { throw "Upload of web/ to $Target failed." }
+    Write-Host "Site uploaded: https://$Domain/"
+    return
+}
+
 if (-not $SkipBuild) { & (Join-Path $PSScriptRoot 'build.ps1') build }
 $jar = Join-Path $PSScriptRoot 'build\libs\parkour-gauntlet-0.1.0.jar'
 if (-not (Test-Path -LiteralPath $jar)) { throw "Build output not found: $jar" }

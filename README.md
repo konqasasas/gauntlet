@@ -212,7 +212,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\verify-server.ps1 -A
 
 ## VPSサーバー
 
-本番は XServer VPS（Ubuntu 24.04）で動かします。初回構築・移行・`deploy.ps1` による反映・バックアップ・一般公開時の確認項目は [docs/VPS_SERVER.md](docs/VPS_SERVER.md) を参照してください。
+本番は XServer VPS（Ubuntu 24.04）で動かします。初回構築・移行・`deploy.ps1` による反映・バックアップ・Web サイト（`web/`）・Discord 連携・一般公開時の確認項目は [docs/VPS_SERVER.md](docs/VPS_SERVER.md) を参照してください。
 
 ## 保存と制約
 

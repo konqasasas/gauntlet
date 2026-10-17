@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catena Online</title>
+<meta name="description" content="Minecraft Java版 パルクールサーバー Catena Online。接続先 mc.catenaonline.net">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' rx='3' transform='rotate(45 16 16)' fill='%23ff7a59'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #101216;
+    --panel: #181b21;
+    --line: #2a2f38;
+    --text: #eef0f4;
+    --muted: #9aa3b2;
+    --accent-a: #ffb347;
+    --accent-b: #ff5f6d;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f4f1;
+      --panel: #ffffff;
+      --line: #e3ded6;
+      --text: #1b1d22;
+      --muted: #5f6673;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+  }
+  main { width: 100%; max-width: 560px; text-align: center; }
+  .mark {
+    width: 44px; height: 44px; margin: 0 auto 20px;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    border-radius: 6px;
+    transform: rotate(45deg);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 9vw, 3.4rem);
+    letter-spacing: 0.02em;
+    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .tagline { margin: 10px 0 32px; color: var(--muted); }
+  .address {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 8px 8px 8px 18px;
+  }
+  .address code {
+    flex: 1; min-width: 0;
+    text-align: left;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 1.1rem;
+    overflow-wrap: anywhere;
+  }
+  button {
+    flex: none;
+    border: 0; border-radius: 8px;
+    padding: 10px 16px;
+    font: inherit; font-weight: 600;
+    color: #1b1d22;
+    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    cursor: pointer;
+  }
+  button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  .label { margin: 0 0 8px; font-size: 0.85rem; color: var(--muted); text-align: left; }
+  .meta { margin-top: 20px; font-size: 0.9rem; color: var(--muted); }
+  footer { margin-top: 48px; font-size: 0.8rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <div class="mark" aria-hidden="true"></div>
+  <h1>Catena Online</h1>
+  <p class="tagline">Minecraft パルクールサーバー</p>
+
+  <p class="label">サーバーアドレス</p>
+  <div class="address">
+    <code id="addr">mc.catenaonline.net</code>
+    <button type="button" id="copy">コピー</button>
+  </div>
+  <p class="meta">Java版 26.3 ・ 現在は運営メンバーのみ参加できます</p>
+
+  <footer>&copy; Catena Online ・ Minecraft は Mojang Studios の商標です。本サーバーは Mojang / Microsoft の公式サービスではありません。</footer>
+</main>
+<script>
+  document.getElementById('copy').addEventListener('click', async function () {
+    var button = this;
+    try {
+      await navigator.clipboard.writeText(document.getElementById('addr').textContent);
+      button.textContent = 'コピーしました';
+    } catch (e) {
+      button.textContent = 'コピーできませんでした';
+    }
+    setTimeout(function () { button.textContent = 'コピー'; }, 2000);
+  });
+</script>
+</body>
+</html>
