@@ -3,6 +3,7 @@
 # staff console channel. Run on the VPS with sudo:
 #   sudo bash discord.sh install     download and verify the plugin, then restart once to create its config
 #   sudo bash discord.sh configure   enter the bot token and channel IDs, apply the settings, restart
+#   sudo bash discord.sh plain-joins join and leave notices as plain text instead of embeds (no restart)
 set -euo pipefail
 
 VERSION='1.30.5'
@@ -28,6 +29,50 @@ open(path, 'w', encoding='utf-8', newline='').write(text)
 PY
 }
 quote() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1], ensure_ascii=False))' "$1"; }
+
+# set_message FILE BLOCK TEXT: in the top-level BLOCK of messages.yml (MinecraftPlayerJoinMessage etc.),
+# send TEXT as the message content and turn the embed off.
+set_message() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json, re, sys
+path, block, content = sys.argv[1:]
+lines = open(path, encoding='utf-8', newline='').read().split('\n')
+start = next((i for i, l in enumerate(lines) if l.rstrip('\r') == f'{block}:'), None)
+if start is None:
+    sys.exit(f'{block} not found in {path}')
+end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i].startswith((' ', '#'))), len(lines))
+done = {'content': False, 'embed': False}
+in_embed = False
+for i in range(start + 1, end):
+    l = lines[i]
+    eol = '\r' if l.endswith('\r') else ''
+    if re.match(r'^  Content:', l):
+        lines[i] = '  Content: ' + json.dumps(content, ensure_ascii=False) + eol
+        done['content'] = True
+    elif re.match(r'^  Embed:', l):
+        in_embed = True
+    elif re.match(r'^  \S', l):
+        in_embed = False
+    elif in_embed and re.match(r'^    Enabled:', l):
+        lines[i] = '    Enabled: false' + eol
+        done['embed'] = True
+if not all(done.values()):
+    sys.exit(f'{block}: Content or Embed.Enabled not found')
+open(path, 'w', encoding='utf-8', newline='').write('\n'.join(lines))
+PY
+}
+
+plain_joins() {
+  local m="$DIR/messages.yml"
+  [[ -f $m ]] || { echo "$m not found. Run install first." >&2; exit 1; }
+  cp -p "$m" "$m.bak"
+  set_message "$m" MinecraftPlayerJoinMessage '➕ **%username%** が参加しました'
+  set_message "$m" MinecraftPlayerFirstJoinMessage '🎉 **%username%** が初めて参加しました'
+  set_message "$m" MinecraftPlayerLeaveMessage '➖ **%username%** が退出しました'
+  chown minecraft:minecraft "$m" "$m.bak"
+  if systemctl is-active --quiet gauntlet.service; then printf 'discord reload\n' > /run/gauntlet.stdin; fi
+  echo 'Join and leave notices are plain text now (previous file: messages.yml.bak).'
+}
 
 install_plugin() {
   tmp="$(mktemp)"
@@ -83,5 +128,6 @@ configure() {
 case "${1:-}" in
   install) install_plugin ;;
   configure) configure ;;
-  *) echo 'Usage: sudo bash discord.sh install|configure' >&2; exit 2 ;;
+  plain-joins) plain_joins ;;
+  *) echo 'Usage: sudo bash discord.sh install|configure|plain-joins' >&2; exit 2 ;;
 esac

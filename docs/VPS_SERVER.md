@@ -326,6 +326,8 @@ sudo bash discord.sh configure    # トークンとチャンネル ID を入力 
 | 起動・停止の通知 | サーバーチャットに日本語で通知 |
 | コンソール | `op` / `deop` / `execute` / `?` は DiscordSRV の既定どおり実行不可 |
 
+参加・退出・初参加の通知を、埋め込みではなく普通のテキスト（`➕ **名前** が参加しました` など）にするときは `sudo bash discord.sh plain-joins`（再起動なし。元の設定は `messages.yml.bak`）。文言は `messages.yml` の `MinecraftPlayerJoinMessage` などの `Content` で変えられます。
+
 設定ファイルは `/opt/gauntlet/server/plugins/DiscordSRV/` にあります。手で変えたときは `gauntlet-cmd discord reload`、または再起動で反映します。
 
 ## 監視と通知
