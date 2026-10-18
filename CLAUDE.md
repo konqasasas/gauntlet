@@ -43,7 +43,7 @@ Minecraft Java 26.3 / Paper のパルクールサーバー「Catena Online」。
 | メニューを git の `config/menu/` から戻す | `deploy.ps1 -Menu`、または Run workflow で `menu`。手元は `-Menu -Local` | なし |
 | Web サイト（`web/`） | `deploy.ps1 -Web`、または Run workflow で `web` | なし |
 | Dialog エディターのコード（`dialog-editor/`） | `deploy.ps1 -DialogEditor`（最後のコミットを送る。編集データは消えない） | エディターのみ |
-| DiscordSRV の設定 | VPS で `sudo bash ~/setup/deploy/discord.sh configure` / `plain-joins` など | なし〜あり |
+| DiscordSRV の設定 | VPS で `sudo bash ~/setup/deploy/discord.sh configure` / `messages`（通知の表記）など | なし〜あり |
 | リソースパック | メニューのパックは `-Menu` で、BetterModel のパックはサーバーが作る。プラグインが10秒ごとに変化を見て、参加中の人にも送り直す | なし |
 
 - `deploy.ps1` は SSH を何度も使う。パスフレーズを何度も聞かれるときは ssh-agent（`Start-Service ssh-agent`、`ssh-add $HOME\.ssh\gauntlet-vps`）を勧める。

@@ -3,7 +3,7 @@
 # staff console channel. Run on the VPS with sudo:
 #   sudo bash discord.sh install     download and verify the plugin, then restart once to create its config
 #   sudo bash discord.sh configure   enter the bot token and channel IDs, apply the settings, restart
-#   sudo bash discord.sh plain-joins join and leave notices as plain text instead of embeds (no restart)
+#   sudo bash discord.sh messages    plain-text notices marked with symbols; no deaths or advancements (no restart)
 set -euo pipefail
 
 VERSION='1.30.5'
@@ -62,16 +62,47 @@ open(path, 'w', encoding='utf-8', newline='').write('\n'.join(lines))
 PY
 }
 
-plain_joins() {
+# disable_message FILE BLOCK: turn off the top-level BLOCK of messages.yml so nothing is sent for it.
+disable_message() {
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+path, block = sys.argv[1:]
+lines = open(path, encoding='utf-8', newline='').read().split('\n')
+start = next((i for i, l in enumerate(lines) if l.rstrip('\r') == f'{block}:'), None)
+if start is None:
+    sys.exit(f'{block} not found in {path}')
+end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i].startswith((' ', '#'))), len(lines))
+for i in range(start + 1, end):
+    if re.match(r'^  Enabled:', lines[i]):
+        lines[i] = '  Enabled: false' + ('\r' if lines[i].endswith('\r') else '')
+        break
+else:
+    sys.exit(f'{block}: Enabled not found')
+open(path, 'w', encoding='utf-8', newline='').write('\n'.join(lines))
+PY
+}
+
+# Plain notices marked with text symbols (no emoji or avatars); deaths and advancements are not sent.
+apply_messages() {
+  local m="$1"
+  set_message "$m" MinecraftPlayerJoinMessage '▸ **%username%** が参加しました'
+  set_message "$m" MinecraftPlayerFirstJoinMessage '▸ **%username%** が初めて参加しました'
+  set_message "$m" MinecraftPlayerLeaveMessage '◂ **%username%** が退出しました'
+  disable_message "$m" MinecraftPlayerDeathMessage
+  disable_message "$m" MinecraftPlayerAchievementMessage
+  set_key "$m" DiscordChatChannelServerStartupMessage "$(quote '● **サーバーが起動しました**')"
+  set_key "$m" DiscordChatChannelServerShutdownMessage "$(quote '■ **サーバーが停止しました**')"
+  set_key "$m" ServerWatchdogMessage "$(quote '▲ <t:%timestamp%:R> %guildowner% サーバーが %timeout% 秒間応答していません（フリーズの可能性）')"
+}
+
+messages() {
   local m="$DIR/messages.yml"
   [[ -f $m ]] || { echo "$m not found. Run install first." >&2; exit 1; }
   cp -p "$m" "$m.bak"
-  set_message "$m" MinecraftPlayerJoinMessage '➕ **%username%** が参加しました'
-  set_message "$m" MinecraftPlayerFirstJoinMessage '🎉 **%username%** が初めて参加しました'
-  set_message "$m" MinecraftPlayerLeaveMessage '➖ **%username%** が退出しました'
+  apply_messages "$m"
   chown minecraft:minecraft "$m" "$m.bak"
   if systemctl is-active --quiet gauntlet.service; then printf 'discord reload\n' > /run/gauntlet.stdin; fi
-  echo 'Join and leave notices are plain text now (previous file: messages.yml.bak).'
+  echo 'Applied the notice formats (previous file: messages.yml.bak).'
 }
 
 install_plugin() {
@@ -113,11 +144,9 @@ configure() {
   set_key "$c" DiscordChatChannelAllowedMentions '[]'
   set_key "$c" DiscordGameStatus "[$(quote '%online%人がプレイ中'), $(quote "$ADDRESS")]"
 
-  set_key "$m" DiscordChatChannelServerStartupMessage "$(quote ':white_check_mark: **サーバーが起動しました**')"
-  set_key "$m" DiscordChatChannelServerShutdownMessage "$(quote ':octagonal_sign: **サーバーが停止しました**')"
+  apply_messages "$m"
   set_key "$m" ChannelTopicUpdaterChatChannelTopicFormat "$(quote "%playercount%/%playermax%人がオンライン | 接続先 $ADDRESS | 更新 %date%")"
   set_key "$m" ChannelTopicUpdaterChatChannelTopicAtServerShutdownFormat "$(quote "サーバー停止中 | 接続先 $ADDRESS")"
-  set_key "$m" ServerWatchdogMessage "$(quote ':fire: <t:%timestamp%:R> %guildowner% サーバーが %timeout% 秒間応答していません（フリーズの可能性）')"
 
   chown minecraft:minecraft "$c" "$m" "$c.bak" "$m.bak"
   chmod 0640 "$c" "$c.bak"
@@ -128,6 +157,6 @@ configure() {
 case "${1:-}" in
   install) install_plugin ;;
   configure) configure ;;
-  plain-joins) plain_joins ;;
-  *) echo 'Usage: sudo bash discord.sh install|configure|plain-joins' >&2; exit 2 ;;
+  messages|plain-joins) messages ;;
+  *) echo 'Usage: sudo bash discord.sh install|configure|messages' >&2; exit 2 ;;
 esac
