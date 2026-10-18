@@ -1,0 +1,16 @@
+[
+  {
+    "family": "5x5 Pixel",
+    "file": "5x5_pixel.ttf",
+    "pixel": true,
+    "dotSize": 8,
+    "glyphHeight": 5,
+    "spaceDots": 4,
+    "chars": "A-Z a-z 0-9（記号なし）",
+    "purpose": "英語の見出し",
+    "author": "Negociator (FontStruct)",
+    "license": "CC BY-SA 3.0",
+    "source": "https://www.dafont.com/5x5-pixel.font",
+    "credit": "5x5 Pixel by Negociator (FontStruct), CC BY-SA 3.0"
+  }
+]
