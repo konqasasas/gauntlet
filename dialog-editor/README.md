@@ -39,7 +39,7 @@ node server.mjs
 
 - 字幅は26.3の規則（bitmap: `(int)(0.5+実幅×scale)+1`、Unifont: `実幅/2+1`、太字 +1 / +0.5）で求め、行幅を本文幅に合わせます。本文の左右からはみ出す文字は出力しません。
 - 日本語クライアントでだけ幅が変わる文字（5字）を使うと注意が出ます。
-- 登録フォントは `fonts/fonts.json`。現在は **5x5 Pixel**（Negociator / FontStruct、CC BY-SA 3.0。英数字のみで、小文字は大文字と同じ字形。8px で1ドット=1px）。ドットフォントはサーバーでドット単位のビットマップに変換し、ブラウザーとNodeで同じ描画にしています（このTTFは cmap の終端が不正で、Chromeでは直接読めないため）。使用したフォントのクレジットは `credits.txt` としてリソースパックに入ります。
+- 登録フォントは `fonts/fonts.json`。現在は **5x5 Pixel**（Negociator / FontStruct、CC BY-SA 3.0。英数字のみで、小文字は大文字と同じ字形。8px で1ドット=1px）と、**美咲ゴシック**（Num Kadoma、[littlelimit.net](https://littlelimit.net/misaki.htm) の 2021-05-05 版。かなと JIS 第一・第二水準の漢字。使用・改変・再配布・商用利用は自由で無保証。8px で1ドット=1px）。ドットフォントはサーバーでドット単位のビットマップに変換し、ブラウザーとNodeで同じ描画にしています（このTTFは cmap の終端が不正で、Chromeでは直接読めないため）。使用したフォントのクレジットは `credits.txt` としてリソースパックに入ります。
 
 ## プラグインへの引き継ぎ
 

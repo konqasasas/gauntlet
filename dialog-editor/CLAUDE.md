@@ -10,7 +10,7 @@ Minecraft Java 26.3 / Paper 向け、Dialog + リソースパックのGUIエデ�
 - `examples/*_mock.mjs` は流さない（画面が作り直され、エディターでの手作業が上書きされる）。今は `data/project.json` が正本で、本番では VPS のエディターのデータが正本。
 - 今の状態・残課題・クライアントの癖の要約は docs/maintenance.md。
 - Node は `C:\Program Files\nodejs`（PATHに無い場合あり）。
-- 文字: render=game（ゲーム内フォント、y は9の倍数）が既定。見出しは英語限定で 5x5 Pixel を render=baked + pixel=true で焼き込む。ゲーム内フォントの資源は `node tools/fetch-vanilla.mjs` で data/vanilla/ に用意する。
+- 文字: render=game（ゲーム内フォント、y は9の倍数）が既定。見出しは render=baked + pixel=true で焼き込む（英字だけなら 5x5 Pixel、日本語が入るなら美咲ゴシック。言語ごとに状態で出し分ける）。ゲーム内フォントの資源は `node tools/fetch-vanilla.mjs` で data/vanilla/ に用意する。
 - 私用領域の文字（space フォント等）はコード中で数値（0xE000 など）で扱う。ツール入力に書いたエスケープ表記が実際の文字に変換されることがあるため。
 - Gauntlet の画面の見本は examples/*_mock.mjs（共通部品 ui_kit.mjs、外枠 FRAME 452×216）。プラグイン向けの引き継ぎは docs/plugin-handoff.md。
 - 見た目を変えたら `node cli.mjs audit` で点検（文字のインク基準の中央ずれ・はみ出し・重なり）。UIの記号はフォントの文字ではなく ui_kit の ICONS（ドット絵）を使う。
