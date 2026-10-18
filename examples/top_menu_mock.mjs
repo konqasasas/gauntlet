@@ -10,7 +10,7 @@
 // 色はテーマの色の名前で参照する（docs/theme.md）。
 
 import { createKit, THEMES, themeOps, FRAME } from './ui_kit.mjs';
-import { loadMeasure } from './ui_kit.mjs';
+import { loadMeasure, componentOps } from './ui_kit.mjs';
 
 const replace = process.argv.includes('--replace');
 const TOP = FRAME.TOP;
@@ -19,12 +19,14 @@ const W = FRAME.W, H = FRAME.H;               // 全画面共通の外枠
 const ops = [];
 if (replace) for (const id of ['top_menu', 'news']) ops.push({ op: 'remove_screen', screen: id, ifExists: true });
 ops.push(...themeOps());
+const measure = await loadMeasure();
+ops.push(...componentOps(measure)); // 共通の部品（ボタン・✕・見出しの帯など）と見出しの文字スタイル
 let target = '';
 const add = (element) => ops.push({ op: 'add_element', screen: target, element });
 const row = (r) => TOP + r * 9;
-const kit = createKit({ add, row, measure: await loadMeasure() });
+const kit = createKit({ add, row, measure });
 const { text, bevel, rect } = kit;
-const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 });
+const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1, textStyle: 'heading' });
 const custom = (value, payload) => ({ type: 'custom', value, payload: JSON.stringify(payload) });
 const screenAction = (value) => ({ type: 'screen', value, payload: '' });
 const hot = (id, x, y, w, h, action, tooltip) => add({ type: 'hotspot', id, x, y, w, h, tooltip, action });
@@ -72,7 +74,7 @@ const BODY_H = 171; // 下の帯（2行）を除いた高さ
   rect('rankup_frame', x, y, w, h, '@card.bg', '@button.on.face', 2);
   rect('rankup_art', x + 2, y + 2, w - 4, 79, '@button.on.shadow');
   text('rankup_icon', x, y + 36, w, '▲', { align: 'center', bold: true, color: '@button.on.text' });
-  add({ type: 'text', id: 'rankup_head', x: x + 8, y: y + 86, w: w - 16, h: 10, text: 'RANK UP', render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 });
+  add({ type: 'text', id: 'rankup_head', x: x + 8, y: y + 86, w: w - 16, h: 10, text: 'RANK UP', render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1, textStyle: 'heading' });
   text('rankup_rank', x + 8, row(11), 100, 'RANK 3', { bold: true, color: '@text.accent' });
   text('rankup_next', x + 8, row(11), w - 16, '次のステージ  3-4', { align: 'right' });
   rect('rankup_bar', x + 8, row(12) + 1, w - 16, 7, '@control.track', '@control.outline', 1);

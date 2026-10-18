@@ -8,7 +8,7 @@
 // 外枠・見出し・右上の✕は他の画面と共通。左下の「◀ メニュー」でトップメニューへ戻る。
 
 import { createKit, themeOps, FRAME } from './ui_kit.mjs';
-import { loadMeasure } from './ui_kit.mjs';
+import { loadMeasure, componentOps } from './ui_kit.mjs';
 
 const replace = process.argv.includes('--replace');
 const { W, H, TOP } = FRAME;
@@ -17,12 +17,14 @@ const SCREENS = ['ranking', 'profile', 'profile_settings', 'help'];
 const ops = [];
 if (replace) for (const id of SCREENS) ops.push({ op: 'remove_screen', screen: id, ifExists: true });
 ops.push(...themeOps());
+const measure = await loadMeasure();
+ops.push(...componentOps(measure)); // 共通の部品（ボタン・✕・見出しの帯など）と見出しの文字スタイル
 let target = '';
 const add = (element) => ops.push({ op: 'add_element', screen: target, element });
 const row = (r) => TOP + r * 9;
-const kit = createKit({ add, row, measure: await loadMeasure() });
+const kit = createKit({ add, row, measure });
 const { text, rect } = kit;
-const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 });
+const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1, textStyle: 'heading' });
 const screenAction = (value) => ({ type: 'screen', value, payload: '' });
 
 function screen(id, title, head) {

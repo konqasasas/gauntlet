@@ -104,8 +104,9 @@ export async function loadMeasure() {
  * @param add 要素を追加する関数（add_element の element を受け取る）
  * @param row 行番号 → y（GUI px）
  * @param measure 文字のインク幅を測る関数（loadMeasure の結果。アイコンと文字をまとめて中央に置くのに使う）
+ * @param components true なら、合う部品があるときは部品の使用箇所を置く（componentOps の部品）
  */
-export function createKit({ add, row, measure = null }) {
+export function createKit({ add, row, measure = null, components = true }) {
   const rect = (id, x, y, w, h, fill, border = '#00000000', borderWidth = 0) => add({ type: 'rect', id, x, y, w, h, fill, border, borderWidth });
   const text = (id, x, y, w, t, over = {}) => add({ type: 'text', id, x, y, w, h: 9, text: t, render: 'game', color: '@text.main', ...over });
   // 黒枠＋上と左に明るい線、下と右に暗い線
@@ -139,6 +140,22 @@ export function createKit({ add, row, measure = null }) {
   // opts.icon でアイコン（label が空なら中央、opts.iconRight なら右端、それ以外は左端に置き、文字はその隣）
   const pill = (id, x, r, w, label, on, action, tooltip, opts = {}) => {
     const theme = opts.theme || (on ? 'blue' : 'light');
+    if (components) {
+      const size = opts.compact ? 'compact' : opts.tall ? 'tall' : 'normal';
+      let comp = null;
+      if (!opts.icon && !opts.left) comp = BUTTON_COMPONENTS[size];
+      else if (opts.icon && !label) comp = ICON_COMPONENTS[`${size}:${opts.icon}:${w}`] && { id: ICON_COMPONENTS[`${size}:${opts.icon}:${w}`].id, h: BUTTON_COMPONENTS[size].h };
+      else if (opts.icon === 'left' && !opts.iconRight && !opts.left && label === 'メニュー' && size === 'normal') comp = { id: 'menu_button', h: BUTTON_COMPONENTS.normal.h };
+      if (comp) {
+        const props = { action: action || { type: 'none', value: '', payload: '' }, tooltip: tooltip || '' };
+        if (comp.id.startsWith('button')) props.label = label;
+        const el = { type: 'instance', id, name: label || id, component: comp.id, x, y: row(r) - 9, w, h: comp.h, props };
+        // variantBy: { key, map, else } で、バリアントを状態に結び付ける（選択肢・タブ）
+        if (opts.variantBy) el.variantBy = opts.variantBy;
+        else if (theme !== 'light') el.variant = theme;
+        return add(el);
+      }
+    }
     const box = opts.compact ? { x, y: row(r) - 1, w, h: 10 } : opts.tall ? { x, y: row(r) - 4, w, h: 16 } : { x, y: row(r) - 2, w, h: 13 };
     bevel(id, box.x, box.y, box.w, box.h, theme);
     const color = THEMES[theme].text;
@@ -181,7 +198,137 @@ export function createKit({ add, row, measure = null }) {
   };
   // 右上の閉じるボタン（本文の一番上の行。赤い立体ボタン）
   const closeX = (x, action = { type: 'close', value: '', payload: '' }, tooltip = '閉じる（Esc）') => {
+    if (components) return add({ type: 'instance', id: 'close_btn', name: '閉じる', component: 'close_button', x, y: 0, w: 13, h: 11, props: { action, tooltip } });
     iconButton('close_btn', 'close', x, 0, 13, 11, 'danger', action, tooltip);
   };
-  return { rect, text, bevel, hint, pill, stack, closeX, icon, iconIn, iconButton };
+  // 見出しの帯（背景色の帯＋太字）。x〜x+w の幅
+  const section = (id, x, r, w, label) => {
+    if (components) return add({ type: 'instance', id, name: label, component: 'section', x, y: row(r), w, h: 9, props: { label } });
+    rect(`${id}_bar`, x + 1, row(r), w - 2, 9, '@section.bg');
+    text(id, x + 6, row(r), w - 12, label, { bold: true, color: '@section.text' });
+  };
+  // ON/OFF スイッチ（x〜x+TOGGLE_W、文字の行 r）。key の値 on / off で見た目が変わる
+  const toggle = (id, x, r, key, action, tooltip) => add({ type: 'instance', id, name: key, component: 'toggle', x, y: row(r) - 9, w: TOGGLE_W, h: 20, variantBy: { key, map: { on: 'on', off: 'off' }, else: 'none' }, props: { action, tooltip } });
+  return { rect, text, bevel, hint, pill, stack, closeX, icon, iconIn, iconButton, section, toggle };
+}
+
+// ---- 部品（コンポーネント） --------------------------------------------------------
+// 見本の画面で繰り返し使う見た目を部品にする。createKit の pill / closeX / section / toggle は、
+// 合う部品があれば使用箇所（instance）を置く（デザイナーはマスターを直すだけで全画面を変えられる）。
+// 部品の中は、行の上端が9pxの倍数になるよう、文字の行を y=9 に置く（使用箇所の y = 文字の行 - 9）。
+
+const NONE_ACTION = { type: 'none', value: '', payload: '' };
+const BUTTON_W = 60;
+// ボタンの部品: 大きさの種類 → 部品の id・高さ（背景の枠は 文字の行 -2 / -1 / -4 から）
+export const BUTTON_COMPONENTS = { normal: { id: 'button', h: 20 }, compact: { id: 'button_compact', h: 18 }, tall: { id: 'button_tall', h: 21 } };
+// アイコンだけのボタン（アイコンを中央に置くので、使用箇所の幅は部品と同じものだけ使う）
+export const ICON_COMPONENTS = {
+  'compact:left:15': { id: 'icon_left_small', name: '◀（小）' },
+  'compact:right:15': { id: 'icon_right_small', name: '▶（小）' },
+  'normal:left:13': { id: 'icon_left', name: '◀' },
+  'normal:right:13': { id: 'icon_right', name: '▶' },
+  'normal:close:13': { id: 'icon_close', name: '✕（小）' },
+};
+const MENU_BUTTON_W = 92;
+export const TOGGLE_W = 216;
+
+// 要素の id の末尾から、伸び縮みの指定を決める（枠は左右に伸び、右下の影は右に、アイコンは中央）
+function roleConstraint(id) {
+  if (/_hi2$/.test(id)) return 'left';
+  if (/_sh2$/.test(id) || /_(track|track_sh|knob_\w+)$/.test(id)) return 'right';
+  if (/_i_\d+_\d+$/.test(id)) return 'center';
+  return 'stretch';
+}
+
+/**
+ * 見本で使う部品の定義（add_component の op。replace:true なので何度流しても同じ定義になる）と、
+ * 英語の見出しの文字スタイル。各見本の先頭で themeOps() の後に流す。
+ */
+export function componentOps(measure) {
+  const ops = [];
+  const build = (fn) => {
+    const els = [];
+    const k = createKit({ add: (e) => els.push(e), row: (r) => 9 + r * 9, measure, components: false });
+    fn(k);
+    return els;
+  };
+  const withRoles = (els, extra = () => ({})) => els.map((e) => ({ ...e, constraints: { h: roleConstraint(e.id), v: 'top' }, ...extra(e) }));
+  const clickBinds = { action: 'action', tooltip: 'tooltip' };
+  const clickProps = [{ name: 'action', type: 'action', default: NONE_ACTION }, { name: 'tooltip', type: 'text', default: '' }];
+
+  // ボタン（3つの大きさ × 明るい・青・赤）
+  for (const [size, def] of Object.entries(BUTTON_COMPONENTS)) {
+    const variants = ['light', 'blue', 'danger'];
+    let els = [];
+    for (const v of variants) {
+      const part = build((k) => k.pill(v, 0, 0, BUTTON_W, 'ボタン', false, null, '', { theme: v, compact: size === 'compact', tall: size === 'tall' }));
+      els.push(...part.filter((e) => e.type !== 'hotspot').map((e) => ({ ...e, state: `variant=${v}`, ...(e.type === 'text' ? { binds: { text: 'label' } } : {}) })));
+      if (v === variants[0]) els.push(...part.filter((e) => e.type === 'hotspot').map((e) => ({ ...e, id: 'hs', binds: clickBinds })));
+    }
+    // クリック領域は最後（一番前面）に
+    els = [...els.filter((e) => e.type !== 'hotspot'), ...els.filter((e) => e.type === 'hotspot')];
+    ops.push({ op: 'add_component', replace: true, component: {
+      id: def.id, name: { normal: 'ボタン', compact: 'ボタン（低い）', tall: 'ボタン（高い）' }[size], width: BUTTON_W, height: def.h, variants,
+      props: [{ name: 'label', type: 'text', default: 'ボタン' }, ...clickProps], elements: withRoles(els),
+    } });
+  }
+  // アイコンだけのボタン
+  for (const [key, def] of Object.entries(ICON_COMPONENTS)) {
+    const [size, icon, w] = key.split(':');
+    const els = build((k) => k.pill('b', 0, 0, Number(w), '', false, null, '', { icon, compact: size === 'compact' }));
+    ops.push({ op: 'add_component', replace: true, component: {
+      id: def.id, name: def.name, width: Number(w), height: BUTTON_COMPONENTS[size].h, variants: ['light'], props: clickProps,
+      elements: withRoles(els, (e) => (e.type === 'hotspot' ? { binds: clickBinds } : {})),
+    } });
+  }
+  // 「メニュー」に戻るボタン（アイコンと文字のまとまりを中央に）
+  {
+    const els = build((k) => k.pill('b', 0, 0, MENU_BUTTON_W, 'メニュー', false, null, '', { icon: 'left' }));
+    ops.push({ op: 'add_component', replace: true, component: {
+      id: 'menu_button', name: 'メニューへ戻る', width: MENU_BUTTON_W, height: BUTTON_COMPONENTS.normal.h, variants: ['light'], props: clickProps,
+      elements: withRoles(els, (e) => (e.type === 'hotspot' ? { binds: clickBinds } : e.type === 'text' ? { constraints: { h: 'center', v: 'top' } } : {})),
+    } });
+  }
+  // 右上の閉じるボタン
+  {
+    const els = build((k) => k.closeX(0));
+    ops.push({ op: 'add_component', replace: true, component: {
+      id: 'close_button', name: '閉じる✕', width: 13, height: 11, variants: ['normal'],
+      props: [{ name: 'action', type: 'action', default: { type: 'close', value: '', payload: '' } }, { name: 'tooltip', type: 'text', default: '閉じる（Esc）' }],
+      elements: els.map((e) => ({ ...e, ...(e.type === 'hotspot' ? { binds: clickBinds } : {}) })),
+    } });
+  }
+  // 見出しの帯（背景色の帯＋太字）
+  ops.push({ op: 'add_component', replace: true, component: {
+    id: 'section', name: '見出しの帯', width: 100, height: 9, variants: ['normal'], props: [{ name: 'label', type: 'text', default: '見出し' }],
+    elements: [
+      { type: 'rect', id: 'bar', x: 1, y: 0, w: 98, h: 9, fill: '@section.bg', border: '#00000000', borderWidth: 0, constraints: { h: 'stretch', v: 'top' } },
+      { type: 'text', id: 'label', x: 6, y: 0, w: 88, h: 9, text: '見出し', render: 'game', bold: true, color: '@section.text', binds: { text: 'label' }, constraints: { h: 'stretch', v: 'top' } },
+    ],
+  } });
+  // ON/OFF スイッチ（右寄せ。ON は青い溝につまみが右、OFF は灰色の溝につまみが左）。
+  // バリアント none は何も出さない（状態の値が on / off 以外のとき）
+  {
+    const W = TOGGLE_W;
+    const els = [];
+    const k = createKit({ add: (e) => els.push(e), row: (r) => 9 + r * 9, measure, components: false });
+    const w = 30, x = W - w, y = 7;
+    for (const on of [true, false]) {
+      const v = on ? 'on' : 'off';
+      const start = els.length;
+      k.rect(`${v}_track`, x, y + 2, w, 9, on ? '@control.on' : '@control.track', '@control.outline', 1);
+      k.rect(`${v}_track_sh`, x + 1, y + 3, w - 2, 1, on ? '@control.on-shadow' : '@control.track-shadow');
+      k.bevel(`${v}_knob`, on ? x + w - 11 : x, y, 11, 13, 'light');
+      k.text(`${v}_state`, 0, 9, x - 6, on ? 'ON' : 'OFF', { align: 'right', color: on ? '@control.on-text' : '@text.sub' });
+      for (let i = start; i < els.length; i++) els[i].state = `variant=${v}`;
+    }
+    k.hint('switch', 0, 0, W, null, '');
+    ops.push({ op: 'add_component', replace: true, component: {
+      id: 'toggle', name: 'ON/OFF スイッチ', width: W, height: 20, variants: ['off', 'on', 'none'], props: clickProps,
+      elements: els.map((e) => ({ ...e, constraints: { h: e.type === 'text' || e.type === 'hotspot' ? 'stretch' : 'right', v: 'top' }, ...(e.type === 'hotspot' ? { binds: clickBinds } : {}) })),
+    } });
+  }
+  // 英語の見出し（5x5 Pixel を焼き込み）
+  ops.push({ op: 'set_text_style', key: 'heading', style: { name: '英語の見出し', render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 } });
+  return ops;
 }

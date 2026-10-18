@@ -14,7 +14,7 @@
 // ゲーム内フォントの文字は9px行に置かれるので、1行の部品は「行の2px上から高さ13px」の背景にする。
 
 import { createKit, THEMES, themeOps, FRAME } from './ui_kit.mjs';
-import { loadMeasure } from './ui_kit.mjs';
+import { loadMeasure, componentOps } from './ui_kit.mjs';
 
 const replace = process.argv.includes('--replace');
 const TOP = FRAME.TOP;
@@ -38,6 +38,8 @@ const VOLUMES = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const ops = [];
 if (replace) for (const id of SCREENS) ops.push({ op: 'remove_screen', screen: id, ifExists: true });
 ops.push(...themeOps()); // テーマの色（既にある色は上書きしない）
+const measure = await loadMeasure();
+ops.push(...componentOps(measure)); // 共通の部品（ボタン・✕・見出しの帯など）と見出しの文字スタイル
 let target = '';
 // 状態: variant の中で追加した見た目の要素に state を付け、id に印を足す。
 // クリック領域（hotspot）は状態で変えられないので、clicks=true の variant（または variant の外）でだけ追加する。
@@ -57,15 +59,12 @@ const variant = (state, clicks, fn) => {
   cur = prev;
 };
 const text = (id, x, y, w, t, over = {}) => add({ type: 'text', id, x, y, w, h: 9, text: t, render: 'game', color: '@text.main', ...over });
-const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 });
+const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1, textStyle: 'heading' });
 const custom = (value, payload) => ({ type: 'custom', value, payload: JSON.stringify(payload) });
 const screenAction = (value) => ({ type: 'screen', value, payload: '' });
 const row = (r) => TOP + r * 9;
 
-const section = (id, r, label, x = CX, w = CW) => {
-  add({ type: 'rect', id: `${id}_bar`, x: x + 1, y: row(r), w: w - 2, h: 9, fill: '@section.bg', border: '#00000000', borderWidth: 0 });
-  text(id, x + 6, row(r), w - 12, label, { bold: true, color: '@section.text' });
-};
+const section = (id, r, label, x = CX, w = CW) => sectionBar(id, x, r, w, label);
 const closeButton = (x) => closeX(x - 1);
 
 function screen(id, title, w, h, stateDefaults = {}) {
@@ -96,32 +95,18 @@ const label = (id, r, t, tip) => {
   if (tip) add({ type: 'hotspot', id: `${id}_tip`, x: LABEL_X - 4, y: row(r), w: CTRL_X - LABEL_X, h: 9, tooltip: tip, action: { type: 'none', value: '', payload: '' } });
 };
 // ---- 部品（立体的な枠。examples/ui_kit.mjs と共通） ----
-const { rect, bevel, hint, pill, closeX, iconIn } = createKit({ add, row, measure: await loadMeasure() });
+const { rect, bevel, hint, pill, closeX, iconIn, section: sectionBar, toggle: toggleSwitch } = createKit({ add, row, measure });
 
-// 選択肢を横に並べる（境目の枠を共有し、選択中は青）。選択中・それ以外の両方を状態として描く
+// 選択肢を横に並べる（境目の枠を共有し、選択中は青）。ボタンの部品のバリアントを状態に結び付ける（その値なら blue）
 const segmented = (key, r, options, tip) => {
   const total = CTRL_R - CTRL_X, w = Math.floor((total + options.length - 1) / options.length);
   options.forEach(([value, t], i) => {
     const id = `${key.replace('.', '_')}_${value}`, x = CTRL_X + i * (w - 1), ww = i === options.length - 1 ? total - i * (w - 1) : w;
-    const action = custom('dcg:settings_set', { key, value });
-    variant(`${key}=${value}`, false, () => pill(id, x, r, ww, t, true, action, tip));
-    variant(`${key}!=${value}`, true, () => pill(id, x, r, ww, t, false, action, tip));
+    pill(id, x, r, ww, t, false, custom('dcg:settings_set', { key, value }), tip, { variantBy: { key, map: { [value]: 'blue' }, else: 'light' } });
   });
 };
-// ON/OFF スイッチ（右寄せ。ON は青い溝につまみが右、OFF は灰色の溝につまみが左）
-const toggle = (key, r, tip) => {
-  const id = key.replace('.', '_');
-  const w = 30, x = CTRL_R - w, y = row(r) - 2;
-  for (const on of [true, false]) {
-    variant(`${key}=${on ? 'on' : 'off'}`, false, () => {
-      rect(`${id}_track`, x, y + 2, w, 9, on ? '@control.on' : '@control.track', '@control.outline', 1);
-      rect(`${id}_track_sh`, x + 1, y + 3, w - 2, 1, on ? '@control.on-shadow' : '@control.track-shadow');
-      bevel(`${id}_knob`, on ? x + w - 11 : x, y, 11, 13, 'light');
-      text(`${id}_state`, CTRL_X, row(r), x - CTRL_X - 6, on ? 'ON' : 'OFF', { align: 'right', color: on ? '@control.on-text' : '@text.sub' });
-    });
-  }
-  hint(`${id}_toggle`, CTRL_X, r, CTRL_R - CTRL_X, custom('dcg:settings_toggle', { key }), `${tip}（クリックで切り替え）`);
-};
+// ON/OFF スイッチ（部品。ON は青い溝につまみが右、OFF は灰色の溝につまみが左）
+const toggle = (key, r, tip) => toggleSwitch(`${key.replace('.', '_')}_toggle`, CTRL_X, r, key, custom('dcg:settings_toggle', { key }), `${tip}（クリックで切り替え）`);
 // スライダー: 70% ◀ [====|----] ▶（溝のクリックでその値、◀▶で10%ずつ）。値・塗り・つまみは状態
 const volume = (key, r, tip) => {
   const id = key.replace('.', '_');
@@ -190,9 +175,8 @@ for (const [id, tab, note] of [
     const r = 1 + Math.floor(i / 2) * 2, x = 6 + (i % 2) * (colW + 4);
     const id = `lang_${code.replace('-', '_').toLowerCase()}`;
     const action = custom('dcg:settings_set', { key: 'translate_lang', value: code });
-    // ベトナム語などはアクセント記号が上に出るので、背の高いボタンにする
-    variant(`translate_lang=${code}`, false, () => pill(id, x, r, colW, name, true, action, `翻訳先を ${name} にする`, { tall: true }));
-    variant(`translate_lang!=${code}`, true, () => pill(id, x, r, colW, name, false, action, `翻訳先を ${name} にする`, { tall: true }));
+    // ベトナム語などはアクセント記号が上に出るので、背の高いボタンにする。選んでいる翻訳先なら blue
+    pill(id, x, r, colW, name, false, action, `翻訳先を ${name} にする`, { tall: true, variantBy: { key: 'translate_lang', map: { [code]: 'blue' }, else: 'light' } });
   });
   pill('back_btn', 6, 20, 80, '戻る', false, screenAction('settings'), '設定に戻る', { icon: 'left' });
 }

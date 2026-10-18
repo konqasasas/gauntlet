@@ -8,7 +8,7 @@
 // 検索欄は本文の中に置けないため、左パネルの「検索」から別の小さなダイアログ（course_search）を開く。
 
 import { createKit, themeOps, FRAME } from './ui_kit.mjs';
-import { loadMeasure } from './ui_kit.mjs';
+import { loadMeasure, componentOps } from './ui_kit.mjs';
 
 const replace = process.argv.includes('--replace');
 const TOP = FRAME.TOP;     // 本文上部の見出しの高さ（2行）
@@ -31,10 +31,12 @@ const FAVORITES = new Set([1, 4, 8]); // 見本: お気に入り登録済みの�
 const ops = [];
 if (replace) ops.push({ op: 'remove_screen', screen: 'course_select', ifExists: true }, { op: 'remove_screen', screen: 'course_search', ifExists: true });
 ops.push(...themeOps()); // テーマの色（既にある色は上書きしない）
+const measure = await loadMeasure();
+ops.push(...componentOps(measure)); // 共通の部品（ボタン・✕・見出しの帯など）と見出しの文字スタイル
 let target = 'course_select';
 const add = (element) => ops.push({ op: 'add_element', screen: target, element });
 const text = (id, x, y, w, t, over = {}) => add({ type: 'text', id, x, y, w, h: 9, text: t, render: 'game', color: '@text.main', ...over });
-const heading = (id, x, y, t, w = 92) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 });
+const heading = (id, x, y, t, w = 92) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1, textStyle: 'heading' });
 const hot = (id, x, y, w, h, action, tooltip) => add({ type: 'hotspot', id, x, y, w, h, tooltip, action });
 const custom = (value, payload) => ({ type: 'custom', value, payload: JSON.stringify(payload) });
 
@@ -48,17 +50,14 @@ ops.push({
 });
 
 const row = (r) => TOP + r * 9;
-const kit = createKit({ add, row, measure: await loadMeasure() }); // 立体ボタン（設定画面と共通）
+const kit = createKit({ add, row, measure }); // 立体ボタン（設定画面と共通）
 
 // ---- 見出し（本文の上）と閉じるボタン（右上） ----
 heading('title_head', 2, 1, 'COURSE SELECT', 300);
 kit.closeX(W - 13);
 
 // ---- 左パネル（見出しは太字＋背景色の帯） ----
-const section = (id, r, label) => {
-  add({ type: 'rect', id: `${id}_bar`, x: 1, y: row(r), w: PANEL_W - 2, h: 9, fill: '@section.bg', border: '#00000000', borderWidth: 0 });
-  text(id, 6, row(r), 88, label, { bold: true, color: '@section.text' });
-};
+const section = (id, r, label) => kit.section(id, 0, r, PANEL_W, label);
 add({ type: 'rect', id: 'panel_bg', x: 0, y: TOP, w: PANEL_W, h: H - TOP, fill: '@panel.bg', border: '@panel.border', borderWidth: 1 });
 section('sort_head', 0, '並べ替え');
 kit.stack(4, 2, PANEL_W - 8, [['sort_diff', '難易度順', true], ['sort_new', '新着順', false], ['sort_name', '名前順', false]]

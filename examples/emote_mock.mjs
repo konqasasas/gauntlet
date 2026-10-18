@@ -9,7 +9,7 @@
 // 外枠・見出し・右上の✕は他の画面と共通。色はテーマの色の名前で参照する。
 
 import { createKit, themeOps, FRAME } from './ui_kit.mjs';
-import { loadMeasure } from './ui_kit.mjs';
+import { loadMeasure, componentOps } from './ui_kit.mjs';
 
 const replace = process.argv.includes('--replace');
 const { W, H, TOP } = FRAME;
@@ -31,12 +31,14 @@ const OLD_SCREENS = ['emote_dance', 'emote_pair']; // 以前の見本で作っ�
 const ops = [];
 if (replace) for (const id of [...VIEWS.map(([id]) => id), ...OLD_SCREENS]) ops.push({ op: 'remove_screen', screen: id, ifExists: true });
 ops.push(...themeOps());
+const measure = await loadMeasure();
+ops.push(...componentOps(measure)); // 共通の部品（ボタン・✕・見出しの帯など）と見出しの文字スタイル
 let target = '';
 const add = (element) => ops.push({ op: 'add_element', screen: target, element });
 const row = (r) => TOP + r * 9;
-const kit = createKit({ add, row, measure: await loadMeasure() });
+const kit = createKit({ add, row, measure });
 const { text, rect } = kit;
-const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1 });
+const heading = (id, x, y, t, w) => add({ type: 'text', id, x, y, w, h: 10, text: t, render: 'baked', fontFamily: '5x5 Pixel', fontSize: 16, pixel: true, wordSpacing: 6, color: '@heading.text', shadow: true, shadowColor: '@heading.shadow', lineHeight: 1, textStyle: 'heading' });
 const custom = (value, payload) => ({ type: 'custom', value, payload: JSON.stringify(payload) });
 const screenAction = (value) => ({ type: 'screen', value, payload: '' });
 const hot = (id, x, y, w, h, action, tooltip) => add({ type: 'hotspot', id, x, y, w, h, tooltip, action });
