@@ -118,3 +118,15 @@ dialog pre { background: #f1f0eb; padding: 6px; overflow-x: auto; font-size: 11p
 
 .color .token-sel { max-width: 110px; font-family: Consolas, monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 3px; }
 .color .swatch { width: 24px; height: 20px; border: 1px solid var(--line); border-radius: 3px; flex: none; }
+
+/* レイヤーの木表示・ドラッグ */
+.layers li .twisty { width: 10px; flex: none; font-size: 10px; color: var(--muted); text-align: center; }
+.layers li.group .name { font-weight: 600; }
+.layers li.drop-above { box-shadow: inset 0 2px 0 var(--accent); }
+.layers li.drop-below { box-shadow: inset 0 -2px 0 var(--accent); }
+.layers li.drop-into { background: var(--accent-weak); outline: 1px dashed var(--accent); }
+.layers li input.rename { flex: 1; min-width: 0; font-size: 12px; padding: 0 3px; }
+/* 整列のボタン */
+.alignbar { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0; }
+.alignbar button { padding: 1px 6px; font-size: 12px; min-width: 26px; }
+.mixed { color: var(--muted); font-style: italic; }

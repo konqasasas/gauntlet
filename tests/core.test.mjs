@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { applyOps, validateProject, migrateProject, defaultProject, defaultScreen, defaultElement, clickRows, LINE } from '../lib/model.mjs';
+import { applyOps, validateProject, migrateProject, defaultProject, defaultScreen, defaultElement, clickRows, LINE, resolveScreen, groupMembers } from '../lib/model.mjs';
 import { spaceString, glyphAdvance, spaceFontJson, tileGeometry } from '../lib/compile.mjs';
 import { buildScreen, getAtlas } from '../lib/export.mjs';
 import { auditScreen } from '../lib/audit.mjs';
@@ -66,7 +66,7 @@ test('v1 からの移行: 文字は焼き込みのまま', () => {
   const v1 = { ...sampleProject(), schemaVersion: 1 };
   for (const s of v1.screens) for (const e of s.elements) { delete e.render; delete e.labelRender; delete e.pixel; delete e.wordSpacing; }
   const m = migrateProject(structuredClone(v1));
-  assert.equal(m.schemaVersion, 3);
+  assert.equal(m.schemaVersion, 4);
   assert.equal(m.screens[0].elements.find((e) => e.id === 'lead').render, 'baked');
   assert.deepEqual(validateProject(m), []);
 });
@@ -162,6 +162,84 @@ test('payload の null は出力しない', () => {
   const click = b.compiled.dialog.body[0].contents.extra.find((c) => c.click_event).click_event;
   assert.deepEqual(click.payload, { key: 'k', list: [1] });
   assert.ok(b.warnings.some((w) => w.includes('null')));
+});
+
+test('グループ: まとめる・入れ子・解除・空のグループは消える・非表示は中も非表示', () => {
+  let p = defaultProject();
+  const s = defaultScreen('g', { width: 100, height: 36 });
+  for (const id of ['a', 'b', 'c', 'd']) s.elements.push(defaultElement('rect', { id, x: 0, y: 0, w: 9, h: 9 }));
+  p.screens.push(s);
+  p = applyOps(p, [{ op: 'group_elements', screen: 'g', elements: ['a', 'c'], group: { id: 'g1', name: '上' } }]);
+  // 中身は一番前面にあった c の位置へ連続して集まる
+  assert.deepEqual(p.screens[0].elements.map((e) => e.id), ['b', 'a', 'c', 'd']);
+  p = applyOps(p, [{ op: 'group_elements', screen: 'g', elements: ['d'], groups: ['g1'], group: { id: 'g2' } }]);
+  assert.equal(p.screens[0].groups.find((g) => g.id === 'g1').parent, 'g2');
+  assert.deepEqual(groupMembers(p.screens[0], 'g2').map((e) => e.id).sort(), ['a', 'c', 'd']);
+  // 非表示のグループの中は描かれない
+  const hidden = applyOps(p, [{ op: 'set_group', screen: 'g', group: 'g2', values: { visible: false } }]);
+  assert.deepEqual(resolveScreen(hidden, hidden.screens[0]).elements.filter((e) => e.visible).map((e) => e.id), ['b']);
+  // 解除すると中身は親へ
+  p = applyOps(p, [{ op: 'ungroup', screen: 'g', group: 'g1' }]);
+  assert.equal(p.screens[0].elements.find((e) => e.id === 'a').group, 'g2');
+  // 中身を全部消すとグループも消える
+  p = applyOps(p, [{ op: 'remove_elements', screen: 'g', elements: ['a', 'c', 'd'] }]);
+  assert.deepEqual(p.screens[0].groups, []);
+  // 存在しないグループへの所属は検証エラー
+  assert.throws(() => applyOps(p, [{ op: 'patch_elements', screen: 'g', patches: [{ element: 'b', values: { group: 'none' } }] }]), /グループ none/);
+});
+
+test('まとめての操作: 追加（グループ付き）・移動・重なり順', () => {
+  let p = defaultProject();
+  const s = defaultScreen('m', { width: 100, height: 36 });
+  for (const id of ['a', 'b', 'c']) s.elements.push(defaultElement('rect', { id, x: 0, y: 0, w: 9, h: 9 }));
+  p.screens.push(s);
+  p = applyOps(p, [{ op: 'add_elements', screen: 'm', groups: [{ id: 'pg', name: '貼り付け' }], elements: [{ type: 'rect', id: 'x', group: 'pg' }, { type: 'text', id: 'y', group: 'pg', render: 'game', y: 9, h: 9 }], index: 1 }]);
+  assert.deepEqual(p.screens[0].elements.map((e) => e.id), ['a', 'x', 'y', 'b', 'c']);
+  assert.throws(() => applyOps(p, [{ op: 'add_elements', screen: 'm', elements: [{ type: 'rect', id: 'a' }] }]), /使用済み/);
+  p = applyOps(p, [{ op: 'patch_elements', screen: 'm', patches: [{ element: 'a', values: { x: 5 } }, { element: 'b', values: { x: 7, y: 2 } }] }]);
+  assert.deepEqual(p.screens[0].elements.filter((e) => e.id === 'a' || e.id === 'b').map((e) => [e.x, e.y]), [[5, 0], [7, 2]]);
+  p = applyOps(p, [{ op: 'move_elements', screen: 'm', elements: ['a', 'b'], index: 3 }]);
+  assert.deepEqual(p.screens[0].elements.map((e) => e.id), ['x', 'y', 'c', 'a', 'b']);
+  // 要素付きで画面を追加できる（以前は自分自身と重複扱いになっていた）
+  p = applyOps(p, [{ op: 'add_screen', screen: { id: 'n2', elements: [{ type: 'rect', id: 'r1' }, { type: 'rect', id: 'r2' }] } }]);
+  assert.deepEqual(p.screens.find((x) => x.id === 'n2').elements.map((e) => e.id), ['r1', 'r2']);
+});
+
+test('文字スタイル: 適用・名前の変更・使用中の削除', () => {
+  let p = defaultProject();
+  const s = defaultScreen('t', { width: 100, height: 36 });
+  s.elements.push(defaultElement('text', { id: 't1', render: 'baked', y: 4 }));
+  s.elements.push(defaultElement('button', { id: 'b1' }));
+  p.screens.push(s);
+  p = applyOps(p, [
+    { op: 'set_theme_token', key: 'head', value: '#f4e7b0ff' },
+    { op: 'set_text_style', key: 'heading', style: { name: '見出し', render: 'baked', fontSize: 16, bold: true, color: '@head' } },
+    { op: 'patch_elements', screen: 't', patches: [{ element: 't1', values: { textStyle: 'heading' } }, { element: 'b1', values: { textStyle: 'heading' } }] },
+  ]);
+  const r = resolveScreen(p, p.screens[0]);
+  assert.equal(r.elements[0].fontSize, 16);
+  assert.equal(r.elements[0].color, '#f4e7b0ff');
+  assert.equal(r.elements[1].labelColor, '#f4e7b0ff');
+  assert.equal(r.elements[1].labelRender, 'baked');
+  // スタイルが game なら、y が9の倍数でない文字は検証エラー
+  assert.throws(() => applyOps(p, [{ op: 'set_text_style', key: 'heading', style: { render: 'game' }, merge: true }]), /9の倍数/);
+  p = applyOps(p, [{ op: 'rename_text_style', key: 'heading', to: 'title' }, { op: 'rename_theme_token', key: 'head', to: 'title.text' }]);
+  assert.equal(p.screens[0].elements[0].textStyle, 'title');
+  assert.equal(p.textStyles.title.color, '@title.text');
+  assert.throws(() => applyOps(p, [{ op: 'remove_text_style', key: 'title' }]), /使用中/);
+  p = applyOps(p, [{ op: 'remove_text_style', key: 'title', detach: true }]);
+  assert.equal(p.screens[0].elements[0].textStyle, '');
+  assert.equal(p.screens[0].elements[0].fontSize, 16);
+});
+
+test('v3 からの移行: グループと文字スタイルが足される', () => {
+  const v3 = structuredClone(sampleProject());
+  v3.schemaVersion = 3;
+  delete v3.textStyles;
+  for (const s of v3.screens) { delete s.groups; for (const e of s.elements) { delete e.group; delete e.textStyle; } }
+  const m = migrateProject(v3);
+  assert.equal(m.schemaVersion, 4);
+  assert.deepEqual(validateProject(m), []);
 });
 
 test('フッターなし: dialog_list・exit_action なしで出力', () => {

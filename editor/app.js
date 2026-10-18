@@ -4,13 +4,19 @@ import { GlyphAtlas, gameTextItems, drawGameTextItems, gameTextCodepoints } from
 import {
   LINE, ELEMENT_TYPES, ACTION_TYPES, FOOTER_ACTION_TYPES, INPUT_TYPES, AFTER_ACTIONS, FITS, ALIGNS, SKIN_SLOTS,
   MAX_BODY_WIDTH, MIN_BODY_WIDTH, TEXT_RENDERS, clickRows, resolveScreen, isTokenRef, themeUsers,
+  TEXT_STYLE_KEYS, applyTextStyle, textStyleUsers, findGroup, groupChain, groupMembers, lockedGroups, hiddenGroups,
 } from '/lib/model.mjs';
+import { elementShown } from '/lib/states.mjs';
 
 // ---- 状態 ----------------------------------------------------------------
 const st = {
   snap: null,          // {revision, project, canUndo, canRedo}
   screenId: null,
-  sel: null,           // 選択中の要素id
+  sel: [],             // 選択中の要素idの一覧（グループを選ぶと中の要素すべて）
+  scope: '',           // ダブルクリックで中に入っているグループ（'' は画面の直下）
+  guides: [],          // ドラッグ中の吸着線 [{x}|{y}]
+  collapsed: new Set(),// 一覧で閉じているグループ
+  clip: null,          // コピーした内容（OS のクリップボードが使えないときの代わり）
   mode: 'edit',
   zoom: 0,             // 0 = 自動（ステージに収まる最大の整数倍）
   z: 3,                // 実際に使っている倍率
@@ -100,7 +106,53 @@ const ctx = canvas.getContext('2d');
 
 const project = () => st.snap.project;
 const screen = () => project().screens.find((s) => s.id === st.screenId) || project().screens[0];
-const selected = () => screen()?.elements.find((e) => e.id === st.sel) || null;
+
+// ---- 選択 ----------------------------------------------------------------
+// 選択は要素の id の一覧。グループを選ぶと中の要素すべてが入る。
+// 「単位」= 今の階層（scope）の直下にあるもの（要素か、グループ）。クリック・整列・一覧はこの単位で扱う。
+const selectedEls = () => { const s = screen(); const set = new Set(st.sel); return s ? s.elements.filter((e) => set.has(e.id)) : []; };
+// 単位が1つの要素だけのときその要素（細かい値を変える欄で使う）
+const selected = () => { const u = selectedUnits(); return u.length === 1 && u[0].kind === 'el' ? selectedEls()[0] : null; };
+function unitOf(s, e) {
+  const chain = e.group ? groupChain(s, e.group) : [];
+  const i = st.scope ? chain.findIndex((g) => g.id === st.scope) : chain.length;
+  const below = i < 0 ? chain : chain.slice(0, i);
+  const top = below[below.length - 1];
+  return top ? { kind: 'group', id: top.id } : { kind: 'el', id: e.id };
+}
+const unitKey = (u) => `${u.kind}:${u.id}`;
+function unitEls(s, u) { return u.kind === 'group' ? groupMembers(s, u.id) : s.elements.filter((e) => e.id === u.id); }
+function selectedUnits() {
+  const s = screen(); if (!s) return [];
+  const out = new Map();
+  for (const e of selectedEls()) { const u = unitOf(s, e); out.set(unitKey(u), u); }
+  return [...out.values()];
+}
+// 選択できる（見えていて、ロックされていない）要素か
+function pickable(s, e) {
+  if (!e.visible || e.locked) return false;
+  if (e.group && (hiddenGroups(s).has(e.group) || lockedGroups(s).has(e.group))) return false;
+  return elementShown(e, s.stateDefaults);
+}
+function insideScope(s, e) { return !st.scope || (e.group && groupChain(s, e.group).some((g) => g.id === st.scope)); }
+function setSel(ids) { st.sel = [...new Set(ids)]; }
+function pruneSelection() {
+  const s = screen();
+  const ids = new Set(s ? s.elements.map((e) => e.id) : []);
+  st.sel = st.sel.filter((id) => ids.has(id));
+  if (st.scope && !(s && findGroup(s, st.scope))) st.scope = '';
+}
+function bboxOf(els) {
+  if (!els.length) return null;
+  const x0 = Math.min(...els.map((e) => e.x)), y0 = Math.min(...els.map((e) => e.y));
+  const x1 = Math.max(...els.map((e) => e.x + e.w)), y1 = Math.max(...els.map((e) => e.y + e.h));
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+function uniqueGroupId(s, base = 'group') {
+  const ids = new Set((s.groups || []).map((g) => g.id));
+  const b = base.replace(/_\d+$/, '') || 'group';
+  for (let i = 1; ; i++) if (!ids.has(`${b}_${i}`)) return `${b}_${i}`;
+}
 
 // ---- 通信 ----------------------------------------------------------------
 async function api(method, url, body, headers = {}) {
@@ -126,7 +178,7 @@ function setStatus(text, err = false) {
 async function load() {
   st.snap = await api('GET', '/api/project');
   if (!st.screenId || !project().screens.some((s) => s.id === st.screenId)) st.screenId = project().screens[0]?.id ?? null;
-  if (st.sel && !selected()) st.sel = null;
+  pruneSelection();
   syncImages();
   preloadGlyphs();
   renderAll();
@@ -138,7 +190,7 @@ async function commit(ops, label) {
   try {
     st.snap = await api('POST', '/api/ops', { revision: st.snap.revision, operations: ops, label, source: 'editor' });
     setStatus(`保存 r${st.snap.revision}`);
-    if (st.sel && !selected()) st.sel = null;
+    pruneSelection();
     syncImages();
     preloadGlyphs();
     renderAll();
@@ -269,15 +321,49 @@ function drawEdit(s) {
       for (const r of clickRows(e.y, e.h, s.height)) ctx.fillRect(Math.max(0, e.x), r * LINE, Math.min(e.w, s.width - e.x), LINE);
     }
   }
-  const e = selected();
-  if (e) {
-    ctx.strokeStyle = '#3ccf86'; ctx.lineWidth = 2 * lw;
-    ctx.strokeRect(e.x, e.y, e.w, e.h);
-    if (!e.locked) for (const h of handles(e)) { ctx.fillStyle = '#fff'; ctx.fillRect(h.x - 2 * lw * 1.5, h.y - 2 * lw * 1.5, 6 * lw, 6 * lw); ctx.strokeRect(h.x - 2 * lw * 1.5, h.y - 2 * lw * 1.5, 6 * lw, 6 * lw); }
-  }
+  drawSelection(s, lw);
   ctx.restore();
   $('#modeNote').textContent = `本文 ${s.width}×${s.height} GUI px / テクスチャ ${project().textureScale}倍`;
 }
+
+// 選択・中に入っているグループ・範囲選択・吸着線
+function drawSelection(s, lw) {
+  if (st.scope) {
+    const b = bboxOf(groupMembers(s, st.scope));
+    if (b) { ctx.setLineDash([4 * lw, 3 * lw]); ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = lw; ctx.strokeRect(b.x, b.y, b.w, b.h); ctx.setLineDash([]); }
+  }
+  const els = selectedEls();
+  if (els.length) {
+    // 単位ごとの枠（グループは中身全体）
+    ctx.strokeStyle = 'rgba(60,207,134,0.7)'; ctx.lineWidth = lw;
+    const units = selectedUnits();
+    if (units.length > 1) for (const u of units) { const b = bboxOf(unitEls(s, u)); if (b) ctx.strokeRect(b.x, b.y, b.w, b.h); }
+    const box = bboxOf(els);
+    ctx.strokeStyle = '#3ccf86'; ctx.lineWidth = 2 * lw;
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
+    if (!els.some((e) => e.locked)) for (const h of handles(box)) { ctx.fillStyle = '#fff'; ctx.fillRect(h.x - 3 * lw, h.y - 3 * lw, 6 * lw, 6 * lw); ctx.strokeRect(h.x - 3 * lw, h.y - 3 * lw, 6 * lw, 6 * lw); }
+    // 位置と大きさ
+    const label = `${box.x}, ${box.y}  ${box.w}×${box.h}`;
+    ctx.font = `${11 * lw}px sans-serif`;
+    const tw = ctx.measureText(label).width + 6 * lw;
+    const ly = box.y + box.h + 4 * lw;
+    ctx.fillStyle = '#3ccf86'; ctx.fillRect(box.x, ly, tw, 14 * lw);
+    ctx.fillStyle = '#0b2a1b'; ctx.fillText(label, box.x + 3 * lw, ly + 11 * lw);
+  }
+  const d = st.drag;
+  if (d?.kind === 'marquee') {
+    const r = rectOf(d.start, d.cur);
+    ctx.fillStyle = 'rgba(60,160,255,0.12)'; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = 'rgba(60,160,255,0.9)'; ctx.lineWidth = lw; ctx.strokeRect(r.x, r.y, r.w, r.h);
+  }
+  ctx.strokeStyle = '#ff3fd0'; ctx.lineWidth = lw;
+  for (const g of st.guides) {
+    ctx.beginPath();
+    if ('x' in g) { ctx.moveTo(g.x, -MARGIN); ctx.lineTo(g.x, s.height + MARGIN); } else { ctx.moveTo(-MARGIN, g.y); ctx.lineTo(s.width + MARGIN, g.y); }
+    ctx.stroke();
+  }
+}
+const rectOf = (a, b) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
 
 function handles(e) {
   const xs = [e.x, e.x + e.w / 2, e.x + e.w], ys = [e.y, e.y + e.h / 2, e.y + e.h];
@@ -357,68 +443,166 @@ function toGui(ev) {
 function hitElement(s, x, y) {
   for (let i = s.elements.length - 1; i >= 0; i--) {
     const e = s.elements[i];
-    if (!e.visible) continue;
+    if (!pickable(s, e)) continue;
     if (x >= e.x && x < e.x + e.w && y >= e.y && y < e.y + e.h) return e;
   }
   return null;
 }
 
+function canvasPoint(ev) { const p = toGui(ev); return { x: p.x - MARGIN, y: p.y - MARGIN }; }
+
 canvas.addEventListener('mousedown', (ev) => {
   if (st.mode === 'game') return gameClick(ev);
   if (st.mode !== 'edit' || ev.button !== 0) return;
+  flushNudge(true);
   const s = screen();
-  const p = toGui(ev); p.x -= MARGIN; p.y -= MARGIN;
-  const cur = selected();
-  if (cur && !cur.locked) {
+  const p = canvasPoint(ev);
+  const els = selectedEls();
+  // 選択範囲の角・辺をつかむと大きさの変更
+  if (els.length && !els.some((e) => e.locked)) {
+    const box = bboxOf(els);
     const tol = 5 / st.z;
-    const h = handles(cur).find((h) => Math.abs(h.x - p.x) <= tol && Math.abs(h.y - p.y) <= tol);
-    if (h) { st.drag = { kind: 'resize', handle: h.name, start: p, orig: { ...cur }, id: cur.id }; return; }
+    const h = handles(box).find((h) => Math.abs(h.x - p.x) <= tol && Math.abs(h.y - p.y) <= tol);
+    if (h) { st.drag = { kind: 'resize', handle: h.name, start: p, box, origs: new Map(els.map((e) => [e.id, { x: e.x, y: e.y, w: e.w, h: e.h }])) }; return; }
   }
   const hit = hitElement(s, p.x, p.y);
-  st.sel = hit?.id ?? null;
-  renderLayers(); renderInspector();
-  if (hit && !hit.locked) st.drag = { kind: 'move', start: p, orig: { ...hit }, id: hit.id, moved: false };
+  if (!hit) {
+    // 何もない所: 範囲選択（Shift で追加）。中に入っているグループの外なら外へ出る
+    if (!ev.shiftKey) st.sel = [];
+    st.drag = { kind: 'marquee', start: p, cur: p, base: ev.shiftKey ? [...st.sel] : [] };
+    renderPanels(); draw();
+    return;
+  }
+  if (st.scope && !insideScope(s, hit)) st.scope = '';
+  const ids = unitEls(s, unitOf(s, hit)).map((e) => e.id);
+  const already = ids.every((id) => st.sel.includes(id));
+  if (ev.shiftKey) setSel(already ? st.sel.filter((id) => !ids.includes(id)) : [...st.sel, ...ids]);
+  else if (!already) setSel(ids);
+  renderPanels();
+  const moving = selectedEls();
+  if (moving.length && !moving.some((e) => e.locked) && (!ev.shiftKey || !already)) {
+    st.drag = { kind: 'move', start: p, alt: ev.altKey, moved: false, origs: new Map(moving.map((e) => [e.id, { x: e.x, y: e.y }])) };
+  }
   draw();
+});
+
+// ダブルクリック: グループの中に入る（中の要素を個別に選べる）
+canvas.addEventListener('dblclick', (ev) => {
+  if (st.mode !== 'edit') return;
+  const s = screen();
+  const p = canvasPoint(ev);
+  const hit = hitElement(s, p.x, p.y);
+  if (!hit) return;
+  const u = unitOf(s, hit);
+  if (u.kind !== 'group') return;
+  st.scope = u.id;
+  setSel(unitEls(s, unitOf(s, hit)).map((e) => e.id));
+  renderPanels(); draw();
 });
 
 window.addEventListener('mousemove', (ev) => {
   if (st.mode === 'game') return gameHover(ev);
   if (st.mode !== 'edit') return;
-  const p = toGui(ev); p.x -= MARGIN; p.y -= MARGIN;
+  const p = canvasPoint(ev);
   $('#cursorPos').textContent = `x ${Math.floor(p.x)}, y ${Math.floor(p.y)}（行 ${Math.floor(p.y / LINE)}）`;
   const d = st.drag;
   if (!d) return;
-  const e = selected();
-  if (!e || e.id !== d.id) return;
-  const dx = Math.round(p.x - d.start.x), dy = Math.round(p.y - d.start.y);
+  const s = screen();
+  if (d.kind === 'marquee') {
+    d.cur = p;
+    const r = rectOf(d.start, p);
+    const hits = new Set();
+    for (const e of s.elements) {
+      if (!pickable(s, e) || !insideScope(s, e)) continue;
+      if (e.x < r.x + r.w && e.x + e.w > r.x && e.y < r.y + r.h && e.y + e.h > r.y) for (const m of unitEls(s, unitOf(s, e))) hits.add(m.id);
+    }
+    setSel([...d.base, ...hits]);
+    draw();
+    return;
+  }
+  const els = s.elements.filter((e) => d.origs.has(e.id));
+  if (!els.length) return;
+  let dx = Math.round(p.x - d.start.x), dy = Math.round(p.y - d.start.y);
   const grid = ev.shiftKey ? LINE : 1;
-  const gameText = e.type === 'text' && e.render === 'game';
-  const rowBound = e.type === 'button' || e.type === 'hotspot' || gameText;
-  const snapY = gameText || ($('#snapChk').checked && rowBound) ? LINE : grid;
+  const rowBound = els.some((e) => e.type === 'button' || e.type === 'hotspot' || (e.type === 'text' && applyTextStyle(project(), { ...e }).render === 'game'));
+  const snapRows = $('#snapChk').checked && rowBound;
   const sn = (v, g) => Math.round(v / g) * g;
+  st.guides = [];
   if (d.kind === 'move') {
-    e.x = sn(d.orig.x + dx, grid); e.y = sn(d.orig.y + dy, snapY);
+    dx = sn(dx, grid); dy = sn(dy, snapRows ? LINE : grid);
+    if (els.length === 1 && snapRows) { const o = d.origs.get(els[0].id); dy = sn(o.y + dy, LINE) - o.y; }
+    // スマートガイド: ほかの要素・画面の端と中心に吸着
+    if ($('#snapChk').checked && !ev.shiftKey) {
+      const box0 = bboxOf(els.map((e) => ({ ...d.origs.get(e.id), w: e.w, h: e.h })));
+      const g = smartSnap(s, { x: box0.x + dx, y: box0.y + dy, w: box0.w, h: box0.h }, new Set(d.origs.keys()), !snapRows);
+      dx += g.dx; dy += g.dy; st.guides = g.lines;
+    }
+    for (const e of els) { const o = d.origs.get(e.id); e.x = o.x + dx; e.y = o.y + dy; }
     d.moved = d.moved || dx !== 0 || dy !== 0;
   } else {
-    let { x, y, w, h } = d.orig;
-    const hn = d.handle;
-    if (hn.includes('e')) w = Math.max(1, sn(d.orig.x + d.orig.w + dx, grid) - x);
-    if (hn.includes('s')) h = Math.max(1, sn(d.orig.y + d.orig.h + dy, snapY) - y);
-    if (hn.includes('w')) { const nx = Math.min(sn(d.orig.x + dx, grid), d.orig.x + d.orig.w - 1); w = d.orig.x + d.orig.w - nx; x = nx; }
-    if (hn.includes('n')) { const ny = Math.min(sn(d.orig.y + dy, snapY), d.orig.y + d.orig.h - 1); h = d.orig.y + d.orig.h - ny; y = ny; }
-    Object.assign(e, { x, y, w, h });
+    // 選択範囲の大きさを変え、中の要素を同じ比率で動かす（1つなら今までどおり）
+    const b = d.box;
+    let x0 = b.x, y0 = b.y, x1 = b.x + b.w, y1 = b.y + b.h;
+    const hn = d.handle, ySnap = snapRows ? LINE : grid;
+    if (hn.includes('e')) x1 = Math.max(x0 + 1, sn(b.x + b.w + dx, grid));
+    if (hn.includes('s')) y1 = Math.max(y0 + 1, sn(b.y + b.h + dy, ySnap));
+    if (hn.includes('w')) x0 = Math.min(x1 - 1, sn(b.x + dx, grid));
+    if (hn.includes('n')) y0 = Math.min(y1 - 1, sn(b.y + dy, ySnap));
+    const kx = (x1 - x0) / b.w, ky = (y1 - y0) / b.h;
+    for (const e of els) {
+      const o = d.origs.get(e.id);
+      const nx0 = Math.round(x0 + (o.x - b.x) * kx), ny0 = Math.round(y0 + (o.y - b.y) * ky);
+      const nx1 = Math.round(x0 + (o.x + o.w - b.x) * kx), ny1 = Math.round(y0 + (o.y + o.h - b.y) * ky);
+      Object.assign(e, { x: nx0, y: ny0, w: Math.max(1, nx1 - nx0), h: Math.max(1, ny1 - ny0) });
+    }
     d.moved = true;
   }
   draw();
 });
 
+// box を動かしたとき、近くの線（ほかの要素の端・中心、画面の端・中心）に合わせるずれと、表示する線
+function smartSnap(s, box, exclude, snapY) {
+  const tol = 6 / st.z;
+  const xs = [0, s.width / 2, s.width], ys = [0, s.height / 2, s.height];
+  for (const e of s.elements) {
+    if (exclude.has(e.id) || !pickable(s, e)) continue;
+    xs.push(e.x, e.x + e.w / 2, e.x + e.w);
+    ys.push(e.y, e.y + e.h / 2, e.y + e.h);
+  }
+  const best = (cands, edges) => {
+    let r = null;
+    for (const c of cands) for (const v of edges) { const diff = c - v; if (Math.abs(diff) <= tol && (!r || Math.abs(diff) < Math.abs(r.diff))) r = { diff, at: c }; }
+    return r;
+  };
+  const bx = best(xs, [box.x, box.x + box.w / 2, box.x + box.w]);
+  const by = snapY ? best(ys, [box.y, box.y + box.h / 2, box.y + box.h]) : null;
+  const dx = bx && Number.isInteger(bx.diff) ? bx.diff : 0;
+  const dy = by && Number.isInteger(by.diff) ? by.diff : 0;
+  const lines = [];
+  if (bx && dx === bx.diff) lines.push({ x: bx.at });
+  if (by && dy === by.diff) lines.push({ y: by.at });
+  return { dx, dy, lines };
+}
+
 window.addEventListener('mouseup', () => {
   const d = st.drag;
   st.drag = null;
-  if (!d || !d.moved) return;
-  const e = selected();
-  if (!e) return;
-  commit([{ op: 'patch_element', screen: screen().id, element: e.id, values: { x: e.x, y: e.y, w: e.w, h: e.h } }], d.kind === 'move' ? `移動 ${e.id}` : `サイズ ${e.id}`);
+  st.guides = [];
+  if (!d) return;
+  if (d.kind === 'marquee') { renderPanels(); draw(); return; }
+  if (!d.moved) { draw(); return; }
+  const s = screen();
+  const els = s.elements.filter((e) => d.origs.has(e.id));
+  if (d.kind === 'move' && d.alt) {
+    // Alt+ドラッグ: 元は動かさず、動かした位置に複製を置く
+    const moved = new Map(els.map((e) => [e.id, { x: e.x, y: e.y }]));
+    for (const e of els) Object.assign(e, d.origs.get(e.id));
+    const first = moved.get(els[0].id), o = d.origs.get(els[0].id);
+    pasteClip(makeClip(s, els), { dx: first.x - o.x, dy: first.y - o.y });
+    return;
+  }
+  const patches = els.map((e) => ({ element: e.id, values: d.kind === 'move' ? { x: e.x, y: e.y } : { x: e.x, y: e.y, w: e.w, h: e.h } }));
+  commit([{ op: 'patch_elements', screen: s.id, patches }], `${d.kind === 'move' ? '移動' : 'サイズ'} ${els.length > 1 ? `${els.length}個` : els[0].id}`);
 });
 
 // プレビュー（ゲーム風）での操作
@@ -522,7 +706,7 @@ async function addElement(el) {
   const s = screen();
   const id = uniqueLocal(s, el.type);
   const ok = await commit([{ op: 'add_element', screen: s.id, element: { ...el, id } }], `追加 ${id}`);
-  if (ok) { st.sel = id; renderAll(); }
+  if (ok) { setSel([id]); renderAll(); }
 }
 
 function uniqueLocal(s, base) {
@@ -549,25 +733,50 @@ $('#assetInput').addEventListener('change', async (ev) => {
 });
 
 // ---- キーボード -------------------------------------------------------------
+const inputFocused = () => ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
 window.addEventListener('keydown', (ev) => {
-  const tag = document.activeElement?.tagName;
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (inputFocused()) return;
   const mod = ev.ctrlKey || ev.metaKey;
-  if (mod && ev.key.toLowerCase() === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); return; }
-  if (mod && (ev.key.toLowerCase() === 'y' || (ev.key.toLowerCase() === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
-  const e = selected();
-  if (!e || st.mode !== 'edit') return;
+  const key = ev.key.toLowerCase();
+  if (mod && key === 'z' && !ev.shiftKey) { ev.preventDefault(); undo(); return; }
+  if (mod && (key === 'y' || (key === 'z' && ev.shiftKey))) { ev.preventDefault(); redo(); return; }
+  if (st.mode !== 'edit') return;
+  const s = screen();
+  if (mod && key === 'a') {
+    ev.preventDefault();
+    setSel(s.elements.filter((e) => pickable(s, e) && insideScope(s, e)).map((e) => e.id));
+    renderPanels(); draw(); return;
+  }
+  if (ev.key === 'Escape') {
+    if (st.sel.length) st.sel = [];
+    else if (st.scope) st.scope = findGroup(s, st.scope)?.parent || '';
+    renderPanels(); draw(); return;
+  }
+  const els = selectedEls();
+  if (!els.length) return;
+  if (ev.key === 'Enter') {
+    // グループを1つ選んでいれば、その中に入る
+    const u = selectedUnits();
+    if (u.length === 1 && u[0].kind === 'group') { st.scope = u[0].id; renderPanels(); draw(); }
+    return;
+  }
   if (ev.key === 'Delete' || ev.key === 'Backspace') { ev.preventDefault(); removeSelected(); return; }
-  if (mod && ev.key.toLowerCase() === 'd') { ev.preventDefault(); duplicateSelected(); return; }
-  if (ev.key === 'Escape') { st.sel = null; renderAll(); return; }
+  if (mod && key === 'd') { ev.preventDefault(); duplicateSelected(); return; }
+  if (mod && key === 'g') { ev.preventDefault(); if (ev.shiftKey) ungroupSelected(); else groupSelected(); return; }
+  if (mod && (ev.key === ']' || ev.key === '[' || ev.code === 'BracketRight' || ev.code === 'BracketLeft')) {
+    ev.preventDefault();
+    const front = ev.key === ']' || ev.code === 'BracketRight';
+    reorderSelected(front ? (ev.shiftKey ? 'front' : 'forward') : (ev.shiftKey ? 'back' : 'backward'));
+    return;
+  }
   const step = ev.shiftKey ? LINE : 1;
   const mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
-  if (mv && !e.locked) {
+  if (mv && !els.some((e) => e.locked)) {
     ev.preventDefault();
-    e.x += mv[0]; e.y += mv[1];
+    for (const e of els) { e.x += mv[0]; e.y += mv[1]; }
     draw(); renderInspector();
     clearTimeout(st.pending?.timer);
-    st.pending = { id: e.id, screen: screen().id, timer: setTimeout(() => flushNudge(true), 400) };
+    st.pending = { ids: els.map((e) => e.id), screen: s.id, timer: setTimeout(() => flushNudge(true), 400) };
   }
 });
 
@@ -577,29 +786,165 @@ function flushNudge(send) {
   clearTimeout(p.timer);
   st.pending = null;
   const s = project().screens.find((x) => x.id === p.screen);
-  const e = s?.elements.find((x) => x.id === p.id);
-  if (!e) return;
-  const op = { op: 'patch_element', screen: s.id, element: e.id, values: { x: e.x, y: e.y } };
-  if (send) commit([op], `移動 ${e.id}`);
-  else api('POST', '/api/ops', { revision: st.snap.revision, operations: [op], label: `移動 ${e.id}`, source: 'editor' }).then((r) => { st.snap = r; }).catch(() => load());
+  const els = s ? s.elements.filter((e) => p.ids.includes(e.id)) : [];
+  if (!els.length) return;
+  const op = { op: 'patch_elements', screen: s.id, patches: els.map((e) => ({ element: e.id, values: { x: e.x, y: e.y } })) };
+  const label = `移動 ${els.length > 1 ? `${els.length}個` : els[0].id}`;
+  if (send) commit([op], label);
+  else api('POST', '/api/ops', { revision: st.snap.revision, operations: [op], label, source: 'editor' }).then((r) => { st.snap = r; }).catch(() => load());
 }
 
-async function undo() { try { st.snap = await api('POST', '/api/undo', { source: 'editor' }); if (!selected()) st.sel = null; renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
-async function redo() { try { st.snap = await api('POST', '/api/redo', { source: 'editor' }); if (!selected()) st.sel = null; renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
+async function undo() { try { st.snap = await api('POST', '/api/undo', { source: 'editor' }); pruneSelection(); renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
+async function redo() { try { st.snap = await api('POST', '/api/redo', { source: 'editor' }); pruneSelection(); renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
 $('#undoBtn').onclick = undo;
 $('#redoBtn').onclick = redo;
 
 function removeSelected() {
-  const e = selected();
-  if (!e) return;
-  commit([{ op: 'remove_element', screen: screen().id, element: e.id }], `削除 ${e.id}`);
+  const els = selectedEls();
+  if (!els.length) return;
+  commit([{ op: 'remove_elements', screen: screen().id, elements: els.map((e) => e.id) }], `削除 ${els.length > 1 ? `${els.length}個` : els[0].id}`);
 }
-async function duplicateSelected() {
-  const e = selected();
-  if (!e) return;
-  const id = uniqueLocal(screen(), e.id.replace(/_\d+$/, ''));
-  if (await commit([{ op: 'duplicate_element', screen: screen().id, element: e.id, newId: id }], `複製 ${e.id}`)) { st.sel = id; renderAll(); }
+function duplicateSelected() {
+  const s = screen();
+  const els = selectedEls();
+  if (els.length) pasteClip(makeClip(s, els), { dx: LINE, dy: LINE });
 }
+
+// ---- グループ・重なり順 ---------------------------------------------------------
+async function groupSelected() {
+  const s = screen();
+  const units = selectedUnits();
+  if (!units.length) return;
+  const id = uniqueGroupId(s);
+  const n = (s.groups || []).length + 1;
+  const ids = selectedEls().map((e) => e.id);
+  const ok = await commit([{ op: 'group_elements', screen: s.id, elements: units.filter((u) => u.kind === 'el').map((u) => u.id), groups: units.filter((u) => u.kind === 'group').map((u) => u.id), group: { id, name: `グループ ${n}` } }], `グループ ${id}`);
+  if (ok) { setSel(ids); renderPanels(); draw(); }
+}
+async function ungroupSelected() {
+  const s = screen();
+  const groups = selectedUnits().filter((u) => u.kind === 'group');
+  if (!groups.length) return;
+  const ids = selectedEls().map((e) => e.id);
+  if (await commit(groups.map((g) => ({ op: 'ungroup', screen: s.id, group: g.id })), 'グループ解除')) { setSel(ids); renderPanels(); draw(); }
+}
+// 選んだものの重なり順: forward/backward は1つ前後（選んでいない要素1つ分）、front/back は一番前・後ろ
+function reorderSelected(how) {
+  const s = screen();
+  const sel = new Set(st.sel);
+  const idx = s.elements.map((e, i) => (sel.has(e.id) ? i : -1)).filter((i) => i >= 0);
+  if (!idx.length) return;
+  const rest = s.elements.filter((e) => !sel.has(e.id));
+  let at;
+  if (how === 'front') at = rest.length;
+  else if (how === 'back') at = 0;
+  else if (how === 'forward') {
+    const above = s.elements.slice(Math.max(...idx) + 1).find((e) => !sel.has(e.id));
+    at = above ? rest.indexOf(above) + 1 : rest.length;
+  } else {
+    const below = s.elements.slice(0, Math.min(...idx)).reverse().find((e) => !sel.has(e.id));
+    at = below ? rest.indexOf(below) : 0;
+  }
+  commit([{ op: 'move_elements', screen: s.id, elements: [...sel], index: at }], '重なり順');
+}
+
+// 整列・等間隔。単位（要素かグループ）ごとに動かす。1つだけなら画面（中に入っているグループ）に合わせる
+function alignSelected(mode) {
+  const s = screen();
+  const units = selectedUnits().map((u) => ({ u, els: unitEls(s, u) })).map((x) => ({ ...x, b: bboxOf(x.els) }));
+  if (!units.length) return;
+  const ref = units.length > 1 ? bboxOf(units.flatMap((x) => x.els)) : (st.scope ? bboxOf(groupMembers(s, st.scope)) : { x: 0, y: 0, w: s.width, h: s.height });
+  const patches = [];
+  const move = (x, dx, dy) => { if (dx || dy) for (const e of x.els) patches.push({ element: e.id, values: { x: e.x + dx, y: e.y + dy } }); };
+  if (mode === 'hdist' || mode === 'vdist') {
+    if (units.length < 3) return;
+    const h = mode === 'hdist';
+    const sorted = [...units].sort((a, b) => (h ? a.b.x - b.b.x : a.b.y - b.b.y));
+    const first = sorted[0].b, last = sorted[sorted.length - 1].b;
+    const span = h ? last.x + last.w - first.x : last.y + last.h - first.y;
+    const sum = sorted.reduce((a, x) => a + (h ? x.b.w : x.b.h), 0);
+    const gap = (span - sum) / (sorted.length - 1);
+    let pos = h ? first.x : first.y;
+    for (const x of sorted) {
+      const target = Math.round(pos);
+      move(x, h ? target - x.b.x : 0, h ? 0 : target - x.b.y);
+      pos += (h ? x.b.w : x.b.h) + gap;
+    }
+  } else {
+    for (const x of units) {
+      const b = x.b;
+      const dx = { left: ref.x - b.x, hcenter: Math.round(ref.x + (ref.w - b.w) / 2) - b.x, right: ref.x + ref.w - b.w - b.x }[mode] ?? 0;
+      const dy = { top: ref.y - b.y, vcenter: Math.round(ref.y + (ref.h - b.h) / 2) - b.y, bottom: ref.y + ref.h - b.h - b.y }[mode] ?? 0;
+      move(x, dx, dy);
+    }
+  }
+  if (patches.length) commit([{ op: 'patch_elements', screen: s.id, patches }], '整列');
+}
+
+// ---- コピー・貼り付け ----------------------------------------------------------
+// OS のクリップボードに JSON で入れる（画面・ブラウザーのタブをまたいで使える）
+function makeClip(s, els) {
+  const p = project();
+  const groupIds = new Set();
+  for (const e of els) if (e.group) for (const g of groupChain(s, e.group)) { if (g.id === st.scope) break; groupIds.add(g.id); }
+  const groups = (s.groups || []).filter((g) => groupIds.has(g.id));
+  const tokens = {}, styles = {};
+  const addToken = (v) => { if (isTokenRef(v) && p.theme?.tokens?.[v.slice(1)]) tokens[v.slice(1)] = p.theme.tokens[v.slice(1)]; };
+  for (const e of els) {
+    for (const k of ['fill', 'border', 'color', 'shadowColor', 'labelColor']) addToken(e[k]);
+    if (e.textStyle && p.textStyles?.[e.textStyle]) { styles[e.textStyle] = p.textStyles[e.textStyle]; addToken(styles[e.textStyle].color); addToken(styles[e.textStyle].shadowColor); }
+  }
+  return { kind: 'dcg-elements', version: 1, screen: s.id, elements: structuredClone(els), groups: structuredClone(groups), tokens, styles };
+}
+
+async function pasteClip(clip, { dx = 0, dy = 0 } = {}) {
+  const s = screen();
+  const p = project();
+  const usedEl = new Set(s.elements.map((e) => e.id));
+  const usedGr = new Set((s.groups || []).map((g) => g.id));
+  const fresh = (used, id) => {
+    const base = (id || 'el').replace(/_\d+$/, '');
+    for (let i = 1; ; i++) { const c = `${base}_${i}`; if (!used.has(c)) { used.add(c); return c; } }
+  };
+  const gmap = new Map(clip.groups.map((g) => [g.id, fresh(usedGr, g.id)]));
+  const groups = clip.groups.map((g) => ({ ...g, id: gmap.get(g.id), parent: gmap.get(g.parent) ?? st.scope }));
+  const elements = clip.elements.map((e) => {
+    const c = { ...e, id: fresh(usedEl, e.id), x: e.x + dx, y: e.y + dy, group: gmap.get(e.group) ?? st.scope };
+    for (const k of ['asset', 'image']) if (c[k] && !p.assets[c[k]]) c[k] = null; // 別のプロジェクトの素材
+    return c;
+  });
+  const ops = [
+    ...Object.entries(clip.tokens || {}).map(([key, value]) => ({ op: 'set_theme_token', key, value, ifMissing: true })),
+    ...Object.entries(clip.styles || {}).map(([key, style]) => ({ op: 'set_text_style', key, style, ifMissing: true })),
+    { op: 'add_elements', screen: s.id, elements, groups },
+  ];
+  if (await commit(ops, `貼り付け ${elements.length}個`)) { setSel(elements.map((e) => e.id)); renderPanels(); draw(); }
+}
+
+document.addEventListener('copy', (ev) => {
+  if (inputFocused() || st.mode !== 'edit' || !st.sel.length) return;
+  ev.preventDefault();
+  st.clip = makeClip(screen(), selectedEls());
+  ev.clipboardData.setData('text/plain', JSON.stringify(st.clip));
+  setStatus(`コピー ${st.clip.elements.length}個`);
+});
+document.addEventListener('cut', (ev) => {
+  if (inputFocused() || st.mode !== 'edit' || !st.sel.length) return;
+  ev.preventDefault();
+  st.clip = makeClip(screen(), selectedEls());
+  ev.clipboardData.setData('text/plain', JSON.stringify(st.clip));
+  removeSelected();
+});
+document.addEventListener('paste', (ev) => {
+  if (inputFocused() || st.mode !== 'edit') return;
+  let clip = null;
+  try { clip = JSON.parse(ev.clipboardData.getData('text/plain')); } catch { clip = st.clip; }
+  if (clip?.kind !== 'dcg-elements') return;
+  ev.preventDefault();
+  // 同じ画面に貼るときは、元と重ならないよう少しずらす
+  const same = clip.screen === screen().id;
+  pasteClip(clip, same ? { dx: LINE, dy: LINE } : {});
+});
 
 // ---- 一覧 -----------------------------------------------------------------
 function renderTabs() {
@@ -616,7 +961,7 @@ function renderTabs() {
 
 function selectScreen(id) {
   flushNudge(true);
-  st.screenId = id; st.sel = null; st.game.screenId = id; st.game.scroll = 0; st.compiledImg = null;
+  st.screenId = id; st.sel = []; st.scope = ''; st.game.screenId = id; st.game.scroll = 0; st.compiledImg = null;
   renderAll(); scheduleCompileInfo();
 }
 
@@ -645,24 +990,135 @@ $('#addScreen').onclick = async () => {
   if (await commit([{ op: 'add_screen', screen: { id, title: id } }], `画面追加 ${id}`)) selectScreen(id);
 };
 
+function renderPanels() { renderLayers(); renderInspector(); }
+
+// 重なり順の一覧（木の形）。前面が上。グループは中身のうち一番前面の位置に置く
+function layerTree(s) {
+  const z = new Map(s.elements.map((e, i) => [e.id, i]));
+  const gz = new Map((s.groups || []).map((g) => [g.id, Math.max(-1, ...groupMembers(s, g.id).map((e) => z.get(e.id)))]));
+  const children = (parent) => [
+    ...s.elements.filter((e) => (e.group || '') === parent).map((e) => ({ kind: 'el', id: e.id, z: z.get(e.id), el: e })),
+    ...(s.groups || []).filter((g) => (g.parent || '') === parent).map((g) => ({ kind: 'group', id: g.id, z: gz.get(g.id), group: g })),
+  ].sort((a, b) => b.z - a.z);
+  const walk = (parent, depth, out) => {
+    for (const n of children(parent)) {
+      out.push({ ...n, depth });
+      if (n.kind === 'group' && !st.collapsed.has(n.id)) walk(n.id, depth + 1, out);
+    }
+    return out;
+  };
+  return walk('', 0, []);
+}
+
 function renderLayers() {
   const ul = $('#layerList');
   ul.innerHTML = '';
   const s = screen();
   if (!s) return;
-  [...s.elements].reverse().forEach((e) => {
-    const idx = s.elements.indexOf(e);
+  const sel = new Set(st.sel);
+  const hidden = hiddenGroups(s), locked = lockedGroups(s);
+  for (const n of layerTree(s)) {
+    const u = { kind: n.kind, id: n.id };
+    const els = unitEls(s, u);
     const li = document.createElement('li');
-    li.className = `${e.id === st.sel ? 'on' : ''} ${e.visible ? '' : 'hidden'}`;
-    li.innerHTML = `<span class="type">${TYPE_LABEL[e.type]}</span><span class="name" title="${esc(e.id)}">${esc(e.name || e.id)}</span>`;
-    li.onclick = () => { st.sel = e.id; renderLayers(); renderInspector(); draw(); };
+    const on = els.length && els.every((e) => sel.has(e.id));
+    const visible = n.kind === 'el' ? n.el.visible && !(n.el.group && hidden.has(n.el.group)) : !hidden.has(n.id);
+    const isLocked = n.kind === 'el' ? n.el.locked || (n.el.group && locked.has(n.el.group)) : locked.has(n.id);
+    li.className = `${on ? 'on' : ''} ${visible ? '' : 'hidden'} ${n.kind === 'group' ? 'group' : ''}`;
+    li.style.paddingLeft = `${4 + n.depth * 12}px`;
+    li.draggable = true;
+    li.dataset.kind = n.kind; li.dataset.id = n.id;
+    const twisty = document.createElement('span');
+    twisty.className = 'twisty';
+    twisty.textContent = n.kind === 'group' ? (st.collapsed.has(n.id) ? '▸' : '▾') : '';
+    twisty.onclick = (ev) => { ev.stopPropagation(); if (n.kind !== 'group') return; if (st.collapsed.has(n.id)) st.collapsed.delete(n.id); else st.collapsed.add(n.id); renderLayers(); };
+    const type = document.createElement('span'); type.className = 'type';
+    type.textContent = n.kind === 'group' ? 'グループ' : TYPE_LABEL[n.el.type];
+    const name = document.createElement('span'); name.className = 'name';
+    name.textContent = n.kind === 'group' ? n.group.name || n.id : n.el.name || n.id;
+    name.title = `${n.id}${n.kind === 'el' && n.el.state ? `（状態 ${n.el.state}）` : ''}（ダブルクリックで名前を変更）`;
+    name.ondblclick = (ev) => { ev.stopPropagation(); renameInline(name, n); };
+    li.append(twisty, type, name);
+    li.onclick = (ev) => {
+      // 一覧から選ぶときは、その階層に入る（グループの中の要素も直接選べる）
+      st.scope = n.kind === 'el' ? n.el.group || '' : n.group.parent || '';
+      const ids = els.map((e) => e.id);
+      if (ev.shiftKey) setSel(on ? st.sel.filter((id) => !ids.includes(id)) : [...st.sel, ...ids]);
+      else setSel(ids);
+      renderPanels(); draw();
+    };
+    const toggleVisible = () => (n.kind === 'el'
+      ? commit([{ op: 'set', screen: s.id, element: n.id, path: 'visible', value: !n.el.visible }], `表示切替 ${n.id}`)
+      : commit([{ op: 'set_group', screen: s.id, group: n.id, values: { visible: !n.group.visible } }], `表示切替 ${n.id}`));
+    const toggleLock = () => (n.kind === 'el'
+      ? commit([{ op: 'set', screen: s.id, element: n.id, path: 'locked', value: !n.el.locked }], `ロック ${n.id}`)
+      : commit([{ op: 'set_group', screen: s.id, group: n.id, values: { locked: !n.group.locked } }], `ロック ${n.id}`));
+    const own = n.kind === 'el' ? n.el : n.group;
     li.append(
-      btn(e.visible ? '👁' : '–', '表示/非表示', (ev) => { ev.stopPropagation(); commit([{ op: 'set', screen: s.id, element: e.id, path: 'visible', value: !e.visible }], `表示切替 ${e.id}`); }),
-      btn('▲', '前面へ', (ev) => { ev.stopPropagation(); if (idx < s.elements.length - 1) commit([{ op: 'move_element', screen: s.id, element: e.id, index: idx + 1 }], `前面へ ${e.id}`); }),
-      btn('▼', '背面へ', (ev) => { ev.stopPropagation(); if (idx > 0) commit([{ op: 'move_element', screen: s.id, element: e.id, index: idx - 1 }], `背面へ ${e.id}`); }),
+      btn(own.visible ? '👁' : '–', '表示/非表示', (ev) => { ev.stopPropagation(); toggleVisible(); }),
+      btn(own.locked ? '🔒' : '·', isLocked && !own.locked ? '外側のグループがロック中' : 'ロック（画面上で選べなくする）', (ev) => { ev.stopPropagation(); toggleLock(); }),
     );
+    li.addEventListener('dragstart', (ev) => { ev.dataTransfer.setData('text/x-layer', JSON.stringify(u)); ev.dataTransfer.effectAllowed = 'move'; });
+    li.addEventListener('dragover', (ev) => {
+      if (!ev.dataTransfer.types.includes('text/x-layer')) return;
+      ev.preventDefault();
+      li.classList.remove('drop-above', 'drop-below', 'drop-into');
+      li.classList.add(`drop-${dropZone(ev, li, n)}`);
+    });
+    li.addEventListener('dragleave', () => li.classList.remove('drop-above', 'drop-below', 'drop-into'));
+    li.addEventListener('drop', (ev) => {
+      ev.preventDefault();
+      li.classList.remove('drop-above', 'drop-below', 'drop-into');
+      const src = JSON.parse(ev.dataTransfer.getData('text/x-layer') || 'null');
+      if (src) dropLayer(s, src, n, dropZone(ev, li, n));
+    });
     ul.append(li);
-  });
+  }
+}
+
+function dropZone(ev, li, n) {
+  const r = li.getBoundingClientRect();
+  const t = (ev.clientY - r.top) / r.height;
+  if (n.kind === 'group' && t > 0.3 && t < 0.7) return 'into';
+  return t < 0.5 ? 'above' : 'below';
+}
+
+// 一覧のドラッグ: 重なり順の移動と、グループへの出し入れ
+function dropLayer(s, src, target, zone) {
+  if (src.kind === target.kind && src.id === target.id) return;
+  if (src.kind === 'group' && target.kind === 'group' && groupChain(s, target.id).some((g) => g.id === src.id)) return; // 自分の中へは入れない
+  const moving = unitEls(s, src);
+  const ids = new Set(moving.map((e) => e.id));
+  const parent = zone === 'into' ? target.id : (target.kind === 'el' ? target.el.group || '' : target.group.parent || '');
+  const rest = s.elements.filter((e) => !ids.has(e.id));
+  const tEls = target.kind === 'el' ? [target.el] : groupMembers(s, target.id);
+  const tIdx = tEls.map((e) => rest.indexOf(e)).filter((i) => i >= 0);
+  // 一覧の上 = 前面。above なら target の前面側（後ろの添字）、below / into なら背面側
+  const index = !tIdx.length ? rest.length : zone === 'above' ? Math.max(...tIdx) + 1 : zone === 'into' ? Math.max(...tIdx) + 1 : Math.min(...tIdx);
+  const ops = [];
+  if (src.kind === 'el') { if ((moving[0].group || '') !== parent) ops.push({ op: 'patch_elements', screen: s.id, patches: [{ element: src.id, values: { group: parent } }] }); }
+  else if ((findGroup(s, src.id).parent || '') !== parent) ops.push({ op: 'set_group', screen: s.id, group: src.id, values: { parent } });
+  ops.push({ op: 'move_elements', screen: s.id, elements: [...ids], index });
+  commit(ops, '一覧で移動');
+}
+
+function renameInline(span, n) {
+  const s = screen();
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = n.kind === 'group' ? n.group.name : n.el.name;
+  input.className = 'rename';
+  span.replaceWith(input);
+  input.focus(); input.select();
+  let done = false;
+  const finish = (save) => {
+    if (done) return; done = true;
+    if (!save || input.value === (n.kind === 'group' ? n.group.name : n.el.name)) { renderLayers(); return; }
+    if (n.kind === 'group') commit([{ op: 'set_group', screen: s.id, group: n.id, values: { name: input.value } }], `名前 ${n.id}`);
+    else commit([{ op: 'set', screen: s.id, element: n.id, path: 'name', value: input.value }], `名前 ${n.id}`);
+  };
+  input.addEventListener('keydown', (ev) => { ev.stopPropagation(); if (ev.key === 'Enter') finish(true); if (ev.key === 'Escape') finish(false); });
+  input.addEventListener('blur', () => finish(true));
 }
 
 function renderAssets() {
@@ -860,6 +1316,51 @@ function themeEditor(box) {
   box.append(tools);
 }
 
+// 文字スタイルの一覧と編集
+function textStyleEditor(box) {
+  const p = project();
+  const styles = p.textStyles || {};
+  const head = h3('文字スタイル');
+  head.dataset.textStyles = '1';
+  box.append(head);
+  box.append(note('「見出し」「本文」などの文字の見た目を登録します。文字の要素でスタイルを選ぶと、ここを直すだけで全画面に反映されます。'));
+  const setStyle = (key, k, v) => commit([{ op: 'set_text_style', key, style: { [k]: v }, merge: true }], `文字スタイル ${key}.${k}`);
+  for (const key of Object.keys(styles).sort()) {
+    const st0 = styles[key];
+    const users = textStyleUsers(p, key).length;
+    const card = document.createElement('div'); card.className = 'card';
+    const hd = document.createElement('div'); hd.className = 'head';
+    hd.innerHTML = `<span>${esc(st0.name || key)} <span class="mono muted">${esc(key)}</span> <span class="muted small">${users}か所</span></span>`;
+    hd.append(
+      btn('名前', 'スタイルの名前（ID）を変える。使っている文字も付け替えます', () => { const to = prompt('新しい名前', key); if (to && to !== key) commit([{ op: 'rename_text_style', key, to }], `文字スタイル名 ${key}→${to}`); }),
+      btn('✕', users ? `使用中（${users}か所）。削除すると今の見た目のまま文字に値を移します` : '削除', () => {
+        if (users && !confirm(`「${st0.name || key}」は ${users}か所で使われています。削除すると、今の見た目のまま各文字に値を移します。削除しますか？`)) return;
+        commit([{ op: 'remove_text_style', key, detach: true }], `文字スタイル削除 ${key}`);
+      }),
+    );
+    card.append(hd);
+    card.append(field('表示名', textInput(st0.name || '', (v) => setStyle(key, 'name', v))));
+    card.append(field('描画', selectInput(st0.render ?? 'game', TEXT_RENDERS.map((r) => [r, r === 'game' ? 'ゲーム内フォント' : '画像に焼き込み']), (v) => setStyle(key, 'render', v))));
+    if ((st0.render ?? 'game') === 'baked') {
+      card.append(field('フォント', textInput(st0.fontFamily ?? '', (v) => setStyle(key, 'fontFamily', v), { list: 'fontList' })));
+      card.append(field('サイズ', numInput(st0.fontSize ?? 9, (v) => setStyle(key, 'fontSize', v), { min: 4, max: 128, step: 0.5, float: true })));
+      card.append(field('ドット化', checkInput(st0.pixel, (v) => setStyle(key, 'pixel', v))));
+      card.append(field('単語間隔', numInput(st0.wordSpacing ?? 0, (v) => setStyle(key, 'wordSpacing', v), { min: -16, max: 64 })));
+      card.append(field('行間', numInput(st0.lineHeight ?? 1.2, (v) => setStyle(key, 'lineHeight', v), { min: 0.8, max: 3, step: 0.05, float: true })));
+    }
+    card.append(field('太字', checkInput(st0.bold, (v) => setStyle(key, 'bold', v))));
+    card.append(field('色', colorInput(st0.color ?? '#ffffffff', (v) => setStyle(key, 'color', v))));
+    card.append(field('影', checkInput(st0.shadow, (v) => setStyle(key, 'shadow', v))));
+    if (st0.shadow) card.append(field('影の色', colorInput(st0.shadowColor ?? '#3f3f3fff', (v) => setStyle(key, 'shadowColor', v))));
+    card.append(field('横揃え', selectInput(st0.align ?? 'left', ALIGNS.map((a) => [a, { left: '左', center: '中央', right: '右' }[a]]), (v) => setStyle(key, 'align', v))));
+    box.append(card);
+  }
+  box.append(btn('＋ 文字スタイルを追加', '', () => {
+    const key = prompt('スタイルの名前（英小文字・数字・_ . -。例: heading）');
+    if (key) commit([{ op: 'set_text_style', key, style: { name: key, render: 'game', bold: false, color: '#ffffffff', shadow: false, align: 'left' } }], `文字スタイル追加 ${key}`);
+  }));
+}
+
 function h3(text) { const h = document.createElement('h3'); h.textContent = text; return h; }
 function note(text, cls = '') { const n = document.createElement('p'); n.className = `note ${cls}`; n.textContent = text; return n; }
 
@@ -870,7 +1371,89 @@ function renderInspector() {
   if (!s) return;
   const e = selected();
   if (e) inspectElement(box, s, e);
+  else if (st.sel.length) inspectMulti(box, s);
   else inspectScreen(box, s);
+}
+
+// 整列・等間隔のボタン（単位が1つなら画面に合わせる）
+function alignBar(n) {
+  const bar = document.createElement('div');
+  bar.className = 'alignbar';
+  const items = [
+    ['left', '⇤', '左揃え'], ['hcenter', '↔', '左右中央'], ['right', '⇥', '右揃え'],
+    ['top', '⤒', '上揃え'], ['vcenter', '↕', '上下中央'], ['bottom', '⤓', '下揃え'],
+  ];
+  for (const [m, t, tip] of items) bar.append(btn(t, `${tip}${n > 1 ? '' : '（画面に合わせる）'}`, () => alignSelected(m)));
+  const hd = btn('⋯横', '横に等間隔（3つ以上）', () => alignSelected('hdist'));
+  const vd = btn('⋮縦', '縦に等間隔（3つ以上）', () => alignSelected('vdist'));
+  hd.disabled = vd.disabled = n < 3;
+  bar.append(hd, vd);
+  return bar;
+}
+
+// 複数の要素・グループを選んでいるとき
+function inspectMulti(box, s) {
+  const els = selectedEls();
+  const units = selectedUnits();
+  const group = units.length === 1 && units[0].kind === 'group' ? findGroup(s, units[0].id) : null;
+  const head = document.createElement('h2');
+  head.innerHTML = group ? `<span>グループ <span class="mono muted">${esc(group.id)}</span></span>` : `<span>${units.length}個を選択 <span class="muted small">（要素 ${els.length}）</span></span>`;
+  const tools = document.createElement('span');
+  tools.append(btn('グループ化', 'Ctrl+G', groupSelected));
+  if (units.some((u) => u.kind === 'group')) tools.append(btn('解除', 'Ctrl+Shift+G', ungroupSelected));
+  tools.append(btn('複製', 'Ctrl+D', duplicateSelected), btn('削除', 'Delete', removeSelected));
+  tools.lastChild.classList.add('danger');
+  head.append(tools);
+  box.append(head);
+  box.append(alignBar(units.length));
+  if (group) {
+    box.append(field('名前', textInput(group.name, (v) => commit([{ op: 'set_group', screen: s.id, group: group.id, values: { name: v } }], `名前 ${group.id}`))));
+    box.append(field('表示', checkInput(group.visible, (v) => commit([{ op: 'set_group', screen: s.id, group: group.id, values: { visible: v } }], `表示 ${group.id}`))));
+    box.append(field('ロック', checkInput(group.locked, (v) => commit([{ op: 'set_group', screen: s.id, group: group.id, values: { locked: v } }], `ロック ${group.id}`)), '画面上でクリックしても選ばれなくなります'));
+    box.append(note('ダブルクリック（または Enter）で中に入り、中の要素を個別に選べます。Esc で外へ出ます。'));
+  }
+  // 選択範囲の位置・大きさ（変えると中の要素をまとめて動かす・拡大縮小する）
+  const b = bboxOf(els);
+  const geo = document.createElement('div'); geo.className = 'field row4';
+  for (const k of ['x', 'y', 'w', 'h']) {
+    const l = document.createElement('label'); l.textContent = k.toUpperCase();
+    l.append(numInput(b[k], (v) => resizeSelection(s, els, b, { ...b, [k]: v }), { min: k === 'w' || k === 'h' ? 1 : undefined }));
+    geo.append(l);
+  }
+  box.append(geo);
+  // 共通の見た目（全部が同じ種類のときだけ）
+  const all = (pred) => els.every(pred);
+  const common = (k) => (els.every((e) => e[k] === els[0][k]) ? els[0][k] : undefined);
+  const setAll = (k, v) => commit([{ op: 'patch_elements', screen: s.id, patches: els.map((e) => ({ element: e.id, values: { [k]: v } })) }], `${k} ${els.length}個`);
+  const mixed = (ctrl, k) => { if (common(k) === undefined) { const n = note('（値が混在）', 'mixed'); const w = document.createElement('div'); w.append(ctrl, n); return w; } return ctrl; };
+  if (all((e) => e.type === 'rect' || e.type === 'button')) {
+    box.append(h3('塗り'));
+    box.append(field('塗り', mixed(colorInput(common('fill') ?? els[0].fill, (v) => setAll('fill', v)), 'fill')));
+    box.append(field('枠線', mixed(colorInput(common('border') ?? els[0].border, (v) => setAll('border', v)), 'border')));
+    box.append(field('枠の太さ', mixed(numInput(common('borderWidth') ?? '', (v) => setAll('borderWidth', v), { min: 0, max: 32 }), 'borderWidth')));
+  }
+  if (all((e) => e.type === 'text' || e.type === 'button')) {
+    box.append(h3('文字'));
+    box.append(field('文字スタイル', mixed(textStyleSelect(common('textStyle') ?? '', (v) => setAll('textStyle', v)), 'textStyle')));
+    if (all((e) => e.type === 'text')) box.append(field('色', mixed(colorInput(common('color') ?? els[0].color, (v) => setAll('color', v)), 'color')));
+  }
+  box.append(field('ロック', checkInput(all((e) => e.locked), (v) => setAll('locked', v))));
+}
+
+// 選択範囲の位置・大きさを数値で変える
+function resizeSelection(s, els, from, to) {
+  const kx = to.w / from.w, ky = to.h / from.h;
+  const patches = els.map((e) => {
+    const x0 = Math.round(to.x + (e.x - from.x) * kx), y0 = Math.round(to.y + (e.y - from.y) * ky);
+    const x1 = Math.round(to.x + (e.x + e.w - from.x) * kx), y1 = Math.round(to.y + (e.y + e.h - from.y) * ky);
+    return { element: e.id, values: { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) } };
+  });
+  commit([{ op: 'patch_elements', screen: s.id, patches }], `位置・大きさ ${els.length}個`);
+}
+
+function textStyleSelect(value, onChange) {
+  const styles = project().textStyles || {};
+  return selectInput(value, [['', '（なし）'], ...Object.keys(styles).sort().map((k) => [k, `${styles[k].name || k}（${k}）`])], onChange);
 }
 
 function setEl(s, e, path, value) { return commit([{ op: 'set', screen: s.id, element: e.id, path, value }], `${e.id}.${path}`); }
@@ -881,11 +1464,12 @@ function inspectElement(box, s, e) {
   const head = document.createElement('h2');
   head.innerHTML = `<span>${TYPE_LABEL[e.type]} <span class="mono muted">${esc(e.id)}</span></span>`;
   const tools = document.createElement('span');
-  tools.append(btn('複製', 'Ctrl+D', duplicateSelected), btn('削除', 'Delete', removeSelected));
+  tools.append(btn('グループ化', 'Ctrl+G', groupSelected), btn('複製', 'Ctrl+D', duplicateSelected), btn('削除', 'Delete', removeSelected));
   tools.lastChild.classList.add('danger');
   head.append(tools);
   box.append(head);
-  box.append(field('ID', textInput(e.id, (v) => commit([{ op: 'set', screen: s.id, element: e.id, path: 'id', value: v }], `id ${e.id}→${v}`).then((ok) => { if (ok) { st.sel = v; renderAll(); } }))));
+  box.append(alignBar(1));
+  box.append(field('ID', textInput(e.id, (v) => commit([{ op: 'set', screen: s.id, element: e.id, path: 'id', value: v }], `id ${e.id}→${v}`).then((ok) => { if (ok) { setSel([v]); renderAll(); } }))));
   box.append(field('名前', textInput(e.name, (v) => setEl(s, e, 'name', v), { placeholder: '一覧での表示名' })));
   const geo = document.createElement('div'); geo.className = 'field row4';
   for (const k of ['x', 'y', 'w', 'h']) {
@@ -894,7 +1478,9 @@ function inspectElement(box, s, e) {
     geo.append(l);
   }
   box.append(geo);
-  box.append(field('ロック', checkInput(e.locked, (v) => setEl(s, e, 'locked', v))));
+  box.append(field('ロック', checkInput(e.locked, (v) => setEl(s, e, 'locked', v)), '画面上でクリックしても選ばれなくなります（一覧からは選べます）'));
+  const groups = s.groups || [];
+  if (groups.length) box.append(field('グループ', selectInput(e.group, [['', '（なし）'], ...groups.map((g) => [g.id, `${g.name}（${g.id}）`])], (v) => setEl(s, e, 'group', v))));
 
   if (e.type === 'rect' || e.type === 'button') {
     box.append(h3(e.type === 'button' ? 'ボタンの見た目' : '塗り'));
@@ -929,8 +1515,40 @@ function inspectText(box, s, e) {
   const rk = isText ? 'render' : 'labelRender';
   const tk = isText ? 'text' : 'label';
   const ck = isText ? 'color' : 'labelColor';
-  const game = e[rk] === 'game';
   box.append(h3(isText ? '文字' : 'ラベル'));
+  box.append(field(isText ? '本文' : 'ラベル', textInput(e[tk], (v) => setEl(s, e, tk, v), { multiline: true })));
+  const styleKey = e.textStyle;
+  const style = styleKey ? project().textStyles?.[styleKey] : null;
+  box.append(field('文字スタイル', textStyleSelect(styleKey, (v) => {
+    // ゲーム内フォントのスタイルにするときは、9px行に合わせる
+    const next = v ? project().textStyles[v] : null;
+    const ops = [{ op: 'set', screen: s.id, element: e.id, path: 'textStyle', value: v }];
+    if (isText && next?.render === 'game') ops.push({ op: 'patch_element', screen: s.id, element: e.id, values: { y: Math.round(e.y / LINE) * LINE, h: Math.max(LINE, Math.round(e.h / LINE) * LINE) } });
+    commit(ops, `文字スタイル ${e.id}`);
+  }), 'スタイルを直すと、それを使う文字すべてに反映されます'));
+  if (style) {
+    const tools = document.createElement('div'); tools.className = 'alignbar';
+    tools.append(
+      btn('スタイルから切り離す', 'スタイルの値をこの文字にコピーして、スタイルとのつながりを外します', () => {
+        const values = {};
+        const r = applyTextStyle(project(), { ...e });
+        for (const k of isText ? TEXT_STYLE_KEYS : ['labelRender', 'fontFamily', 'fontSize', 'pixel', 'wordSpacing', 'bold', 'labelColor', 'shadow']) if (k in r) values[k] = r[k];
+        commit([{ op: 'patch_element', screen: s.id, element: e.id, values: { ...values, textStyle: '' } }], `スタイル切り離し ${e.id}`);
+      }),
+      btn('スタイルを編集', '画面の設定（何も選ばない状態）の「文字スタイル」で編集します', () => { setSel([]); renderPanels(); draw(); $('#inspector').querySelector('[data-text-styles]')?.scrollIntoView(); }),
+    );
+    box.append(tools);
+    box.append(note(`見た目はスタイル「${style.name || styleKey}」の値を使っています。`));
+    return;
+  }
+  if (isText) box.append(btn('この文字からスタイルを作る', '今の見た目を新しい文字スタイルとして登録し、この文字に使います', () => {
+    const key = prompt('スタイルの名前（英小文字・数字・_ . -。例: heading）');
+    if (!key) return;
+    const style = { name: key };
+    for (const k of TEXT_STYLE_KEYS) style[k] = e[k];
+    commit([{ op: 'set_text_style', key, style }, { op: 'set', screen: s.id, element: e.id, path: 'textStyle', value: key }], `文字スタイル作成 ${key}`);
+  }));
+  const game = e[rk] === 'game';
   box.append(field('描画', selectInput(e[rk], TEXT_RENDERS.map((r) => [r, r === 'game' ? 'ゲーム内フォント' : '画像に焼き込み']), (v) => {
     const ops = [{ op: 'set', screen: s.id, element: e.id, path: rk, value: v }];
     if (v === 'game' && isText) {
@@ -939,7 +1557,6 @@ function inspectText(box, s, e) {
     }
     commit(ops, `描画方式 ${e.id}`);
   }), game ? 'ゲームの文字で表示（8px固定・日本語可）。y は9px行、h で行数が決まります。常に最前面に描かれます' : '任意のフォントを画像にします。見出しは英語のドットフォント推奨'));
-  box.append(field(isText ? '本文' : 'ラベル', textInput(e[tk], (v) => setEl(s, e, tk, v), { multiline: true })));
   if (!game) {
     box.append(field('フォント', textInput(e.fontFamily, (v) => {
       const f = customFonts.find((x) => x.family === v);
@@ -1072,6 +1689,7 @@ function inspectScreen(box, s) {
   box.append(field('パック説明', textInput(p.description, (v) => setPj('description', v))));
   box.append(field('テクスチャ倍率', selectInput(p.textureScale, [1, 2, 3, 4].map((n) => [n, `${n}倍`]), (v) => setPj('textureScale', Number(v))), '大きいほど文字が滑らかになり、パックが大きくなります'));
   themeEditor(box);
+  textStyleEditor(box);
   box.append(h3('標準GUIスキン（全体に影響）'));
   box.append(note('ここで指定した画像はMinecraftの全ての標準ボタン/スクロールバーを置き換えます。画面単位では変えられません。', 'warn'));
   const assetOpts = [['', '（変更しない）'], ...Object.entries(p.assets).map(([id, a]) => [id, a.name])];
