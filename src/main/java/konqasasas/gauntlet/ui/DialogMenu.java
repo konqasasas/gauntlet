@@ -3,6 +3,7 @@ package konqasasas.gauntlet.ui;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Function;
 import java.util.logging.Level;
 import com.google.gson.*;
 import io.papermc.paper.connection.PlayerGameConnection;
@@ -18,6 +19,7 @@ import io.papermc.paper.registry.set.RegistrySet;
 import konqasasas.gauntlet.data.*;
 import konqasasas.gauntlet.i18n.Msg;
 import konqasasas.gauntlet.lobby.Lobby;
+import konqasasas.gauntlet.pack.PackStatus;
 import konqasasas.gauntlet.play.Participants;
 import net.kyori.adventure.key.Key;
 import net.kyori.adventure.nbt.api.BinaryTagHolder;
@@ -46,6 +48,7 @@ public final class DialogMenu implements Listener,CommandExecutor {
     private final Lobby lobby;
     private final Participants participants;
     private DialogTemplates templates=DialogTemplates.empty(NAMESPACE);
+    private Function<Player,PackStatus.State> packState=p -> PackStatus.State.READY;
 
     public DialogMenu(JavaPlugin plugin,PlayerData data,Lobby lobby,Participants participants) {
         this.plugin=plugin; this.data=data; this.lobby=lobby; this.participants=participants;
@@ -74,8 +77,18 @@ public final class DialogMenu implements Listener,CommandExecutor {
         return true;
     }
 
+    /** Where the menu's resource pack is for a player (ResourcePacks.menuState); screens wait for it. */
+    public void packState(Function<Player,PackStatus.State> packState) { this.packState=packState; }
+
     /** Shows a screen drawn for this player; tells the player when it exists nowhere. */
     public boolean open(Player player,String screen) {
+        // Before the pack has loaded the image tiles and space font are missing and the layout breaks.
+        switch(packState.apply(player)) {
+            case READY -> {}
+            case LOADING -> { Msg.send(player,"menu.pack.loading"); return false; }
+            case DECLINED -> { Msg.send(player,"menu.pack.declined"); return false; }
+            case FAILED -> { Msg.send(player,"menu.pack.failed"); return false; }
+        }
         Dialog dialog=null;
         JsonObject json=templates.select(screen,values(player));
         if(json!=null) {

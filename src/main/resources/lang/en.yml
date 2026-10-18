@@ -148,6 +148,9 @@ menu.unavailable: "<gray>This is not available yet."
 menu.lobby.off: "No lobby is set up."
 menu.emote.in-course: "Emotes cannot be used during a course."
 menu.emote.unavailable: "This emote is not available right now."
+menu.pack.loading: "<yellow>The resource pack is still loading. Open the menu again once it has finished."
+menu.pack.declined: "<red>The menu needs the server resource pack, which you declined. In the server list, select this server, choose Edit, set Server Resource Packs to Enabled, and join again."
+menu.pack.failed: "<red>The resource pack could not be loaded, so the menu cannot be shown. Please rejoin."
 
 # ---- Chat translation ----
 chat.original: "<gray>Original (<language>)"

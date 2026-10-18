@@ -138,6 +138,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             menu.start();
             packs=new ResourcePacks(this);
             packs.start();
+            menu.packState(packs::menuState);
             getLogger().info("Parkour Gauntlet ready: /gauntlet kit, /course (Paper 26.3)");
         } catch(IOException|RuntimeException e) {
             getLogger().log(Level.SEVERE,"Cannot initialize Parkour Gauntlet; existing state was preserved",e);

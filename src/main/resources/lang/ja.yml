@@ -150,6 +150,9 @@ menu.unavailable: "<gray>この項目は準備中です。"
 menu.lobby.off: "ロビーが設定されていません。"
 menu.emote.in-course: "コース中はエモートを使えません。"
 menu.emote.unavailable: "このエモートは今は使えません。"
+menu.pack.loading: "<yellow>リソースパックを読み込み中です。読み込みが終わってから、もう一度開いてください。"
+menu.pack.declined: "<red>リソースパックを受け取っていないため、メニューを表示できません。サーバー一覧でこのサーバーを選んで「編集」から「サーバーリソースパック」を「有効」にし、入り直してください。"
+menu.pack.failed: "<red>リソースパックを読み込めなかったため、メニューを表示できません。入り直してみてください。"
 
 # ---- チャット翻訳 ----
 chat.original: "<gray>原文（<language>）"

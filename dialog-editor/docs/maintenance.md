@@ -54,7 +54,7 @@
 
 - **段階D・Eの書き出しは、まだ試験用のサーバーに入れていない。** 今の `config/menu/`（本番に出すメニュー）は、それより前の書き出し（r149）。D・E のあとの書き出しで、実機の見た目が変わらないことを確かめる必要がある。
 - 設定画面で `translate_lang=vi`（ベトナム語）のとき、文字の上の記号が枠から 2px はみ出す（`audit` で検出済み・未対応）。
-- **リソースパックの読み込みを待たずにメニューが開く。** [plugin-handoff.md](plugin-handoff.md) の 5 では「読み込み完了（SUCCESSFULLY_LOADED）を待ってから画面を開く」としているが、プラグインの今の作り（参加時にパックを送る `ResourcePacks` と、`/menu` で開く `DialogMenu`）は待っていない。読み込み前に開くと画像タイルや空白フォントがなく、レイアウトが崩れる。
+- ~~リソースパックの読み込みを待たずにメニューが開く。~~ 対応済み（2026-10-18）。メニュー用のパックを読み込み終えるまで、プラグインは画面を開かずに案内を出す（[plugin-handoff.md](plugin-handoff.md) の 5）。
 - VPS でのログインは nginx のパスワード（`gauntlet-dialog-user`）に決まった。**同時編集**（複数人が同時に開いたとき）の扱いは決めていない。API は revision による競合検出を持っているので、片方の編集が拒否されることはあっても、黙って上書きされることはない。
 - `tools/fetch-vanilla.mjs` の client.jar の候補に、CurseForge の既定の場所（`%USERPROFILE%\curseforge\minecraft\Install\versions\26.3\26.3.jar`）を足した。前の候補 `C:/mc/dialog-gui/research/` はもうない。候補にないときは `--download-jar` で公式の配布から取る。
 - 移動前の作業ツリーにあった `data/project.json` の変更と `data/assets/` は、ユーザーが試しにいじったもの。**コミットしない。**

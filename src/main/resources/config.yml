@@ -29,6 +29,8 @@ resource-packs:
   files:
     - "plugins/BetterModel/build.zip"
     - "plugins/ParkourGauntlet/menu/resourcepack.zip"
+  # メニュー用のパック。これを読み込み終えるまでメニューは開かない
+  menu-file: "plugins/ParkourGauntlet/menu/resourcepack.zip"
   # ファイルの変化を調べる間隔（秒）。変わったら参加中の人にも送り直す
   check-seconds: 10
 

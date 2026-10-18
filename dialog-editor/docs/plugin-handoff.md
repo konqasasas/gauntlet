@@ -109,7 +109,7 @@ payload の ID（`c01` や `emote_01`）は見本の仮の値。実際のコー�
 - Paper の API でパックを送り（URL と SHA-1）、**読み込み完了（SUCCESSFULLY_LOADED）を待ってから**画面を開く。読み込み前に開くと画像タイルや空白フォントが無く、レイアウトが崩れる。
 - 既存のサーバーパックがある場合は、追加のパックとして送るか、統合する。統合するときは `assets/dcg/` と `credits.txt` をそのまま入れる。
 - `credits.txt` は使ったフォントのクレジット（5x5 Pixel、CC BY-SA 3.0）。パックに残すこと。
-- **今のプラグイン（2026-10-18）**: 参加時に、このパックと BetterModel のパックを別々のパックとして送っている（`pack/ResourcePacks`、gauntlet の [docs/VPS_SERVER.md](../../docs/VPS_SERVER.md) の「リソースパック」）。**読み込み完了を待ってから画面を開く処理はまだない**（[maintenance.md](maintenance.md) の「残っていること」）。
+- **今のプラグイン（2026-10-18）**: 参加時に、このパックと BetterModel のパックを別々のパックとして送っている（`pack/ResourcePacks`、gauntlet の [docs/VPS_SERVER.md](../../docs/VPS_SERVER.md) の「リソースパック」）。各プレイヤーのパックの状態（`pack/PackStatus`）を覚え、**メニュー用のパックが SUCCESSFULLY_LOADED になるまで画面を開かない**。読み込み中・断った・失敗したときは、それぞれの案内（言語ファイルの `menu.pack.*`）を出す。パックを送っていないサーバー（手元の試験用）ではすぐ開く。
 
 ## 6. まだできていないこと（エディター側）
 
