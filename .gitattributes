@@ -1,0 +1,12 @@
+# 行末は LF にそろえる（gauntlet リポジトリと同じ）。画像・フォント・ZIP は手を付けない
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.zip binary

@@ -18,7 +18,8 @@ const JAR_CANDIDATES = [
   opt('jar'),
   process.env.DCG_MC_JAR,
   process.env.APPDATA && path.join(process.env.APPDATA, '.minecraft', 'versions', VERSION, `${VERSION}.jar`),
-  'C:/mc/dialog-gui/research/client-26.3.jar',
+  // CurseForge の既定のインストール先
+  process.env.USERPROFILE && path.join(process.env.USERPROFILE, 'curseforge', 'minecraft', 'Install', 'versions', VERSION, `${VERSION}.jar`),
 ].filter(Boolean);
 const UNIFONT_OBJECTS = ['minecraft/font/include/unifont.json', 'minecraft/font/unifont.zip', 'minecraft/font/unifont_jp.zip'];
 const JAR_TEXTURES = ['ascii.png', 'accented.png', 'nonlatin_european.png'];

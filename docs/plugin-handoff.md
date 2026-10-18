@@ -1,6 +1,6 @@
 # Paperプラグインへの引き継ぎ
 
-Gauntlet サーバーの GUI（Minecraft Java 26.3 / Paper）を、このエディター（`C:\mc\dialog-custom-gui`）で作っています。この資料は、別プロジェクトで作る **Paper プラグイン**に必要なことをまとめたものです。エディター自体はこのプロジェクトで引き続き開発します。
+Gauntlet サーバーの GUI（Minecraft Java 26.3 / Paper）を、このエディター（gauntlet リポジトリの `dialog-editor/`。`C:\mc\gauntlet\dialog-editor`）で作っています。この資料は、同じリポジトリの **Paper プラグイン**に必要なことをまとめたものです。
 
 作成日: 2026-10-17。エディターの revision 42 時点。
 

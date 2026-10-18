@@ -2,20 +2,20 @@
 
 Minecraft Java 26.3 / Paper 向けに、**Dialog + リソースパック**でGUIを作るWebエディターです。core shader は使いません（出力時に shader ファイルが混入しないことも検査します）。
 
-現段階はエディター・CLI・書き出しまで。Paperプラグインは次の段階で作ります（書き出したデータパックだけでも、画面表示と画面遷移は動きます）。
+gauntlet リポジトリの `dialog-editor/` にあります。書き出した雛形は、同じリポジトリの Paper プラグイン（ParkourGauntlet）が読みます（書き出したデータパックだけでも、画面表示と画面遷移は動きます）。
 
 ## 起動
 
 Node.js 22 以降。
 
 ```powershell
-cd C:\mc\dialog-custom-gui
+cd C:\mc\gauntlet\dialog-editor
 npm install
 node tools/fetch-vanilla.mjs   # 初回のみ: ゲーム内フォントの資源を data/vanilla/ に用意
 node server.mjs
 ```
 
-`fetch-vanilla.mjs` は client.jar（`--jar` で指定。既定は `%APPDATA%\.minecraft\versions\26.3\26.3.jar` か `C:\mc\dialog-gui\research\client-26.3.jar`）からフォント定義と英字等の画像を、Mojang公式のアセット配信から Unifont（日本語など）を取得し、SHA-1 を照合して保存します。ローカル専用で、配布物には含めません。
+`fetch-vanilla.mjs` は client.jar（`--jar` か環境変数 `DCG_MC_JAR` で指定。既定は `%APPDATA%\.minecraft\versions\26.3\26.3.jar` か、CurseForge の `%USERPROFILE%\curseforge\minecraft\Install\versions\26.3\26.3.jar`）からフォント定義と英字等の画像を、Mojang公式のアセット配信から Unifont（日本語など）を取得し、SHA-1 を照合して保存します。ローカル専用で、配布物には含めません。
 
 ブラウザーで `http://127.0.0.1:4320/` を開きます。ポートは `DCG_PORT`、データの場所は `DCG_DATA` / `DCG_EXPORTS` で変えられます。ローカル（127.0.0.1）専用です。
 
