@@ -9,7 +9,8 @@ import { applyOps, validateProject, migrateProject, defaultProject, defaultScree
 import { spaceString, glyphAdvance, spaceFontJson, tileGeometry } from '../lib/compile.mjs';
 import { buildScreen, getAtlas, rasterizeScreen } from '../lib/export.mjs';
 import { createCanvas } from '@napi-rs/canvas';
-import { auditScreen } from '../lib/audit.mjs';
+import { auditScreen, auditAllStates } from '../lib/audit.mjs';
+import { lintScreen, ownerId, issueText, issueFromText } from '../lib/lint.mjs';
 import { sampleProject } from '../lib/sample.mjs';
 import { selectStates, stateMatches } from '../lib/states.mjs';
 import { encodePNG, decodeOwnPNG, makeZip } from '../lib/binary.mjs';
@@ -440,6 +441,51 @@ test('中央寄せはインク（描かれる画素）で揃い、点検で検�
   const issues = auditScreen(p, s, vanilla.atlas);
   assert.equal(issues.filter((i) => i.element === 'lbl').length, 0, JSON.stringify(issues));
   assert.ok(issues.some((i) => i.element === 'off' && i.kind === 'center-x'));
+});
+
+test('その場の警告: 9px行・クリック範囲・状態の既定値・要素への結び付け', () => {
+  const p = defaultProject();
+  const s = defaultScreen('t', { width: 120, height: 36 });
+  s.elements.push(defaultElement('text', { id: 'ok', render: 'game', x: 0, y: 9, w: 40, h: 9, text: 'OK' }));
+  s.elements.push(defaultElement('text', { id: 'off', render: 'game', x: 0, y: 13, w: 40, h: 9, text: 'NG' }));
+  s.elements.push(defaultElement('hotspot', { id: 'hs', x: 50, y: 4, w: 20, h: 9, tooltip: 'x' }));
+  s.elements.push(defaultElement('rect', { id: 'tabbed', x: 80, y: 0, w: 10, h: 9, state: 'tab=a' }));
+  p.screens.push(s);
+  const issues = lintScreen(p, s);
+  const of = (id) => issues.filter((i) => i.element === id);
+  assert.equal(of('ok').length, 0);
+  assert.equal(of('off')[0].severity, 'error');
+  assert.equal(of('off')[0].kind, 'row');
+  assert.deepEqual(of('off')[0].box, { x: 0, y: 13, w: 40, h: 9 });
+  assert.equal(of('hs')[0].kind, 'click');
+  const def = issues.find((i) => i.kind === 'state-default');
+  assert.equal(def.element, 'tabbed');
+  assert.equal(issueText(def), 'tabbed: 状態 tab の既定値がありません（画面の stateDefaults）');
+  assert.ok(issues.every((i) => i.live));
+  // 部品の使用箇所の中の要素は、使用箇所の id にまとめる
+  const raw = { elements: [{ id: 'btn' }, { id: 'btn_x' }] };
+  assert.equal(ownerId(raw, 'btn__hs'), 'btn');
+  assert.equal(ownerId(raw, 'btn_x'), 'btn_x');
+  assert.equal(ownerId(raw, 'nope'), null);
+  // 書き出しの文から: 要素の id か行の番号で場所を付ける
+  const r = resolveScreen(p, s);
+  assert.equal(issueFromText('warn', 'compile', r, 'off: なにか').element, 'off');
+  assert.deepEqual(issueFromText('error', 'layout', r, '行2: 幅が違う').box, { x: 0, y: 18, w: 120, h: 9 });
+});
+
+test('見た目の点検は状態の値ごとに行い、既定値で出ないものは状態を書き添える', { skip: !HAS_VANILLA && 'data/vanilla なし' }, () => {
+  const p = defaultProject();
+  const s = defaultScreen('t', { width: 120, height: 18 });
+  s.stateDefaults = { tab: 'a' };
+  s.elements.push(defaultElement('text', { id: 'base', render: 'game', x: 0, y: 0, w: 60, h: 9, text: 'HELLO' }));
+  s.elements.push(defaultElement('text', { id: 'over', render: 'game', x: 0, y: 0, w: 60, h: 9, text: 'WORLD', state: 'tab=b' }));
+  p.screens.push(s);
+  assert.equal(auditScreen(p, s, vanilla.atlas, { values: { tab: 'a' } }).length, 0);
+  const all = auditAllStates(p, s, vanilla.atlas);
+  const ov = all.find((i) => i.kind === 'overlap');
+  assert.ok(ov, JSON.stringify(all));
+  assert.match(ov.message, /状態 tab=b のとき/);
+  assert.ok(ov.box && ov.box.w > 0);
 });
 
 test('PNGとZIP', () => {

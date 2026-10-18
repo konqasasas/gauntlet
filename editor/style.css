@@ -79,6 +79,11 @@ h3 { font-size: 12px; margin: 14px 0 6px; padding-top: 8px; border-top: 1px soli
 .diag .e { color: var(--danger); }
 .diag .w { color: var(--warn); }
 .diag .ok { color: var(--accent); }
+.diag .issue { cursor: pointer; }
+.diag .issue:hover { text-decoration: underline; }
+.issues { margin: 4px 0 8px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+.issues .e { color: var(--danger); }
+.issues .w { color: var(--warn); }
 
 .mc-tooltip {
   position: fixed; pointer-events: none; z-index: 10; background: #100010f0; color: #fff; padding: 3px 5px;

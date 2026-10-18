@@ -2,7 +2,7 @@
 
 作成: 2026-10-18（revision 73 時点）
 
-進み具合: **段階A・B・C・D 完了**（2026-10-18）。データの版は 6。16画面は部品で作り直し済み（作り直し前後で画素・文字・クリック範囲が同じことを `tools/compare-projects.mjs` で確認）。次は段階E（その場の警告）。説明書は [designer-guide.md](designer-guide.md)。
+進み具合: **段階A〜E すべて完了**（2026-10-18）。データの版は 6。16画面は部品で作り直し済み（作り直し前後で画素・文字・クリック範囲が同じことを `tools/compare-projects.mjs` で確認）。警告は `lib/lint.mjs` の形（`{ severity, kind, element, message, box }`）で画面上に印を出す。説明書は [designer-guide.md](designer-guide.md)。
 
 デザイナーがブラウザーのエディターだけで画面を作り、見た目を自由に変えられるようにする。プラグイン（Gauntlet）は書き出しの形が変わらない限り触らない。
 
@@ -183,6 +183,13 @@
 ### データ・サーバー
 
 - 警告を文字列から `{ element, kind, severity, message, box }` の形に直す（`buildScreen` と `audit.mjs`）。CLI の表示は今と同じ文にする。
+
+### 実装メモ
+
+- `lib/lint.mjs`: 警告の形（`issue` / `issueText` / `issueFromText`）、その場の点検 `lintScreen`（ブラウザーと Node の両方）、展開後の id を画面の要素にまとめる `ownerId`、状態の値の組み合わせ `stateCombos`。
+- `buildScreen` は `issues` を返し、`errors` / `warnings` はそこから今と同じ文で作る（全画面で文が変わらないことを確認）。9px行からずれた文字は保存の時点で弾かれるので、書き出しの検証では数えない。
+- `audit.mjs` の `auditAllStates`: 状態の値ごとに点検してまとめる（設定画面で 43 通り・約35ms）。`/api/compile` の `audit` と CLI の `audit` はこれを使う。
+- 確定（ops）が検証で拒否されたときは、手元のデータをサーバーの内容に戻す（ドラッグで先に動かしていた分が残らないように）。
 
 ---
 

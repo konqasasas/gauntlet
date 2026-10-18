@@ -8,6 +8,7 @@ import {
 } from '/lib/model.mjs';
 import { elementShown, stateMatches, stateKeys, parseConditions, combineStates, formatCondition } from '/lib/states.mjs';
 import { isComponentRef, findComponent, COMPONENT_PREFIX, H_CONSTRAINTS, V_CONSTRAINTS, BIND_TARGETS, componentUsers } from '/lib/components.mjs';
+import { lintScreen, ownerId } from '/lib/lint.mjs';
 
 // ---- 状態 ----------------------------------------------------------------
 const st = {
@@ -268,7 +269,8 @@ async function commit(ops, label) {
     return true;
   } catch (e) {
     if (e.status === 409) { setStatus('他の編集を取り込みました', true); await load(); }
-    else { setStatus(e.message.split('\n')[0], true); alert(e.message); renderAll(); }
+    // ドラッグなどで手元のデータを先に変えていることがあるので、サーバーの内容に戻す
+    else { setStatus(e.message.split('\n')[0], true); alert(e.message); await load(); }
     return false;
   }
 }
@@ -289,12 +291,12 @@ function scheduleCompileInfo() {
   compileTimer = setTimeout(async () => {
     const s = screen();
     if (!s) return;
-    if (s.isComponent) { st.compileInfo = null; $('#diag').innerHTML = '<div class="muted">部品のマスターを編集中です。書き出しの検証は、部品を置いた画面で確かめてください。</div>'; return; }
+    if (s.isComponent) { st.compileInfo = null; renderDiag(); return; }
     try {
       st.compileInfo = { screenId: s.id, ...(await api('GET', `/api/compile/${s.id}?${stateParam(s).slice(1)}`)) };
-      renderDiag();
+      if (st.mode === 'edit') { draw(); if (selected()) renderInspector(); } else renderDiag();
       if (st.mode === 'compiled') loadCompiledImage();
-    } catch (e) { $('#diag').innerHTML = `<div class="e">${esc(e.message)}</div>`; }
+    } catch (e) { st.diagHtml = null; $('#diag').innerHTML = `<div class="e">${esc(e.message)}</div>`; }
   }, 350);
 }
 
@@ -396,9 +398,84 @@ function drawEdit(s) {
       for (const r of clickRows(e.y, e.h, s.height)) ctx.fillRect(Math.max(0, e.x), r * LINE, Math.min(e.w, s.width - e.x), LINE);
     }
   }
+  drawIssueMarks(s, lw);
   drawSelection(s, lw);
   ctx.restore();
+  renderDiag();
   $('#modeNote').textContent = `本文 ${s.width}×${s.height} GUI px / テクスチャ ${project().textureScale}倍`;
+}
+
+// ---- 警告（その場の点検＋サーバーの検証） ------------------------------------------
+// その場で分かるもの（lintScreen）は描くたびに求め直す（ドラッグ中も）。
+// 書き出しの検証・見た目の点検はサーバーの結果（少し遅れる）。動かしている要素のサーバーの印は隠す。
+function screenIssues(s) {
+  const live = lintScreen(project(), s, { resolved: resolveScreen(project(), s), component: !!s.isComponent });
+  const info = st.compileInfo;
+  const fromServer = info && info.screenId === s.id && !s.isComponent
+    ? [...(info.issues || []).filter((i) => !i.live), ...(info.audit || []).map((a) => ({ ...a, severity: a.severity || 'warn', audit: true }))]
+    : [];
+  const moving = st.drag?.origs;
+  const list = [...live, ...fromServer.filter((i) => !(moving && moving.has(ownerId(s, i.element))))];
+  for (const i of list) i.owner = ownerId(s, i.element);
+  return list;
+}
+
+const MARK_R = 6; // 印の半径（画面の px）
+function drawIssueMarks(s, lw) {
+  st.marks = [];
+  if (!$('#issueChk').checked) return;
+  const groups = new Map();
+  for (const i of screenIssues(s)) {
+    if (!i.box) continue;
+    const k = `${i.owner || ''}|${i.box.x},${i.box.y},${i.box.w},${i.box.h}`;
+    if (!groups.has(k)) groups.set(k, { box: i.box, owner: i.owner, issues: [] });
+    groups.get(k).issues.push(i);
+  }
+  const r = MARK_R * lw;
+  const used = [];
+  for (const g of groups.values()) {
+    const err = g.issues.some((i) => i.severity === 'error');
+    const color = err ? '#ff5b5b' : '#ffc53d';
+    ctx.strokeStyle = err ? 'rgba(255,91,91,0.9)' : 'rgba(255,197,61,0.8)'; ctx.lineWidth = lw;
+    ctx.setLineDash([2 * lw, 2 * lw]);
+    ctx.strokeRect(g.box.x + lw / 2, g.box.y + lw / 2, Math.max(lw, g.box.w - lw), Math.max(lw, g.box.h - lw));
+    ctx.setLineDash([]);
+    // 印は範囲の右上。画面の外へ出ないように寄せ、ほかの印と重なれば左へずらす
+    let x = clamp(g.box.x + g.box.w, -MARGIN + r, s.width + MARGIN - r), y = clamp(g.box.y, -MARGIN + r, s.height + MARGIN - r);
+    while (used.some((u) => Math.hypot(u.x - x, u.y - y) < r * 1.8)) x -= r * 2;
+    used.push({ x, y });
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.strokeStyle = '#1b1d22'; ctx.lineWidth = lw; ctx.stroke();
+    ctx.fillStyle = '#1b1d22'; ctx.font = `bold ${10 * lw}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(g.issues.length > 1 ? String(g.issues.length) : '!', x, y + 0.5 * lw);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+    st.marks.push({ x, y, r, ...g });
+  }
+}
+
+function markAt(p) {
+  const hit = (st.marks || []).filter((m) => Math.hypot(m.x - p.x, m.y - p.y) <= m.r * 1.2);
+  return hit[hit.length - 1] || null;
+}
+
+function issueLine(i) {
+  return `${i.severity === 'error' ? '書き出せない' : i.audit ? '見た目' : '注意'}: ${i.element ? `${i.element} — ` : ''}${i.message}`;
+}
+
+// 警告の要素を選び、画面をそこへ寄せる
+function focusIssue(i) {
+  const s = screen();
+  if (i.owner) {
+    const e = s.elements.find((x) => x.id === i.owner);
+    if (e) { st.scope = ''; setSel(unitEls(s, unitOf(s, e)).map((x) => x.id)); }
+  }
+  renderPanels(); draw();
+  if (i.box) {
+    const stg = $('#stage');
+    const cx = canvas.offsetLeft + (MARGIN + i.box.x + i.box.w / 2) * st.z, cy = canvas.offsetTop + (MARGIN + i.box.y + i.box.h / 2) * st.z;
+    stg.scrollTo({ left: cx - stg.clientWidth / 2, top: cy - stg.clientHeight / 2, behavior: 'smooth' });
+  }
 }
 
 // 選択・中に入っているグループ・範囲選択・吸着線
@@ -533,6 +610,8 @@ canvas.addEventListener('mousedown', (ev) => {
   flushNudge(true);
   const s = screen();
   const p = canvasPoint(ev);
+  const mark = markAt(p);
+  if (mark) { hideTip(); focusIssue(mark.issues[0]); return; }
   const els = selectedEls();
   // 選択範囲の角・辺をつかむと大きさの変更
   if (els.length && !els.some((e) => e.locked)) {
@@ -583,7 +662,18 @@ window.addEventListener('mousemove', (ev) => {
   const p = canvasPoint(ev);
   $('#cursorPos').textContent = `x ${Math.floor(p.x)}, y ${Math.floor(p.y)}（行 ${Math.floor(p.y / LINE)}）`;
   const d = st.drag;
-  if (!d) return;
+  if (!d) {
+    // 警告の印に乗せると内容
+    const m = ev.target === canvas ? markAt(p) : null;
+    const tt = $('#tooltip');
+    if (m) {
+      tt.textContent = m.issues.map(issueLine).join('\n');
+      tt.hidden = false; tt.style.left = `${ev.clientX + 12}px`; tt.style.top = `${ev.clientY - 18}px`;
+      canvas.style.cursor = 'pointer';
+      st.markTip = true;
+    } else if (st.markTip) { tt.hidden = true; canvas.style.cursor = ''; st.markTip = false; }
+    return;
+  }
   const s = screen();
   if (d.kind === 'marquee') {
     d.cur = p;
@@ -1592,16 +1682,44 @@ function inspectInstance(box, s, e) {
 }
 
 function renderDiag() {
-  const info = st.compileInfo;
   const box = $('#diag');
-  if (!info || info.screenId !== screen()?.id) { box.innerHTML = ''; return; }
+  const s = screen();
+  const info = s && st.compileInfo && st.compileInfo.screenId === s.id ? st.compileInfo : null;
   const parts = [];
-  if (vanilla.available === false) parts.push(`<div class="e">ゲーム内フォントを読み込めません: ${esc(vanilla.error)}</div>`);
-  for (const e of info.errors) parts.push(`<div class="e">エラー: ${esc(e)}</div>`);
-  for (const w of info.warnings) parts.push(`<div class="w">注意: ${esc(w)}</div>`);
-  for (const a of info.audit || []) parts.push(`<div class="w">見た目: ${esc(a.element)} — ${esc(a.message)}</div>`);
-  if (!info.errors.length) parts.push(`<div class="ok">検証OK — タイル ${info.stats.tiles} 枚 / 行 ${info.stats.lines} / テキスト部品 ${info.stats.components} / JSON ${(info.stats.jsonBytes / 1024).toFixed(1)} KB / クリック区間 ${info.clicks.length}（r${info.revision}）</div>`);
-  box.innerHTML = parts.join('');
+  let issues = [];
+  if (s) {
+    issues = screenIssues(s);
+    if (vanilla.available === false) parts.push(`<div class="e">ゲーム内フォントを読み込めません: ${esc(vanilla.error)}</div>`);
+    issues.forEach((i, n) => parts.push(`<div class="${i.severity === 'error' ? 'e' : 'w'} issue" data-n="${n}"${i.owner || i.box ? ' title="クリックでその場所へ"' : ''}>${esc(issueLine(i))}</div>`));
+    if (s.isComponent) parts.push('<div class="muted">部品のマスターを編集中です。書き出しの検証は、部品を置いた画面で確かめてください（ここでは、その場で分かる点検だけ出します）。</div>');
+    else if (info && !issues.some((i) => i.severity === 'error')) parts.push(`<div class="ok">検証OK — タイル ${info.stats.tiles} 枚 / 行 ${info.stats.lines} / テキスト部品 ${info.stats.components} / JSON ${(info.stats.jsonBytes / 1024).toFixed(1)} KB / クリック区間 ${info.clicks.length}（r${info.revision}）</div>`);
+  }
+  st.diagIssues = issues;
+  const html = parts.join('');
+  if (html === st.diagHtml) return; // ドラッグ中に毎回作り直さない
+  st.diagHtml = html;
+  box.innerHTML = html;
+}
+$('#diag').addEventListener('click', (ev) => {
+  const d = ev.target.closest('.issue');
+  const i = d && st.diagIssues?.[Number(d.dataset.n)];
+  if (!i) return;
+  if (st.mode !== 'edit') setMode('edit');
+  focusIssue(i);
+});
+
+// 選んだ要素の警告（右の欄の上に出す）
+function elementIssues(box, s, ids) {
+  const list = screenIssues(s).filter((i) => i.owner && ids.includes(i.owner));
+  if (!list.length) return;
+  const d = document.createElement('div'); d.className = 'issues';
+  for (const i of list) {
+    const row = document.createElement('div');
+    row.className = i.severity === 'error' ? 'e' : 'w';
+    row.textContent = `${i.severity === 'error' ? '✖' : '⚠'} ${i.element && i.element !== i.owner ? `${i.element.slice(i.owner.length + 2)}: ` : ''}${i.message}`;
+    d.append(row);
+  }
+  box.append(d);
 }
 
 // ---- インスペクター ------------------------------------------------------------
@@ -2065,6 +2183,7 @@ function inspectElement(box, s, e) {
   head.append(tools);
   box.append(head);
   box.append(alignBar(1));
+  elementIssues(box, s, [e.id]);
   box.append(field('ID', textInput(e.id, (v) => commit([{ op: 'set', screen: s.id, element: e.id, path: 'id', value: v }], `id ${e.id}→${v}`).then((ok) => { if (ok) { setSel([v]); renderAll(); } }))));
   box.append(field('名前', textInput(e.name, (v) => setEl(s, e, 'name', v), { placeholder: '一覧での表示名' })));
   const geo = document.createElement('div'); geo.className = 'field row4';
@@ -2336,6 +2455,7 @@ document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('clic
 }));
 $('#zoomSel').addEventListener('change', (ev) => { st.zoom = Number(ev.target.value); if (st.mode === 'compiled') loadCompiledImage(); draw(); });
 $('#gridChk').addEventListener('change', draw);
+$('#issueChk').addEventListener('change', draw);
 $('#clickChk').addEventListener('change', () => { if (st.mode === 'compiled') loadCompiledImage(); draw(); });
 
 // ---- 同期（CLI/API からの変更を反映） -----------------------------------------------

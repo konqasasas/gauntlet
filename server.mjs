@@ -8,7 +8,7 @@ import { loadImage } from '@napi-rs/canvas';
 import { Store } from './lib/store.mjs';
 import { OPS, ELEMENT_TYPES, ACTION_TYPES, FOOTER_ACTION_TYPES, INPUT_TYPES, SKIN_SLOTS, defaultElement, defaultScreen, OpError } from './lib/model.mjs';
 import { exportProject, previewPNG, buildScreen, loadAssetImages, fontFamilies, getAtlas, getPixelFonts, FONTS_DIR } from './lib/export.mjs';
-import { auditScreen } from './lib/audit.mjs';
+import { auditAllStates } from './lib/audit.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.DCG_PORT || 4320);
@@ -24,7 +24,7 @@ const STATIC = {
   '/style.css': ['editor/style.css', 'text/css; charset=utf-8'],
 };
 // ブラウザーと共有するモジュール（Node専用のものは出さない）
-const SHARED = new Set(['model.mjs', 'states.mjs', 'components.mjs', 'raster.mjs', 'frame.mjs', 'compile.mjs', 'simulate.mjs', 'gametext.mjs']);
+const SHARED = new Set(['model.mjs', 'states.mjs', 'lint.mjs', 'components.mjs', 'raster.mjs', 'frame.mjs', 'compile.mjs', 'simulate.mjs', 'gametext.mjs']);
 const FONT_TYPES = { '.ttf': 'font/ttf', '.otf': 'font/otf', '.woff': 'font/woff', '.woff2': 'font/woff2' };
 const IMAGE_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' };
 
@@ -178,7 +178,7 @@ async function route(req, res) {
     return send(res, 200, {
       revision: store.revision,
       stats: b.compiled.stats, errors: b.errors, warnings: b.warnings, clicks: b.compiled.clicks,
-      audit: vanilla.atlas ? auditScreen(store.project, screen, vanilla.atlas) : [],
+      issues: b.issues, audit: vanilla.atlas ? auditAllStates(store.project, screen, vanilla.atlas) : [],
       ...(full ? { dialog: b.compiled.dialog, font: b.compiled.font } : {}),
     });
   }
