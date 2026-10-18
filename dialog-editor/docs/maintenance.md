@@ -24,7 +24,7 @@
 - **`data/project.json` は直接書き換えない。** エディターを起動した状態で `node cli.mjs ...` か `/api/ops` を使う（検証・Undo・ブラウザーへの同期が保たれる）。
 - **`examples/*_mock.mjs` は気軽に流さない。** 流すと画面が作り直され、エディターでの手作業（デザイナーの作業を含む）が上書きされる。デザイナーが触り始めた今は `project.json` が正本。
 - `lib/` を変えたら `server.mjs` を再起動する（古いコードのまま動き続けるため）。
-- 変更したら必ず `npm test`（28件）。
+- 変更したら必ず `npm test`（28件）。**テストは `data/vanilla`（ゲーム内フォントの資源）を使う**ので、ないと一部が失敗する。git には入れないので、新しく取り出した場所では先に `node tools/fetch-vanilla.mjs` を流す。client.jar が手元にない環境（GitHub Actions・VPS）では `--download-jar` で Mojang 公式の配布から取得する（SHA-1 を照合、jar は保存しない）。GitHub Actions は取得した資源をキャッシュして使う。
 - 見た目に関わる変更のあとは `node cli.mjs audit`（文字のインク基準の中央ずれ・はみ出し・重なり）。
 - 内部の作り（展開・書き出し）を変えたときは、変更前後の `project.json` を比べ、画面ごと・状態の値ごとに画素・文字・クリック範囲が変わっていないことを確かめる。
 
@@ -56,5 +56,5 @@
 - 設定画面で `translate_lang=vi`（ベトナム語）のとき、文字の上の記号が枠から 2px はみ出す（`audit` で検出済み・未対応）。
 - **リソースパックの読み込みを待たずにメニューが開く。** [plugin-handoff.md](plugin-handoff.md) の 5 では「読み込み完了（SUCCESSFULLY_LOADED）を待ってから画面を開く」としているが、プラグインの今の作り（参加時にパックを送る `ResourcePacks` と、`/menu` で開く `DialogMenu`）は待っていない。読み込み前に開くと画像タイルや空白フォントがなく、レイアウトが崩れる。
 - VPS でのログインは nginx のパスワード（`gauntlet-dialog-user`）に決まった。**同時編集**（複数人が同時に開いたとき）の扱いは決めていない。API は revision による競合検出を持っているので、片方の編集が拒否されることはあっても、黙って上書きされることはない。
-- `tools/fetch-vanilla.mjs` の client.jar の候補に、CurseForge の既定の場所（`%USERPROFILE%\curseforge\minecraft\Install\versions\26.3\26.3.jar`）を足した。前の候補 `C:/mc/dialog-gui/research/` はもうない。
+- `tools/fetch-vanilla.mjs` の client.jar の候補に、CurseForge の既定の場所（`%USERPROFILE%\curseforge\minecraft\Install\versions\26.3\26.3.jar`）を足した。前の候補 `C:/mc/dialog-gui/research/` はもうない。候補にないときは `--download-jar` で公式の配布から取る。
 - 移動前の作業ツリーにあった `data/project.json` の変更と `data/assets/` は、ユーザーが試しにいじったもの。**コミットしない。**

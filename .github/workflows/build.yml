@@ -19,15 +19,15 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build and test
         run: ./gradlew build --no-daemon
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: parkour-gauntlet
           path: build/libs/parkour-gauntlet-0.1.0.jar
@@ -40,13 +40,22 @@ jobs:
       run:
         working-directory: dialog-editor
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: dialog-editor/package-lock.json
       - run: npm ci
+      # The tests need the game font data (Minecraft assets, never committed). It comes from
+      # Mojang's official downloads, checked by SHA-1, and is cached between runs.
+      - id: vanilla
+        uses: actions/cache@v6
+        with:
+          path: dialog-editor/data/vanilla
+          key: dialog-vanilla-26.3-${{ hashFiles('dialog-editor/tools/fetch-vanilla.mjs') }}
+      - if: steps.vanilla.outputs.cache-hit != 'true'
+        run: node tools/fetch-vanilla.mjs --download-jar
       - run: npm test
 
   deploy:
@@ -60,8 +69,8 @@ jobs:
     env:
       VPS: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: parkour-gauntlet
           path: dist

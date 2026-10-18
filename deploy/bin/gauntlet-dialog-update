@@ -46,7 +46,11 @@ if [[ ! -f $BASE/data/project.json && -f $BASE/app/data/project.json ]]; then
   install -o dialog -g dialog -m 0640 "$BASE/app/data/project.json" "$BASE/data/project.json"
   echo 'Started the editor data from the repository (data/project.json)'
 fi
-[[ -d $BASE/data/vanilla ]] || echo 'Warning: no data/vanilla; game-font previews need it (deploy.ps1 -DialogEditor uploads it from your PC).'
+if [[ ! -d $BASE/data/vanilla ]]; then
+  # Not uploaded: fetch the game font data from Mojang's official downloads (SHA-1 checked).
+  runuser -u dialog -- env HOME="$BASE" DCG_DATA="$BASE/data" node "$BASE/app/tools/fetch-vanilla.mjs" --download-jar \
+    || echo 'Warning: no data/vanilla; game-font previews need it.' >&2
+fi
 
 systemctl restart gauntlet-dialog.service
 sleep 2
