@@ -12,6 +12,12 @@ const A = await uploadArt();
 const STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 const sid = (s) => s.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 const click = (id, x, y, w, action, tooltip) => ({ ...hot(id, x, y, w, 9, { constraints: fixed }), binds: {}, action, tooltip });
+// ランクの札（26×10、文字の行 y の 1px 上から）。名前はインクのまま書き、横にこの札を添える（ランクの色は紙の上の文字には明るすぎるため）
+const RANK_ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+const rankChip = (id, n, x, y, extra = {}) => [
+  img(id, A[`rank_${n}`], x, y - 1, 26, 10, extra),
+  txt(`${id}_t`, RANK_ROMAN[n - 1], x, y, 26, '@ink', { align: 'center', ...extra }),
+];
 
 // ======================= ホーム（ロビー） =======================
 
@@ -75,8 +81,9 @@ const home = screenBase(S('home'), '試作: ホーム', [
   click('gal_hs2', 266, 162, 178, open(S('gallery')), '展示場でこの試練を見る'),
 
   // 下の段
-  txt('me_name', 'Steve', 12, 189, 40, '@sky.3'),
-  txt('me_rank', 'Anulus III', 50, 189, 80, '@ink.sub'),
+  ...rankChip('me_chip', 3, 12, 189),
+  txt('me_name', 'Steve', 42, 189, 50, '@ink'),
+  txt('me_rank', 'Anulus III', 92, 189, 80, '@ink.sub'),
   inst('help', 'ui_button', 358, 180, 86, 21, 'normal', { label: '遊び方', tooltip: '操作のコツやルール', action: open(S('help')) }),
 ]);
 
@@ -371,8 +378,6 @@ function confirmScreen(id, title, under, question, back, keys) {
 // コースの一覧を開いたところは、クリック範囲が変わるので別の画面（proto_ledger_course）
 const LEDGER_COURSES = [['c01', '天空回廊'], ['c02', '氷の回廊'], ['c03', 'スライム工場'], ['c04', '溶岩渡り'], ['c05', '風の通り道'], ['c06', '黒曜石の塔'],
   ['era3', 'Anulus III（時代の合計）'], ['era2', 'Anulus II（時代の合計）']];
-// 名前の色は Anulus の段階ごと（ランクの11色が決まるまでの仮。空の色を濃くしたもの）
-const rankColor = (n) => (n <= 2 ? '@verdigris.dark' : n <= 4 ? '@brass.dark' : n <= 7 ? '@sky.3' : n <= 10 ? '@sky.4' : '@sky.5');
 const LEDGER_PAGES = {
   1: [['Alex', 7, '0:58.10', '10/16'], ['Mia', 6, '0:59.42', '10/17'], ['Sora', 9, '1:00.05', '10/12'], ['Ken', 5, '1:01.77', '10/15'], ['Rio', 4, '1:02.30', '10/17'],
     ['Lena', 6, '1:02.88', '10/14'], ['Taro', 5, '1:03.10', '10/16'], ['Emi', 4, '1:03.45', '10/13'], ['Jun', 8, '1:03.92', '10/18'], ['Aki', 3, '1:04.20', '10/15']],
@@ -418,8 +423,8 @@ function ledgerTable(shapesOnly) {
     const ty = rowY(k), id = `lg_p${page}_r${k}`;
     return [
       txt(`${id}_rank`, String((page - 1) * 10 + k + 1), LX.rank, ty, 24, me ? '@ink' : '@ink.sub', { align: 'right' }),
-      txt(`${id}_name`, me ? `${name}（自分）` : name, LX.name, ty, 100, rankColor(anulus)),
-      txt(`${id}_anulus`, `Anulus ${ROMAN[anulus - 1]}`, LX.anulus, ty, 60, '@ink.sub'),
+      txt(`${id}_name`, me ? `${name}（自分）` : name, LX.name, ty, 100, '@ink'),
+      ...rankChip(`${id}_anulus`, anulus, LX.anulus, ty),
       txt(`${id}_time`, time, LX.time, ty, 52, '@ink', { align: 'right' }),
       txt(`${id}_date`, date, LX.date, ty, 50, '@ink.faint'),
       txt(`${id}_umbra`, me ? '自分の Umbra' : 'Umbra と辿る', LX.umbra, ty, 84, '@verdigris.dark'),
@@ -463,10 +468,10 @@ const profile = screenBase(S('profile'), '試作: プロフィール', [
   nine('pf_card', A.card, 8, 21, 140, 184, { constraints: fixed }),
   img('pf_face', A.face, 16, 27, 32, 32),
   rect('pf_face_frame', 15, 26, 34, 34, '#00000000', { border: '@brass.dark', borderWidth: 1 }),
-  txt('pf_name', 'Steve', 54, 27, 90, rankColor(3)),
+  txt('pf_name', 'Steve', 54, 27, 90, '@ink'),
   txt('pf_rank', 'Anulus III', 54, 36, 90, '@ink.sub'),
-  rect('pf_color', 54, 47, 6, 5, rankColor(3)),
-  txt('pf_color_t', '名前の色', 63, 45, 80, '@ink.faint'),
+  ...rankChip('pf_chip', 3, 54, 45),
+  txt('pf_color_t', '名前の色', 84, 45, 60, '@ink.faint'),
   rect('pf_rule', 16, 66, 124, 1, '@ink.faint'),
   ...heading('pf_comp_h', { ja: '相棒', en: 'Companion' }, 16, 72, 124),
   img('pf_comp', A.companion, 54, 90, 48, 40),

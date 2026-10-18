@@ -21,6 +21,11 @@ const PALETTE = {
   ink: '#2a241bff', 'ink.sub': '#5e5444ff', 'ink.faint': '#8f8470ff',
   verdigris: '#4e8a7cff', 'verdigris.dark': '#2c5249ff', vermilion: '#a5432fff', 'vermilion.dark': '#5e2116ff',
   'sky.1': '#9cc3d9ff', 'sky.2': '#e0a560ff', 'sky.3': '#b0574aff', 'sky.4': '#5a3d6bff', 'sky.5': '#232347ff',
+  // ランク（Anulus I〜XI）の色。チャットや TAB の名前と同じ色（gauntlet の src/main/resources/display.yml の ranks.styles）。
+  // VIII〜XI は2色のグラデーションで、rank.N.to が2色目。紙の上では読めない明るさなので、文字ではなく札の地に使う
+  'rank.1': '#dfe6eaff', 'rank.2': '#a6d4f2ff', 'rank.3': '#74b6f0ff', 'rank.4': '#6f93eeff', 'rank.5': '#f7e07aff', 'rank.6': '#ffb98aff',
+  'rank.7': '#f25d78ff', 'rank.8': '#e97ac8ff', 'rank.8.to': '#f25d78ff', 'rank.9': '#c98bf0ff', 'rank.9.to': '#e97ac8ff',
+  'rank.10': '#9f8ff5ff', 'rank.10.to': '#c98bf0ff', 'rank.11': '#9f8ff5ff', 'rank.11.to': '#e8c97fff',
 };
 {
   const { revision } = await (await fetch(`${BASE}/api/project`)).json();
@@ -553,6 +558,18 @@ tab(true); tab(false);
   spire(52, 14, 3, 30);
   for (const x of [22, 42]) spire(x, 20, 2, 30);
   out('spires', img, null, '尖塔の影絵（横に並べる）');
+}
+
+// ---- ランクの札（Anulus I〜XI）52×20 = 26×10 GUI px。地はランクの色（VIII〜XI は左から右へのグラデーション）、
+// 上に明るい縁、下に暗い縁、丸い角。数字はゲーム内フォントの文字を上に重ねる（画面の側で書く）。
+// 文字の行（9px）より 1px 上から置き、縁の線は付けない（数字が縁に重ならないように）----
+for (let n = 1; n <= 11; n++) {
+  const img = new Img(52, 20), from = C(`rank.${n}`), to = T[`rank.${n}.to`] ? C(`rank.${n}.to`) : from;
+  for (let x = 0; x < 52; x++) img.rect(x, 0, 1, 20, mix(from, to, x / 51));
+  img.rect(0, 0, 52, 2, alpha(WHITE, 0.35));
+  img.rect(0, 18, 52, 2, alpha(C('ink'), 0.3));
+  for (const [x, y] of [[0, 0], [1, 0], [0, 1]]) { img.clear(x, y); img.clear(x, 19 - y); img.clear(51 - x, y); img.clear(51 - x, 19 - y); }
+  out(`rank_${n}`, img, null, `ランクの札（Anulus ${n}）`);
 }
 
 // ---- 時代の空（左が Anulus I の昼、右へ暮れていく）160×4、横に引き伸ばして使う ----
