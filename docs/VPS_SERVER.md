@@ -196,6 +196,63 @@ GitHub に預けるのは、デプロイ専用の鍵です。VPS 側で `gauntle
 - 書式の誤り（ランクの色が11個ない、`<text>` がない など）があると、再読み込みは拒否されて前の見た目のまま残ります。その状態で再起動しても、プラグインは既定の見た目で起動します（ログに `Ignoring display.yml` が出ます）。
 - エディターに埋め込んだ既定値は、テスト（`DisplayEditorDefaultsTest`）でプラグイン同梱のファイルと一致するか確かめています。同梱の `display.yml` や言語ファイルを変えたら、エディター側の既定値も合わせてください。
 
+## メニュー（Dialog エディター）
+
+メニュー画面は Dialog エディター（`dialog-editor/`）で作ります。**本体は VPS 上のエディター**（`https://catenaonline.net/dialog/`、パスワード付き）で、運営やデザイナーはそこで編集します。git の `config/menu/` には、本番に出したメニューの写しを残します。
+
+| もの | 場所 | 中身 |
+|---|---|---|
+| 編集中のデータ | VPS の `/opt/dialog-editor/data`（git には `dialog-editor/data/project.json` に写す） | 画面・部品・画像 |
+| 書き出し | VPS の `/opt/dialog-editor/exports/latest` | 雛形・データパック・リソースパック |
+| 本番に出したメニュー | git の `config/menu/` | `templates/*.json`、`datapack.zip`、`resourcepack.zip`、`manifest.json` |
+| サーバーが読むもの | `plugins/ParkourGauntlet/menu/*.json`、`world/datapacks/dialog-custom-gui.zip` | |
+
+### 初回の準備（VPS）
+
+Web サイト（`web-setup.sh`）のあとに行います。
+
+```bash
+cd /root/deploy && sudo ADMIN_USER=konqa bash dialog-setup.sh
+```
+
+Node.js 22 を入れ、専用ユーザー `dialog` でエディターを動かすサービス（`gauntlet-dialog`、127.0.0.1:4320 のみ）と、nginx の `/dialog/`（パスワード付き、HTTPS のみ、パスワードを5回間違えると1時間遮断）を用意します。続けて Windows からエディターを送り、使う人を登録します。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -DialogEditor
+```
+
+```bash
+sudo gauntlet-dialog-user add <名前>      # 1人1つ。パスワードは12文字以上
+sudo gauntlet-dialog-user list
+sudo gauntlet-dialog-user remove <名前>
+```
+
+`-DialogEditor` は `dialog-editor/` の**最後のコミット**と、手元の `dialog-editor/data/vanilla`（ゲーム内フォントの資源。公開しない）を送ります。エディターのコードを直したときも同じコマンドで更新します（編集中のデータは消えません）。初回だけ、リポジトリの `dialog-editor/data/project.json` から始まります。
+
+メモリは Minecraft と同じ VPS で共有します（エディターは最大 768MB）。4GB プランで足りなくなったら、`/etc/default/gauntlet` の `JAVA_MEM` を下げるかプランを上げます。
+
+### いつもの流れ
+
+1. `https://catenaonline.net/dialog/` で編集し、エディターの「書き出し」を押す（ここではまだ本番に出ない）。
+2. Windows で本番に出し、同時に git へ写します。
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -Menu -FromEditor
+   ```
+
+   VPS の最新の書き出しをサーバーに入れて `/gauntlet reload menu`（データパックが変わったときは `minecraft:reload` も）を送り、再起動はしません。続けて、書き出しを `config/menu/` に、編集データを `dialog-editor/data/` に写すので、差分を確認してコミットします。手元にコミットしていない変更があると止まります（`-Force` で上書き）。
+
+### そのほか
+
+| やりたいこと | コマンド（Windows） |
+|---|---|
+| 手元のサーバーで試す | `deploy.ps1 -Menu -Local` のあと、ゲーム内で `/gauntlet reload menu`（データパックが変わったら `/minecraft:reload`） |
+| git の `config/menu` を本番に戻す | `deploy.ps1 -Menu`、または GitHub Actions の Run workflow で `menu` |
+
+サーバーには、送った雛形だけが置かれます（送った中にない画面は消えます）。
+
+**リソースパック**（メニューの見た目に必要な画像・フォント）は、まだプレイヤーへの配布の仕組みがありません。`config/menu/resourcepack.zip` を各自のクライアントに入れて使います。
+
 ## Web サイト（`catenaonline.net`）
 
 `web/` の静的ページを nginx で配信し、Let's Encrypt で HTTPS にします。証明書は certbot が自動で更新します。

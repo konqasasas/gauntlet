@@ -1,0 +1,28 @@
+[Unit]
+Description=Catena Online Dialog editor (nginx serves it at /dialog/)
+After=network.target
+
+[Service]
+Type=simple
+User=dialog
+Group=dialog
+# Group-readable so the admin user (in the dialog group) can copy edits back into git.
+UMask=0027
+WorkingDirectory=/opt/dialog-editor/app
+Environment=DCG_PORT=4320
+Environment=DCG_DATA=/opt/dialog-editor/data
+Environment=DCG_EXPORTS=/opt/dialog-editor/exports
+Environment=DCG_ALLOWED_ORIGINS=https://catenaonline.net,https://www.catenaonline.net
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=5
+MemoryMax=768M
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/dialog-editor/data /opt/dialog-editor/exports
+
+[Install]
+WantedBy=multi-user.target

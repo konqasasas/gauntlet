@@ -3,6 +3,7 @@
 #   ssh <admin>@<vps> deploy-plugin < parkour-gauntlet.jar   install the JAR and restart the server
 #   tar -cf - . | ssh <admin>@<vps> deploy-web                replace the site files
 #   tar -cf - display.yml lang | ssh <admin>@<vps> deploy-display   install display settings and reload them
+#   tar -cf - templates datapack.zip | ssh <admin>@<vps> deploy-menu   install the menu (config/menu) and reload it
 # Register the key (as the admin user, not root):
 #   gauntlet-ci --authorize "ssh-ed25519 AAAA... gauntlet-ci"
 set -euo pipefail
@@ -25,6 +26,9 @@ case "${SSH_ORIGINAL_COMMAND:-}" in
     ;;
   deploy-display)
     exec sudo -n /usr/local/bin/gauntlet-display --stdin
+    ;;
+  deploy-menu)
+    exec sudo -n /usr/local/bin/gauntlet-menu --stdin
     ;;
   deploy-web)
     [[ -d $SITE && -w $SITE ]] || { echo "$SITE is missing or not writable. Run web-setup.sh first." >&2; exit 1; }

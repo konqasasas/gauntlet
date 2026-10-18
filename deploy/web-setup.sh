@@ -36,6 +36,8 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
     location / { try_files \$uri \$uri/ =404; }
+    # Extra locations, e.g. the Dialog editor at /dialog/ (dialog-setup.sh). certbot keeps this in the HTTPS block.
+    include /etc/nginx/snippets/gauntlet-*.conf;
 }
 EOF
 ln -sf "/etc/nginx/sites-available/$DOMAIN" "/etc/nginx/sites-enabled/$DOMAIN"

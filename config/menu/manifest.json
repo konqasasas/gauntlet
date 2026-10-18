@@ -1,0 +1,1560 @@
+{
+  "format": "dialog-custom-gui/manifest",
+  "compilerVersion": 1,
+  "namespace": "dcg",
+  "closeActionId": "dcg:close",
+  "openActionId": "dcg:open",
+  "templates": "templates/<画面>.json（全状態入り。insertion の目印で状態を選ぶ）",
+  "screens": [
+    {
+      "id": "course_select",
+      "dialog": "dcg:course_select",
+      "title": "コース選択",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "sort_diff_hs",
+          "type": "custom",
+          "value": "dcg:course_sort",
+          "payload": "{\"by\":\"diff\"}"
+        },
+        {
+          "element": "sort_new_hs",
+          "type": "custom",
+          "value": "dcg:course_sort",
+          "payload": "{\"by\":\"new\"}"
+        },
+        {
+          "element": "sort_name_hs",
+          "type": "custom",
+          "value": "dcg:course_sort",
+          "payload": "{\"by\":\"name\"}"
+        },
+        {
+          "element": "f_all_hs",
+          "type": "custom",
+          "value": "dcg:course_filter",
+          "payload": "{\"filter\":\"all\"}"
+        },
+        {
+          "element": "f_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_filter",
+          "payload": "{\"filter\":\"fav\"}"
+        },
+        {
+          "element": "f_open_hs",
+          "type": "custom",
+          "value": "dcg:course_filter",
+          "payload": "{\"filter\":\"open\"}"
+        },
+        {
+          "element": "f_done_hs",
+          "type": "custom",
+          "value": "dcg:course_filter",
+          "payload": "{\"filter\":\"done\"}"
+        },
+        {
+          "element": "f_easy_hs",
+          "type": "custom",
+          "value": "dcg:course_filter",
+          "payload": "{\"filter\":\"easy\"}"
+        },
+        {
+          "element": "f_hard_hs",
+          "type": "custom",
+          "value": "dcg:course_filter",
+          "payload": "{\"filter\":\"hard\"}"
+        },
+        {
+          "element": "search_btn_hs",
+          "type": "screen",
+          "value": "course_search",
+          "payload": ""
+        },
+        {
+          "element": "search_clear_hs",
+          "type": "custom",
+          "value": "dcg:course_search_clear",
+          "payload": "{}"
+        },
+        {
+          "element": "c01_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c01\"}"
+        },
+        {
+          "element": "c01_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c01\",\"on\":true}"
+        },
+        {
+          "element": "c02_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c02\"}"
+        },
+        {
+          "element": "c02_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c02\",\"on\":false}"
+        },
+        {
+          "element": "c03_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c03\"}"
+        },
+        {
+          "element": "c03_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c03\",\"on\":true}"
+        },
+        {
+          "element": "c04_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c04\"}"
+        },
+        {
+          "element": "c04_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c04\",\"on\":true}"
+        },
+        {
+          "element": "c05_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c05\"}"
+        },
+        {
+          "element": "c05_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c05\",\"on\":false}"
+        },
+        {
+          "element": "c06_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c06\"}"
+        },
+        {
+          "element": "c06_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c06\",\"on\":true}"
+        },
+        {
+          "element": "c07_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c07\"}"
+        },
+        {
+          "element": "c07_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c07\",\"on\":true}"
+        },
+        {
+          "element": "c08_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c08\"}"
+        },
+        {
+          "element": "c08_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c08\",\"on\":true}"
+        },
+        {
+          "element": "c09_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c09\"}"
+        },
+        {
+          "element": "c09_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c09\",\"on\":false}"
+        },
+        {
+          "element": "c10_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c10\"}"
+        },
+        {
+          "element": "c10_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c10\",\"on\":true}"
+        },
+        {
+          "element": "c11_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c11\"}"
+        },
+        {
+          "element": "c11_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c11\",\"on\":true}"
+        },
+        {
+          "element": "c12_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c12\"}"
+        },
+        {
+          "element": "c12_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c12\",\"on\":true}"
+        },
+        {
+          "element": "c13_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c13\"}"
+        },
+        {
+          "element": "c13_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c13\",\"on\":true}"
+        },
+        {
+          "element": "c14_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c14\"}"
+        },
+        {
+          "element": "c14_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c14\",\"on\":true}"
+        },
+        {
+          "element": "c15_hs",
+          "type": "custom",
+          "value": "dcg:course_start",
+          "payload": "{\"course\":\"c15\"}"
+        },
+        {
+          "element": "c15_fav_hs",
+          "type": "custom",
+          "value": "dcg:course_favorite",
+          "payload": "{\"course\":\"c15\",\"on\":true}"
+        },
+        {
+          "element": "pager_prev_hs",
+          "type": "custom",
+          "value": "dcg:course_page",
+          "payload": "{\"delta\":-1}"
+        },
+        {
+          "element": "pager_next_hs",
+          "type": "custom",
+          "value": "dcg:course_page",
+          "payload": "{\"delta\":1}"
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 396,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 31,
+        "jsonBytes": 36447
+      }
+    },
+    {
+      "id": "course_search",
+      "dialog": "dcg:course_search",
+      "title": "コース検索",
+      "width": 200,
+      "height": 18,
+      "actions": [],
+      "footer": [
+        {
+          "index": 0,
+          "label": "検索",
+          "type": "submit",
+          "value": "dcg:course_search",
+          "payload": ""
+        },
+        {
+          "index": 1,
+          "label": "戻る",
+          "type": "screen",
+          "value": "course_select",
+          "payload": ""
+        }
+      ],
+      "inputs": [
+        "query"
+      ],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 0,
+        "overlays": 0,
+        "components": 11,
+        "lines": 2,
+        "bodyWidth": 201,
+        "texts": 2,
+        "jsonBytes": 1231
+      }
+    },
+    {
+      "id": "ranking",
+      "dialog": "dcg:ranking",
+      "title": "ランキング",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 121,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 3,
+        "jsonBytes": 6189
+      }
+    },
+    {
+      "id": "profile",
+      "dialog": "dcg:profile",
+      "title": "プロフィール",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tab_0_hs",
+          "type": "screen",
+          "value": "profile",
+          "payload": ""
+        },
+        {
+          "element": "tab_1_hs",
+          "type": "screen",
+          "value": "profile_settings",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 131,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 6,
+        "jsonBytes": 6950
+      }
+    },
+    {
+      "id": "profile_settings",
+      "dialog": "dcg:profile_settings",
+      "title": "プロフィール設定",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tab_0_hs",
+          "type": "screen",
+          "value": "profile",
+          "payload": ""
+        },
+        {
+          "element": "tab_1_hs",
+          "type": "screen",
+          "value": "profile_settings",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 131,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 6,
+        "jsonBytes": 7033
+      }
+    },
+    {
+      "id": "help",
+      "dialog": "dcg:help",
+      "title": "遊び方",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 121,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 3,
+        "jsonBytes": 6161
+      }
+    },
+    {
+      "id": "emote",
+      "dialog": "dcg:emote",
+      "title": "エモート",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_hs",
+          "type": "screen",
+          "value": "emote",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_motion_hs",
+          "type": "screen",
+          "value": "emote_motion",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_pose_hs",
+          "type": "screen",
+          "value": "emote_pose",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        },
+        {
+          "element": "em_01_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"cheer\"}"
+        },
+        {
+          "element": "em_02_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"stomp\"}"
+        },
+        {
+          "element": "em_03_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"slump\"}"
+        },
+        {
+          "element": "em_04_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"clap\"}"
+        },
+        {
+          "element": "em_05_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"wave\"}"
+        },
+        {
+          "element": "em_06_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"photo_poses\",\"id\":\"fist_pump\"}"
+        },
+        {
+          "element": "em_07_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"photo_poses\",\"id\":\"point_block\"}"
+        },
+        {
+          "element": "em_08_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"photo_poses\",\"id\":\"raise_block\"}"
+        },
+        {
+          "element": "em_prev_hs",
+          "type": "custom",
+          "value": "dcg:emote_page",
+          "payload": "{\"view\":\"emote\",\"delta\":-1}"
+        },
+        {
+          "element": "em_next_hs",
+          "type": "custom",
+          "value": "dcg:emote_page",
+          "payload": "{\"view\":\"emote\",\"delta\":1}"
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 265,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 22,
+        "jsonBytes": 21102
+      }
+    },
+    {
+      "id": "emote_motion",
+      "dialog": "dcg:emote_motion",
+      "title": "エモート - 動き",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_hs",
+          "type": "screen",
+          "value": "emote",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_motion_hs",
+          "type": "screen",
+          "value": "emote_motion",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_pose_hs",
+          "type": "screen",
+          "value": "emote_pose",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        },
+        {
+          "element": "em_01_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"cheer\"}"
+        },
+        {
+          "element": "em_02_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"stomp\"}"
+        },
+        {
+          "element": "em_03_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"slump\"}"
+        },
+        {
+          "element": "em_04_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"clap\"}"
+        },
+        {
+          "element": "em_05_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"social_emotes\",\"id\":\"wave\"}"
+        },
+        {
+          "element": "em_prev_hs",
+          "type": "custom",
+          "value": "dcg:emote_page",
+          "payload": "{\"view\":\"emote_motion\",\"delta\":-1}"
+        },
+        {
+          "element": "em_next_hs",
+          "type": "custom",
+          "value": "dcg:emote_page",
+          "payload": "{\"view\":\"emote_motion\",\"delta\":1}"
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 217,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 16,
+        "jsonBytes": 16026
+      }
+    },
+    {
+      "id": "emote_pose",
+      "dialog": "dcg:emote_pose",
+      "title": "エモート - ポーズ",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_hs",
+          "type": "screen",
+          "value": "emote",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_motion_hs",
+          "type": "screen",
+          "value": "emote_motion",
+          "payload": ""
+        },
+        {
+          "element": "tag_emote_pose_hs",
+          "type": "screen",
+          "value": "emote_pose",
+          "payload": ""
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        },
+        {
+          "element": "em_01_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"photo_poses\",\"id\":\"fist_pump\"}"
+        },
+        {
+          "element": "em_02_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"photo_poses\",\"id\":\"point_block\"}"
+        },
+        {
+          "element": "em_03_hs",
+          "type": "custom",
+          "value": "dcg:emote_play",
+          "payload": "{\"model\":\"photo_poses\",\"id\":\"raise_block\"}"
+        },
+        {
+          "element": "em_prev_hs",
+          "type": "custom",
+          "value": "dcg:emote_page",
+          "payload": "{\"view\":\"emote_pose\",\"delta\":-1}"
+        },
+        {
+          "element": "em_next_hs",
+          "type": "custom",
+          "value": "dcg:emote_page",
+          "payload": "{\"view\":\"emote_pose\",\"delta\":1}"
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 185,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 12,
+        "jsonBytes": 12777
+      }
+    },
+    {
+      "id": "top_menu",
+      "dialog": "dcg:top_menu",
+      "title": "メニュー",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "news_btn_hs",
+          "type": "screen",
+          "value": "news",
+          "payload": ""
+        },
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "rankup_hs",
+          "type": "custom",
+          "value": "dcg:rankup_start",
+          "payload": "{}"
+        },
+        {
+          "element": "rankup_go_hs",
+          "type": "custom",
+          "value": "dcg:rankup_start",
+          "payload": "{}"
+        },
+        {
+          "element": "to_courses_hs",
+          "type": "screen",
+          "value": "course_select",
+          "payload": ""
+        },
+        {
+          "element": "to_ranking_hs",
+          "type": "screen",
+          "value": "ranking",
+          "payload": ""
+        },
+        {
+          "element": "to_profile_hs",
+          "type": "screen",
+          "value": "profile",
+          "payload": ""
+        },
+        {
+          "element": "to_emote_hs",
+          "type": "screen",
+          "value": "emote",
+          "payload": ""
+        },
+        {
+          "element": "to_settings_hs",
+          "type": "screen",
+          "value": "settings",
+          "payload": ""
+        },
+        {
+          "element": "to_help_hs",
+          "type": "screen",
+          "value": "help",
+          "payload": ""
+        },
+        {
+          "element": "to_lobby_hs",
+          "type": "custom",
+          "value": "dcg:lobby",
+          "payload": "{}"
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 269,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 18,
+        "jsonBytes": 21361
+      }
+    },
+    {
+      "id": "news",
+      "dialog": "dcg:news",
+      "title": "お知らせ",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "news_btn_hs",
+          "type": "screen",
+          "value": "news",
+          "payload": ""
+        },
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "n0_hs",
+          "type": "custom",
+          "value": "dcg:news_open",
+          "payload": "{\"id\":0}"
+        },
+        {
+          "element": "n1_hs",
+          "type": "custom",
+          "value": "dcg:news_open",
+          "payload": "{\"id\":1}"
+        },
+        {
+          "element": "n2_hs",
+          "type": "custom",
+          "value": "dcg:news_open",
+          "payload": "{\"id\":2}"
+        },
+        {
+          "element": "n3_hs",
+          "type": "custom",
+          "value": "dcg:news_open",
+          "payload": "{\"id\":3}"
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 159,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 13,
+        "jsonBytes": 9253
+      }
+    },
+    {
+      "id": "settings",
+      "dialog": "dcg:settings",
+      "title": "設定 - 一般",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tab_0_hs",
+          "type": "screen",
+          "value": "settings",
+          "payload": ""
+        },
+        {
+          "element": "tab_1_hs",
+          "type": "screen",
+          "value": "settings_friend",
+          "payload": ""
+        },
+        {
+          "element": "tab_2_hs",
+          "type": "screen",
+          "value": "settings_chat",
+          "payload": ""
+        },
+        {
+          "element": "menu_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        },
+        {
+          "element": "ui_lang_auto_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"ui_lang\",\"value\":\"auto\"}"
+        },
+        {
+          "element": "ui_lang_ja_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"ui_lang\",\"value\":\"ja\"}"
+        },
+        {
+          "element": "ui_lang_en_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"ui_lang\",\"value\":\"en\"}"
+        },
+        {
+          "element": "translate_lang_hs",
+          "type": "screen",
+          "value": "settings_translate",
+          "payload": ""
+        },
+        {
+          "element": "translate_auto_toggle_hs",
+          "type": "custom",
+          "value": "dcg:settings_toggle",
+          "payload": "{\"key\":\"translate_auto\"}"
+        },
+        {
+          "element": "sound_system_down_hs",
+          "type": "custom",
+          "value": "dcg:settings_step",
+          "payload": "{\"key\":\"sound.system\",\"delta\":-10}"
+        },
+        {
+          "element": "sound_system_seg1_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":10}"
+        },
+        {
+          "element": "sound_system_seg2_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":20}"
+        },
+        {
+          "element": "sound_system_seg3_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":30}"
+        },
+        {
+          "element": "sound_system_seg4_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":40}"
+        },
+        {
+          "element": "sound_system_seg5_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":50}"
+        },
+        {
+          "element": "sound_system_seg6_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":60}"
+        },
+        {
+          "element": "sound_system_seg7_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":70}"
+        },
+        {
+          "element": "sound_system_seg8_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":80}"
+        },
+        {
+          "element": "sound_system_seg9_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":90}"
+        },
+        {
+          "element": "sound_system_seg10_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.system\",\"value\":100}"
+        },
+        {
+          "element": "sound_system_up_hs",
+          "type": "custom",
+          "value": "dcg:settings_step",
+          "payload": "{\"key\":\"sound.system\",\"delta\":10}"
+        },
+        {
+          "element": "sound_course_down_hs",
+          "type": "custom",
+          "value": "dcg:settings_step",
+          "payload": "{\"key\":\"sound.course\",\"delta\":-10}"
+        },
+        {
+          "element": "sound_course_seg1_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":10}"
+        },
+        {
+          "element": "sound_course_seg2_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":20}"
+        },
+        {
+          "element": "sound_course_seg3_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":30}"
+        },
+        {
+          "element": "sound_course_seg4_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":40}"
+        },
+        {
+          "element": "sound_course_seg5_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":50}"
+        },
+        {
+          "element": "sound_course_seg6_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":60}"
+        },
+        {
+          "element": "sound_course_seg7_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":70}"
+        },
+        {
+          "element": "sound_course_seg8_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":80}"
+        },
+        {
+          "element": "sound_course_seg9_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":90}"
+        },
+        {
+          "element": "sound_course_seg10_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"sound.course\",\"value\":100}"
+        },
+        {
+          "element": "sound_course_up_hs",
+          "type": "custom",
+          "value": "dcg:settings_step",
+          "payload": "{\"key\":\"sound.course\",\"delta\":10}"
+        },
+        {
+          "element": "reset_btn_hs",
+          "type": "screen",
+          "value": "settings_reset_confirm",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {
+          "ui_lang": [
+            "auto",
+            "ja",
+            "en"
+          ],
+          "translate_lang": [
+            "ui",
+            "ja",
+            "en",
+            "ko",
+            "zh-CN",
+            "zh-TW",
+            "es",
+            "pt",
+            "fr",
+            "de",
+            "ru",
+            "it",
+            "th",
+            "vi",
+            "id"
+          ],
+          "translate_auto": [
+            "on",
+            "off"
+          ],
+          "sound.system": [
+            "0",
+            "10",
+            "20",
+            "30",
+            "40",
+            "50",
+            "60",
+            "70",
+            "80",
+            "90",
+            "100"
+          ],
+          "sound.course": [
+            "0",
+            "10",
+            "20",
+            "30",
+            "40",
+            "50",
+            "60",
+            "70",
+            "80",
+            "90",
+            "100"
+          ]
+        },
+        "defaults": {
+          "ui_lang": "auto",
+          "translate_lang": "ui",
+          "translate_auto": "off",
+          "sound.system": "100",
+          "sound.course": "100"
+        }
+      },
+      "stats": {
+        "tiles": 49,
+        "overlays": 45,
+        "components": 453,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 57,
+        "jsonBytes": 37642
+      }
+    },
+    {
+      "id": "settings_friend",
+      "dialog": "dcg:settings_friend",
+      "title": "設定 - フレンド",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tab_0_hs",
+          "type": "screen",
+          "value": "settings",
+          "payload": ""
+        },
+        {
+          "element": "tab_1_hs",
+          "type": "screen",
+          "value": "settings_friend",
+          "payload": ""
+        },
+        {
+          "element": "tab_2_hs",
+          "type": "screen",
+          "value": "settings_chat",
+          "payload": ""
+        },
+        {
+          "element": "menu_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 135,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 7,
+        "jsonBytes": 7364
+      }
+    },
+    {
+      "id": "settings_chat",
+      "dialog": "dcg:settings_chat",
+      "title": "設定 - チャット",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "tab_0_hs",
+          "type": "screen",
+          "value": "settings",
+          "payload": ""
+        },
+        {
+          "element": "tab_1_hs",
+          "type": "screen",
+          "value": "settings_friend",
+          "payload": ""
+        },
+        {
+          "element": "tab_2_hs",
+          "type": "screen",
+          "value": "settings_chat",
+          "payload": ""
+        },
+        {
+          "element": "menu_btn_hs",
+          "type": "screen",
+          "value": "top_menu",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 135,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 7,
+        "jsonBytes": 7342
+      }
+    },
+    {
+      "id": "settings_translate",
+      "dialog": "dcg:settings_translate",
+      "title": "翻訳先の選択",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "lang_ui_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"ui\"}"
+        },
+        {
+          "element": "lang_ja_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"ja\"}"
+        },
+        {
+          "element": "lang_en_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"en\"}"
+        },
+        {
+          "element": "lang_ko_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"ko\"}"
+        },
+        {
+          "element": "lang_zh_cn_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"zh-CN\"}"
+        },
+        {
+          "element": "lang_zh_tw_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"zh-TW\"}"
+        },
+        {
+          "element": "lang_es_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"es\"}"
+        },
+        {
+          "element": "lang_pt_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"pt\"}"
+        },
+        {
+          "element": "lang_fr_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"fr\"}"
+        },
+        {
+          "element": "lang_de_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"de\"}"
+        },
+        {
+          "element": "lang_ru_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"ru\"}"
+        },
+        {
+          "element": "lang_it_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"it\"}"
+        },
+        {
+          "element": "lang_th_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"th\"}"
+        },
+        {
+          "element": "lang_vi_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"vi\"}"
+        },
+        {
+          "element": "lang_id_hs",
+          "type": "custom",
+          "value": "dcg:settings_set",
+          "payload": "{\"key\":\"translate_lang\",\"value\":\"id\"}"
+        },
+        {
+          "element": "back_btn_hs",
+          "type": "screen",
+          "value": "settings",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {
+          "translate_lang": [
+            "ui",
+            "ja",
+            "en",
+            "ko",
+            "zh-CN",
+            "zh-TW",
+            "es",
+            "pt",
+            "fr",
+            "de",
+            "ru",
+            "it",
+            "th",
+            "vi",
+            "id"
+          ]
+        },
+        "defaults": {
+          "translate_lang": "ui"
+        }
+      },
+      "stats": {
+        "tiles": 76,
+        "overlays": 30,
+        "components": 403,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 31,
+        "jsonBytes": 34480
+      }
+    },
+    {
+      "id": "settings_reset_confirm",
+      "dialog": "dcg:settings_reset_confirm",
+      "title": "初期設定に戻す",
+      "width": 452,
+      "height": 216,
+      "actions": [
+        {
+          "element": "close_btn_hs",
+          "type": "close",
+          "value": "",
+          "payload": ""
+        },
+        {
+          "element": "ok_btn_hs",
+          "type": "custom",
+          "value": "dcg:settings_reset",
+          "payload": "{}"
+        },
+        {
+          "element": "cancel_btn_hs",
+          "type": "screen",
+          "value": "settings",
+          "payload": ""
+        }
+      ],
+      "footer": [],
+      "inputs": [],
+      "states": {
+        "keys": {},
+        "defaults": {}
+      },
+      "stats": {
+        "tiles": 8,
+        "overlays": 0,
+        "components": 125,
+        "lines": 24,
+        "bodyWidth": 453,
+        "texts": 4,
+        "jsonBytes": 6659
+      }
+    }
+  ],
+  "resourcePack": {
+    "file": "resourcepack.zip",
+    "sha1": "867f9a414e0af840100033fa39bc39961b5e9588",
+    "bytes": 108837
+  },
+  "dataPack": {
+    "file": "datapack.zip",
+    "sha1": "43ce9d82d17c652e5c8c232318d7f4557489bf63",
+    "bytes": 22784
+  },
+  "projectRevision": 149,
+  "textFont": "dcg:text",
+  "credits": [
+    "5x5 Pixel by Negociator (FontStruct), CC BY-SA 3.0"
+  ]
+}

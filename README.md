@@ -145,7 +145,7 @@ mobのSNBTはMinecraftのバージョンで書式が変わることがありま�
 
 ## メニュー（Dialog）
 
-`/menu` でメニュー画面を開きます。画面はこのリポジトリの Dialog エディター（[dialog-editor/](dialog-editor/README.md)）で作り、書き出した `templates\*.json` を `plugins\ParkourGauntlet\menu\` に、`resourcepack.zip` をクライアントに入れて使います（配布の仕組みはまだありません）。プラグインが雛形からプレイヤーごとの画面を組み立てて送るので、設定画面には今の値が表示されます。雛形を差し替えたら `/gauntlet reload menu` で読み直します。
+`/menu` でメニュー画面を開きます。画面はこのリポジトリの Dialog エディター（[dialog-editor/](dialog-editor/README.md)。本番では `https://catenaonline.net/dialog/`）で作ります。本番に出したメニューは `config\menu\` にあり、手元のサーバーへは `deploy.ps1 -Menu -Local` で `plugins\ParkourGauntlet\menu\` とデータパックに入ります。`resourcepack.zip` はクライアントに入れて使います（配布の仕組みはまだありません）。手順は [docs/VPS_SERVER.md](docs/VPS_SERVER.md) の「メニュー」を参照してください。プラグインが雛形からプレイヤーごとの画面を組み立てて送るので、設定画面には今の値が表示されます。雛形を差し替えたら `/gauntlet reload menu` で読み直します。
 今つながっているのは「画面の移動」「✕で閉じる」「ロビーへ戻る」「エモート（BetterModel）」「設定」です。それ以外のボタンは「準備中」と出ます。詳細は [docs/design/menu-dialog.md](docs/design/menu-dialog.md)。
 
 ## 表示（TAB・スコアボード・名前）

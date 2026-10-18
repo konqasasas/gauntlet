@@ -19,6 +19,8 @@ node server.mjs
 
 ブラウザーで `http://127.0.0.1:4320/` を開きます。ポートは `DCG_PORT`、データの場所は `DCG_DATA` / `DCG_EXPORTS` で変えられます。ローカル（127.0.0.1）専用です。
 
+本番では VPS で動かし、nginx がパスワード付きで `https://catenaonline.net/dialog/` に出します（画面・APIのURLは相対なので、パスの下でも動きます）。逆プロキシ越しの編集（POST）を許す Origin は `DCG_ALLOWED_ORIGINS`（カンマ区切り）で指定し、指定がなければ localhost だけを許します。構築と運用は gauntlet の [docs/VPS_SERVER.md](../docs/VPS_SERVER.md) の「メニュー」を参照してください。
+
 ## エディター
 
 - **編集**: 矩形・テキスト・画像・ボタン・クリック領域を配置。複数選択（Shift+クリック・範囲選択）、整列・等間隔、グループ（Ctrl+G）、コピー・貼り付け（画面をまたいでも可）、文字スタイル。操作の一覧はデザイナー向けの [docs/designer-guide.md](docs/designer-guide.md)。

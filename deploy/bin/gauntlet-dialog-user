@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Who may open https://catenaonline.net/dialog/ (nginx basic auth).
+#   sudo gauntlet-dialog-user add <name>      asks for the password twice
+#   sudo gauntlet-dialog-user remove <name>
+#   sudo gauntlet-dialog-user list
+set -euo pipefail
+FILE=/etc/nginx/gauntlet-dialog.htpasswd
+
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+[[ -f $FILE ]] || install -o root -g www-data -m 0640 /dev/null "$FILE"
+case "${1:-}" in
+  add)
+    name="${2:?Usage: gauntlet-dialog-user add <name>}"
+    [[ $name =~ ^[A-Za-z0-9_.-]{1,32}$ ]] || { echo 'Use letters, digits, "_", "." or "-" (up to 32).' >&2; exit 1; }
+    read -rsp "Password for $name: " pw1; echo
+    read -rsp 'Again: ' pw2; echo
+    [[ $pw1 == "$pw2" ]] || { echo 'The passwords differ.' >&2; exit 1; }
+    (( ${#pw1} >= 12 )) || { echo 'Use at least 12 characters.' >&2; exit 1; }
+    hash="$(printf '%s' "$pw1" | openssl passwd -apr1 -stdin)"
+    grep -v "^$name:" "$FILE" > "$FILE.tmp" || true
+    echo "$name:$hash" >> "$FILE.tmp"
+    install -o root -g www-data -m 0640 "$FILE.tmp" "$FILE"
+    rm -f "$FILE.tmp"
+    echo "Added $name"
+    ;;
+  remove)
+    name="${2:?Usage: gauntlet-dialog-user remove <name>}"
+    grep -q "^$name:" "$FILE" || { echo "No user $name" >&2; exit 1; }
+    grep -v "^$name:" "$FILE" > "$FILE.tmp" || true
+    install -o root -g www-data -m 0640 "$FILE.tmp" "$FILE"
+    rm -f "$FILE.tmp"
+    echo "Removed $name"
+    ;;
+  list) cut -d: -f1 "$FILE" ;;
+  *) echo 'Usage: gauntlet-dialog-user add|remove <name> | list' >&2; exit 2 ;;
+esac

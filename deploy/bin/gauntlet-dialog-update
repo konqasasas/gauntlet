@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# Install the Dialog editor's code and restart it. deploy.ps1 -DialogEditor uploads a tar with
+# app/ (git archive of dialog-editor/) and optionally data/vanilla/ (Minecraft font data, never public).
+#   sudo /usr/local/bin/gauntlet-dialog-update /opt/gauntlet/incoming/<file>.tar
+# The editor's data (/opt/dialog-editor/data) is kept; on the first install it starts from app/data/project.json.
+set -euo pipefail
+INCOMING=/opt/gauntlet/incoming
+BASE=/opt/dialog-editor
+MAX_BYTES=$((100 * 1024 * 1024))
+
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+id dialog &>/dev/null || { echo 'Run dialog-setup.sh first.' >&2; exit 1; }
+src="$(realpath -e -- "${1:?Usage: gauntlet-dialog-update <tar in $INCOMING>}")"
+[[ $(dirname "$src") == "$INCOMING" && $src == *.tar && -f $src ]] || { echo "Refusing $1: must be a .tar directly in $INCOMING" >&2; exit 1; }
+(( $(stat -c %s "$src") <= MAX_BYTES )) || { echo 'Upload is larger than 100 MB.' >&2; exit 1; }
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+mv -- "$src" "$work/in.tar"
+
+# Only app/... and data/vanilla/... may be in the tar (GNU tar also refuses ".." and strips leading "/").
+while IFS= read -r member; do
+  name="${member#./}"
+  [[ $name == app || $name == app/* || $name == data || $name == data/ || $name == data/vanilla || $name == data/vanilla/* ]] \
+    || { echo "Refusing the upload: unexpected entry $member" >&2; exit 1; }
+done < <(tar -tf "$work/in.tar")
+mkdir "$work/x"
+tar -x --no-same-owner --no-same-permissions -C "$work/x" -f "$work/in.tar"
+[[ -f $work/x/app/server.mjs && -f $work/x/app/package-lock.json ]] || { echo 'The upload has no app/server.mjs or app/package-lock.json.' >&2; exit 1; }
+
+# New code beside the old one, dependencies installed as the service user, then swapped in.
+rm -rf "$BASE/app.new" "$BASE/app.old"
+cp -r "$work/x/app" "$BASE/app.new"
+chown -R dialog:dialog "$BASE/app.new"
+runuser -u dialog -- env HOME="$BASE" npm --prefix "$BASE/app.new" ci --omit=dev --no-audit --no-fund
+[[ -d $BASE/app ]] && mv "$BASE/app" "$BASE/app.old"
+mv "$BASE/app.new" "$BASE/app"
+rm -rf "$BASE/app.old"
+
+if [[ -d $work/x/data/vanilla ]]; then
+  rm -rf "$BASE/data/vanilla"
+  cp -r "$work/x/data/vanilla" "$BASE/data/vanilla"
+  chown -R dialog:dialog "$BASE/data/vanilla"
+  echo 'Installed data/vanilla'
+fi
+if [[ ! -f $BASE/data/project.json && -f $BASE/app/data/project.json ]]; then
+  install -o dialog -g dialog -m 0640 "$BASE/app/data/project.json" "$BASE/data/project.json"
+  echo 'Started the editor data from the repository (data/project.json)'
+fi
+[[ -d $BASE/data/vanilla ]] || echo 'Warning: no data/vanilla; game-font previews need it (deploy.ps1 -DialogEditor uploads it from your PC).'
+
+systemctl restart gauntlet-dialog.service
+sleep 2
+if curl -fsS -o /dev/null http://127.0.0.1:4320/; then echo 'Dialog editor is running: https://catenaonline.net/dialog/'
+else echo 'The editor did not answer; check: journalctl -u gauntlet-dialog -n 50' >&2; exit 1; fi

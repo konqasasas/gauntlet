@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# Install the menu (Dialog editor output: templates/*.json and datapack.zip) and reload it without a restart.
+# The server ends up with exactly the uploaded templates; a screen missing from the upload is removed.
+#   sudo /usr/local/bin/gauntlet-menu /opt/gauntlet/incoming/<file>.tar   (deploy.ps1 -Menu: a tar of config/menu)
+#   sudo /usr/local/bin/gauntlet-menu --stdin < menu.tar                  (gauntlet-ci deploy-menu)
+#   sudo /usr/local/bin/gauntlet-menu --from-editor                       (the VPS editor's latest export)
+set -euo pipefail
+INCOMING=/opt/gauntlet/incoming
+SERVER=/opt/gauntlet/server
+MENU=$SERVER/plugins/ParkourGauntlet/menu
+EDITOR_LATEST=/opt/dialog-editor/exports/latest
+FIFO=/run/gauntlet.stdin
+LOG=$SERVER/logs/latest.log
+MAX_BYTES=$((20 * 1024 * 1024))
+
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+[[ -d $SERVER/plugins/ParkourGauntlet ]] || { echo "$SERVER/plugins/ParkourGauntlet not found. Start the server once first." >&2; exit 1; }
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+mkdir "$work/x"
+
+case "${1:-}" in
+  --from-editor)
+    [[ -d $EDITOR_LATEST/templates ]] || { echo "No export in $EDITOR_LATEST. Export from the editor first." >&2; exit 1; }
+    cp -r "$EDITOR_LATEST/templates" "$work/x/templates"
+    for f in datapack.zip resourcepack.zip manifest.json; do [[ -f $EDITOR_LATEST/$f ]] && cp "$EDITOR_LATEST/$f" "$work/x/$f"; done
+    ;;
+  --stdin|'')
+    [[ ${1:-} == --stdin ]] || { echo 'Usage: gauntlet-menu <tar in incoming> | --stdin | --from-editor' >&2; exit 2; }
+    head -c $((MAX_BYTES + 1)) > "$work/in.tar"
+    ;;
+  *)
+    src="$(realpath -e -- "$1")"
+    [[ $(dirname "$src") == "$INCOMING" && $src == *.tar && -f $src ]] || { echo "Refusing $1: must be a .tar directly in $INCOMING" >&2; exit 1; }
+    cp -- "$src" "$work/in.tar"
+    rm -f -- "$src"
+    ;;
+esac
+if [[ -f $work/in.tar ]]; then
+  (( $(stat -c %s "$work/in.tar") <= MAX_BYTES )) || { echo 'Upload is larger than 20 MB.' >&2; exit 1; }
+  # Only templates/<screen>.json and the known files may be in the tar.
+  while IFS= read -r member; do
+    name="${member#./}"
+    [[ -z $name || $name =~ ^(templates/?|templates/[a-z0-9_]+\.json|datapack\.zip|resourcepack\.zip|manifest\.json)$ ]] \
+      || { echo "Refusing the upload: unexpected entry $member" >&2; exit 1; }
+  done < <(tar -tf "$work/in.tar")
+  tar -x --no-same-owner --no-same-permissions -C "$work/x" -f "$work/in.tar"
+fi
+shopt -s nullglob
+uploaded=("$work"/x/templates/*.json)
+(( ${#uploaded[@]} )) || { echo 'The upload has no templates/*.json.' >&2; exit 1; }
+for f in "${uploaded[@]}"; do
+  [[ $(basename "$f") =~ ^[a-z0-9_]+\.json$ ]] || { echo "Refusing template name $(basename "$f")" >&2; exit 1; }
+done
+
+# Templates: replace the whole set.
+install -d -o minecraft -g minecraft -m 2770 "$MENU"
+for f in "$MENU"/*.json; do [[ -f $work/x/templates/$(basename "$f") ]] || { rm -f -- "$f"; echo "Removed $(basename "$f")"; }; done
+for f in "${uploaded[@]}"; do install -o minecraft -g minecraft -m 0660 "$f" "$MENU/$(basename "$f")"; done
+echo "Installed ${#uploaded[@]} templates"
+
+# Datapack: the fallback dialogs (dcg:<screen>) for screens the plugin cannot build itself.
+datapack_changed=0
+if [[ -f $work/x/datapack.zip ]]; then
+  level=$(sed -n 's/^level-name=//p' "$SERVER/server.properties" | head -1)
+  target="$SERVER/${level:-world}/datapacks/dialog-custom-gui.zip"
+  if ! cmp -s "$work/x/datapack.zip" "$target"; then
+    install -d -o minecraft -g minecraft -m 2770 "$(dirname "$target")"
+    install -o minecraft -g minecraft -m 0660 "$work/x/datapack.zip" "$target"
+    datapack_changed=1
+    echo "Installed datapack (${level:-world}/datapacks/dialog-custom-gui.zip)"
+  fi
+fi
+if [[ -f $work/x/resourcepack.zip ]]; then
+  echo "Resource pack in the upload: sha1 $(sha1sum "$work/x/resourcepack.zip" | cut -d' ' -f1) (players need it; not distributed by this script)"
+fi
+
+if systemctl is-active --quiet gauntlet.service; then
+  before=$(wc -l < "$LOG")
+  printf 'gauntlet reload menu\n' > "$FIFO"
+  if (( datapack_changed )); then printf 'minecraft:reload\n' > "$FIFO"; fi
+  sleep 3
+  tail -n +"$((before + 1))" "$LOG" | grep -E 'Menu templates|メニュー|Reloading|reload' || echo 'No reload message yet; check: journalctl -u gauntlet -n 20'
+else
+  echo 'Server is not running; the menu applies on the next start.'
+fi

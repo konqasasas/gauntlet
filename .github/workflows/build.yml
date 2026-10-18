@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: VPS に反映するもの（plugin はサーバーを再起動、display は再起動なしで表示設定を読み直す）
+        description: VPS に反映するもの（plugin はサーバーを再起動、display / menu は再起動なしで読み直す）
         type: choice
-        options: [plugin, web, both, display, none]
+        options: [plugin, web, both, display, menu, none]
         default: plugin
 
 permissions:
@@ -87,3 +87,10 @@ jobs:
           files=$(ls display.yml lang/ja.yml lang/en.yml 2>/dev/null || true)
           if [ -z "$files" ]; then echo "config/ has no display.yml or lang/*.yml" >&2; exit 1; fi
           tar -cf - $files | ssh -o BatchMode=yes "$VPS" deploy-display
+      - name: Deploy menu
+        # Restores the menu from git (config/menu). Usually the VPS editor publishes instead (deploy.ps1 -Menu -FromEditor).
+        if: inputs.deploy == 'menu'
+        run: |
+          cd config/menu
+          files=$(ls -d templates datapack.zip resourcepack.zip manifest.json 2>/dev/null || true)
+          tar -cf - $files | ssh -o BatchMode=yes "$VPS" deploy-menu
