@@ -46,6 +46,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private PlaceableDisplays placeable;
     private InvisibleGear invisibleGear;
     private DialogMenu menu;
+    private PlayerDisplay display;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
@@ -93,14 +94,21 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             CourseItems courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
             participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems);
 
-            PlayerDisplay display=new PlayerDisplay(new Ranks());
+            DisplayStyle style;
+            try { style=DisplayStyle.load(getClassLoader(),data.resolve("display.yml"),getLogger()); }
+            catch(IOException e) {
+                // A broken display.yml must not take the whole plugin down: start with the bundled look.
+                getLogger().log(Level.SEVERE,"Ignoring display.yml, using the bundled display settings",e);
+                style=DisplayStyle.load(getClassLoader(),null,getLogger());
+            }
+            display=new PlayerDisplay(new Ranks(),style);
             nameTags=new NameTags(this,display,playerData,participants::active);
             Teleports.beforeTeleport(nameTags::detach);
             visibility=new Visibility(this,playerData,nameTags);
             participants.visibility(visibility);
             lobby=new Lobby(this,scaffold,visibility,participants::active);
             tabList=new TabList(this,display);
-            sidebar=new Sidebar(this,display,playerData,tabList.logo(),this::courseView);
+            sidebar=new Sidebar(this,display,playerData,this::courseView);
 
             participants.start();
             courses=new CourseEditor(this,courseStore,templateStore,courseItems,new NamespacedKey(this,"tool"),participants);
@@ -164,6 +172,12 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             catch(IOException e) { Msg.send(sender,"editor.lang.reload-failed",Msg.arg("error",String.valueOf(e.getMessage()))); getLogger().log(Level.SEVERE,"Cannot reload language files",e); }
             return true;
         }
+        if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("display")) {
+            if(display==null) return true;
+            try { display.style(DisplayStyle.load(getClassLoader(),getDataFolder().toPath().resolve("display.yml"),getLogger())); Msg.send(sender,"editor.display.reloaded"); }
+            catch(IOException e) { Msg.send(sender,"editor.display.reload-failed",Msg.arg("error",String.valueOf(e.getMessage()))); getLogger().log(Level.SEVERE,"Cannot reload display.yml",e); }
+            return true;
+        }
         if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("menu")) {
             Msg.send(sender,menu!=null && menu.reload() ? "editor.menu.reloaded" : "editor.menu.reload-failed");
             return true;
@@ -177,7 +191,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         if(args.length==1) return List.of("kit","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
-        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu");
+        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display");
         return List.of();
     }
     private boolean allowed(Player player) {

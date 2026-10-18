@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Install the display settings from the repository's config/ (a tar of display.yml and lang/*.yml)
+# and reload them without a restart. The server ends up with exactly the files in the tar:
+# a file missing from it is removed, so the bundled default applies again.
+#   sudo /usr/local/bin/gauntlet-display /opt/gauntlet/incoming/<file>.tar   (deploy.ps1 -Display)
+#   sudo /usr/local/bin/gauntlet-display --stdin < config.tar                 (gauntlet-ci deploy-display)
+set -euo pipefail
+INCOMING=/opt/gauntlet/incoming
+DATA=/opt/gauntlet/server/plugins/ParkourGauntlet
+FIFO=/run/gauntlet.stdin
+LOG=/opt/gauntlet/server/logs/latest.log
+FILES=(display.yml lang/ja.yml lang/en.yml)
+MAX_BYTES=$((5 * 1024 * 1024))
+
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+[[ -d $DATA ]] || { echo "$DATA not found. Start the server once first." >&2; exit 1; }
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+if [[ ${1:-} == --stdin ]]; then
+  head -c $((MAX_BYTES + 1)) > "$work/in.tar"
+else
+  src="$(realpath -e -- "${1:?Usage: gauntlet-display <tar in $INCOMING> | --stdin}")"
+  [[ $(dirname "$src") == "$INCOMING" && $src == *.tar && -f $src ]] || { echo "Refusing $1: must be a .tar directly in $INCOMING" >&2; exit 1; }
+  cp -- "$src" "$work/in.tar"
+  rm -f -- "$src"
+fi
+(( $(stat -c %s "$work/in.tar") <= MAX_BYTES )) || { echo 'Upload is larger than 5 MB.' >&2; exit 1; }
+
+# Only the known files (and their directories) may be in the tar.
+while IFS= read -r member; do
+  name="${member#./}"
+  case "$name" in
+    ''|lang|lang/|display.yml|lang/ja.yml|lang/en.yml) ;;
+    *) echo "Refusing the upload: unexpected entry $member" >&2; exit 1 ;;
+  esac
+done < <(tar -tf "$work/in.tar")
+mkdir "$work/x"
+tar -x --no-same-owner --no-same-permissions -C "$work/x" -f "$work/in.tar"
+[[ -f $work/x/display.yml || -f $work/x/lang/ja.yml || -f $work/x/lang/en.yml ]] || { echo 'The upload has no display.yml or lang/*.yml.' >&2; exit 1; }
+
+install -d -o minecraft -g minecraft -m 2770 "$DATA/lang"
+for f in "${FILES[@]}"; do
+  if [[ -f $work/x/$f ]]; then
+    install -o minecraft -g minecraft -m 0660 "$work/x/$f" "$DATA/$f"
+    echo "Installed $f"
+  elif [[ -f $DATA/$f ]]; then
+    rm -f -- "$DATA/$f"
+    echo "Removed $f (bundled default applies)"
+  fi
+done
+
+if systemctl is-active --quiet gauntlet.service; then
+  before=$(wc -l < "$LOG")
+  printf 'gauntlet reload display\ngauntlet reload lang\n' > "$FIFO"
+  sleep 2
+  # The plugin answers in the console; show what it said (a failure keeps the previous look).
+  tail -n +"$((before + 1))" "$LOG" | grep -E '表示設定|言語ファイル|display\.yml' || echo 'No reload message yet; check: journalctl -u gauntlet -n 20'
+else
+  echo 'Server is not running; the files apply on the next start.'
+fi

@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>表示エディター</title>
+<meta name="description" content="Catena Online のチャット・TAB・サイドバー・アクションバーの見た目を編集し、display.yml と言語ファイルを書き出す">
+<meta name="robots" content="noindex">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+<style>
+  :root {
+    --bg: #14161b; --panel: #1c1f26; --panel-2: #23272f; --line: #323844;
+    --text: #e9ecf2; --muted: #9aa3b2; --accent: #ff7a59; --warn: #ffb547; --ok: #5dd39e;
+    --input: #111318;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f3f1ee; --panel: #ffffff; --panel-2: #f7f5f2; --line: #ddd7ce;
+      --text: #1d1f24; --muted: #646b78; --input: #fbfaf8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
+    padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 16px; }
+  header .spacer { flex: 1; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button { border: 1px solid var(--line); background: var(--panel-2); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #1b1d22; font-weight: 600; }
+  button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 16px; max-width: 1500px; margin: 0 auto; }
+  @media (max-width: 960px) { .layout { grid-template-columns: minmax(0, 1fr); } .preview { position: static !important; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 15px; }
+  .card h3 { margin: 16px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .tabs button[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #1b1d22; font-weight: 600; }
+  .field { margin-bottom: 12px; }
+  .field label { display: flex; align-items: baseline; gap: 8px; font-weight: 600; margin-bottom: 4px; }
+  .field label .key { font: 12px ui-monospace, Consolas, monospace; color: var(--muted); font-weight: 400; }
+  .field label .changed { color: var(--warn); font-size: 12px; font-weight: 400; }
+  .field .reset { margin-left: auto; padding: 1px 8px; font-size: 12px; }
+  .field input[type="text"], .field textarea { width: 100%; background: var(--input); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 8px; font: 13px ui-monospace, "Cascadia Code", Consolas, monospace; }
+  .field textarea { min-height: 7.5em; resize: vertical; }
+  .help { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .help code { font-size: 12px; }
+  .error { color: var(--warn); font-size: 12px; margin-top: 3px; }
+  .samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
+  .samples label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 2px; }
+  .samples input[type="text"], .samples input[type="number"], .samples select { background: var(--input); border: 1px solid var(--line);
+    border-radius: 6px; padding: 4px 6px; color: var(--text); }
+  .samples .check { flex-direction: row; align-items: center; gap: 6px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; font-size: 12px; }
+  .toolbar input[type="color"] { width: 32px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; }
+  .toolbar .target { color: var(--muted); }
+  .rank-row { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .rank-row .num { font-weight: 700; text-align: right; color: var(--muted); }
+  .rank-row input[type="text"] { width: 100%; background: var(--input); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+    font: 12px ui-monospace, Consolas, monospace; }
+  .rank-row .tools { display: flex; gap: 3px; align-items: center; }
+  .rank-row .tools input[type="color"] { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; }
+  .rank-row .tools button { padding: 2px 6px; font-size: 12px; }
+  .preview { position: sticky; top: 64px; align-self: start; }
+  .scene { border-radius: 8px; padding: 12px; overflow: hidden; }
+  .scene.day { background: linear-gradient(#7fb3ff, #b9d7ff 60%, #7cb35d 60%, #5f9443); }
+  .scene.night { background: linear-gradient(#0b1430, #1d2a55 60%, #263b26 60%, #1c2d1c); }
+  .mc { font: 600 16px/1.35 "Segoe UI", system-ui, "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif; color: #fff; white-space: pre-wrap; word-break: break-word; }
+  .mc .o { animation: obf 0.25s steps(2) infinite; }
+  @keyframes obf { 50% { opacity: 0.35; } }
+  .chatbox { background: rgba(0, 0, 0, 0.5); padding: 4px 6px; max-width: 520px; }
+  .chatbox div { padding: 1px 0; }
+  .tab { margin: 0 auto; max-width: 420px; background: rgba(0, 0, 0, 0.35); padding: 8px; text-align: center; }
+  .tab .rows { display: grid; gap: 2px; margin: 8px 0; text-align: left; }
+  .tab .row { display: flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.14); padding: 1px 6px 1px 2px; }
+  .tab .head { width: 16px; height: 16px; flex: none; background: linear-gradient(135deg, #8a6b4f, #5c4330); }
+  .tab .bars { margin-left: auto; color: #55ff55; font-size: 11px; letter-spacing: -1px; }
+  .sidebar { margin-left: auto; width: max-content; min-width: 180px; max-width: 100%; }
+  .sidebar .title { background: rgba(0, 0, 0, 0.4); text-align: center; padding: 1px 6px; }
+  .sidebar .lines { background: rgba(0, 0, 0, 0.3); padding: 0 6px 2px; }
+  .sidebar .lines div { min-height: 1.35em; }
+  .actionbar { text-align: center; padding: 8px 0 4px; }
+  .hotbar { margin: 4px auto 0; width: 270px; height: 30px; background: rgba(0, 0, 0, 0.45); border: 2px solid rgba(255, 255, 255, 0.35); }
+  .nametag { width: max-content; margin: 0 auto; background: rgba(0, 0, 0, 0.25); padding: 0 4px; }
+  .figure { width: 22px; height: 52px; margin: 4px auto 0; background: linear-gradient(#c58e6d 0 30%, #2f9fa8 30% 65%, #3b3f8f 65%); }
+  .ranks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 12px; background: rgba(0, 0, 0, 0.45); padding: 8px; }
+  .bar-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .bar-controls button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #1b1d22; }
+  .notice { padding: 8px 12px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); margin-bottom: 12px; font-size: 13px; }
+  .notice.warn { border-color: var(--warn); }
+  details summary { cursor: pointer; color: var(--muted); }
+  .file-out { display: grid; gap: 8px; }
+  .file-out .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .file-out .row strong { min-width: 9em; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Catena Online 表示エディター</h1>
+  <div class="spacer"></div>
+  <label class="sr" for="import">ファイルを読み込む</label>
+  <input type="file" id="import" accept=".yml,.yaml" multiple hidden>
+  <button type="button" id="import-btn" title="display.yml、ja.yml、en.yml を読み込む">読み込む</button>
+  <button type="button" id="reset-all">すべて既定に戻す</button>
+  <button type="button" class="primary" id="export-btn">書き出す</button>
+</header>
+
+<div class="layout">
+  <main>
+    <div id="notices"></div>
+    <section class="card">
+      <h2>サンプルの値（プレビュー用）</h2>
+      <div class="samples" id="samples"></div>
+    </section>
+
+    <section class="card">
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div class="toolbar" id="toolbar">
+        <span class="target" id="target">入力欄を選ぶと、ここから装飾を入れられます</span>
+        <input type="color" id="tb-color" value="#ff7a59" aria-label="色">
+        <button type="button" data-wrap="color">色</button>
+        <input type="color" id="tb-color2" value="#5ee7ff" aria-label="グラデーションの2色目">
+        <button type="button" data-wrap="gradient">グラデーション</button>
+        <button type="button" data-wrap="bold"><b>B</b></button>
+        <button type="button" data-wrap="italic"><i>I</i></button>
+        <button type="button" data-wrap="underlined"><u>U</u></button>
+        <button type="button" data-wrap="strikethrough"><s>S</s></button>
+      </div>
+      <div id="panel"></div>
+    </section>
+
+    <section class="card" id="export-card" hidden>
+      <h2>書き出し</h2>
+      <div class="file-out" id="file-out"></div>
+      <details style="margin-top:12px">
+        <summary>反映のしかた</summary>
+        <ol class="help" style="font-size:13px">
+          <li>書き出したファイルをリポジトリの <code>config/display.yml</code>、<code>config/lang/ja.yml</code>、<code>config/lang/en.yml</code> に置く（言語ファイルは変更したときだけ）。</li>
+          <li>手元のサーバーで試す：<code>deploy.ps1 -Display -Local</code> のあと、ゲーム内で <code>/gauntlet reload display</code> と <code>/gauntlet reload lang</code>。</li>
+          <li>本番に反映：<code>deploy.ps1 -Display</code>、または GitHub Actions の Run workflow で <code>display</code> を選ぶ。再起動はしません。</li>
+        </ol>
+      </details>
+    </section>
+  </main>
+
+  <aside class="preview" aria-label="プレビュー">
+    <section class="card">
+      <h2>プレビュー</h2>
+      <div class="bar-controls">
+        <button type="button" id="scene-toggle">背景：昼</button>
+        <button type="button" id="hint-next">TAB のヒントを次へ</button>
+      </div>
+      <div class="scene day" id="scene">
+        <div class="mc tab" id="pv-tab"></div>
+        <div style="display:flex; gap:12px; align-items:flex-end; margin-top:12px; flex-wrap:wrap">
+          <div style="flex:1; min-width:180px">
+            <div class="mc nametag" id="pv-nametag"></div>
+            <div class="figure" aria-hidden="true"></div>
+          </div>
+          <div class="mc sidebar" id="pv-sidebar"></div>
+        </div>
+        <div class="mc chatbox" id="pv-chat" style="margin-top:12px"></div>
+        <div class="mc actionbar" id="pv-actionbar"></div>
+        <div class="hotbar" aria-hidden="true"></div>
+      </div>
+      <h3>アクションバーの場面</h3>
+      <div class="bar-controls" id="bar-scenes"></div>
+      <h3>ランク一覧</h3>
+      <div class="mc ranks-grid" id="pv-ranks"></div>
+    </section>
+  </aside>
+</div>
+
+<!-- Bundled defaults. DisplayEditorDefaultsTest keeps these equal to src/main/resources/display.yml and lang/*.yml. -->
+<script type="text/yaml" id="default-display">
+# Parkour Gauntlet 表示設定（名前・チャット・TAB・サイドバー）
+#
+# 書式は MiniMessage（例：<gold>金色</gold>、<gradient:#ffb347:#ff5f6d>グラデーション</gradient>）。
+# <...> のうち、各項目の説明にある名前は値が差し込まれる（例：<name> はプレイヤー名）。
+# サーバーでは plugins/ParkourGauntlet/display.yml に書いた項目だけがこのファイルを上書きする。
+# 変更後は /gauntlet reload display で、再起動せずに反映される。
+# Web エディター（web/editor/）で見た目を確かめながら編集できる。
+
+# ランク（1〜13）
+ranks:
+  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"13"）。
+  # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
+  badge: "[<rank_padded>]"
+  # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜13（13個ちょうど）。
+  styles:
+    - "<color:#d9d9d9><text></color>"
+    - "<color:#8bd36b><text></color>"
+    - "<color:#3fbf7f><text></color>"
+    - "<color:#4fc3f7><text></color>"
+    - "<color:#4f7dff><text></color>"
+    - "<color:#b07cff><text></color>"
+    - "<gradient:#ff9a5a:#ff4f6a><text></gradient>"
+    - "<gradient:#ffe06b:#ff9620><text></gradient>"
+    - "<gradient:#5ee7ff:#7c5cff><text></gradient>"
+    - "<gradient:#ff7eb6:#8a5cff><text></gradient>"
+    - "<gradient:#ff5f5f:#ffd84d:#5dffb0><text></gradient>"
+    - "<gradient:#4dc9ff:#d36bff:#ff5fa2><text></gradient>"
+    - "<gradient:#ffffff:#ffd54a:#ff7a1a:#ffd54a:#ffffff><text></gradient>"
+
+# プレイヤー名の表示
+names:
+  # 運営の印（gauntlet.display.admin を持つ人だけ）。後ろの空白も含めて書く。
+  admin-tag: "<red><bold>[ADMIN]</bold></red> "
+  # チャットと TAB の名前。<badge> ランクの札、<admin> 運営の印（なければ空）、<name> ランクの色の名前
+  full: "<badge> <admin><name>"
+  # 頭の上の名前。<badge> <name>
+  nametag: "<badge> <name>"
+
+# チャット。<player> は names.full、<message> は発言（翻訳されることがある）
+chat:
+  format: "<player>: <message>"
+
+# TAB
+tab:
+  # 上部。<server> は config.yml の server.name
+  header: "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  # 下部の Ping の数字の色（境目のミリ秒は config.yml の tab.ping-good / ping-ok）。
+  # <ping> は数値。下部の文全体は言語ファイルの tab.ping と tab.hints。
+  ping:
+    good: "<green><ping>ms"
+    ok: "<yellow><ping>ms"
+    bad: "<red><ping>ms"
+
+# 右側のサイドバー（最大15行）
+sidebar:
+  # タイトル。<server>
+  title: "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  # 各行。<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> config.yml の server.address。
+  # "<course_block>" だけの行は、コース中に下の course の行に置き換わる（コース外では消える）。
+  lines:
+    - ""
+    - "<gold>Player:"
+    - " <white><player>"
+    - "<gold>Rank:"
+    - " <badge>"
+    - "<gold>Playtime:"
+    - " <white><playtime>"
+    - ""
+    - "<course_block>"
+    - "<yellow><address>"
+  # コース中だけの行。<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数
+  course:
+    - "<gray>───────────"
+    - "<gold>Course:"
+    - " <white><course>"
+    - "<gold>Best:</gold><white> <best>"
+    - "<gold>Attempts:</gold><white> <attempts>"
+    - ""
+</script>
+<script type="application/json" id="default-lang">
+{
+  "ja": {
+    "prefix": "<gray>[Gauntlet]</gray> ",
+    "time.seconds": "<value>s",
+    "tab.ping": "<gray>Ping <ping>",
+    "tab.hints": "<yellow>Tips</yellow> <gray>ブロックは空中でも置ける！\n<yellow>Tips</yellow> <gray>本番中は1番を持ってQでいつでもリトライ\n<yellow>Tips</yellow> <gray>練習ではFでセーブ、Qでセーブ地点へ\n<yellow>Tips</yellow> <gray>/settings で言語や音量を変えられる",
+    "play.bar.separator": " <gray>|</gray> ",
+    "play.bar.unmeasured": "<red>計測不能：クライアントのtick通知が届いていません",
+    "play.bar.waiting": "<gray>動くと計測開始",
+    "play.bar.time": "<white><time></white><limit>",
+    "play.bar.limit": "<gray> / <limit>",
+    "play.bar.goal": "<gold>クリア <time>",
+    "play.bar.percent": "<white><percent>",
+    "play.bar.retry": "<yellow>[<key:key.drop>]</yellow> <gray>リトライ",
+    "play.bar.practice": "<aqua>練習",
+    "play.bar.practice.waiting": "<gray>動くと区間計測開始",
+    "play.bar.practice.running": "<white>区間 <time>",
+    "play.bar.practice.finished": "<white>区間 <time></white> <gray>（確定）",
+    "play.bar.practice.goal": "<gold>ゴール",
+    "play.bar.to-save": "<yellow>[<key:key.drop>]</yellow> <gray>セーブ地点へ",
+    "play.bar.save": "<yellow>[<key:key.swapOffhand>]</yellow> <gray>セーブ"
+  },
+  "en": {
+    "prefix": "<gray>[Gauntlet]</gray> ",
+    "time.seconds": "<value>s",
+    "tab.ping": "<gray>Ping <ping>",
+    "tab.hints": "<yellow>Tips</yellow> <gray>You can place blocks in mid-air!\n<yellow>Tips</yellow> <gray>Hold slot 1 and press Q to retry at any time\n<yellow>Tips</yellow> <gray>In practice, F saves and Q goes back to the save\n<yellow>Tips</yellow> <gray>/settings changes language and volume",
+    "play.bar.separator": " <gray>|</gray> ",
+    "play.bar.unmeasured": "<red>Not measured: your client is not reporting ticks",
+    "play.bar.waiting": "<gray>Move to start",
+    "play.bar.time": "<white><time></white><limit>",
+    "play.bar.limit": "<gray> / <limit>",
+    "play.bar.goal": "<gold>Clear <time>",
+    "play.bar.percent": "<white><percent>",
+    "play.bar.retry": "<yellow>[<key:key.drop>]</yellow> <gray>Retry",
+    "play.bar.practice": "<aqua>Practice",
+    "play.bar.practice.waiting": "<gray>Move to time a segment",
+    "play.bar.practice.running": "<white>Segment <time>",
+    "play.bar.practice.finished": "<white>Segment <time></white> <gray>(done)",
+    "play.bar.practice.goal": "<gold>Goal",
+    "play.bar.to-save": "<yellow>[<key:key.drop>]</yellow> <gray>To save",
+    "play.bar.save": "<yellow>[<key:key.swapOffhand>]</yellow> <gray>Save"
+  }
+}
+</script>
+
+<script>
+"use strict";
+// ---------- MiniMessage (the subset the plugin uses) ----------
+const NAMED = { black: "#000000", dark_blue: "#0000AA", dark_green: "#00AA00", dark_aqua: "#00AAAA", dark_red: "#AA0000",
+  dark_purple: "#AA00AA", gold: "#FFAA00", gray: "#AAAAAA", grey: "#AAAAAA", dark_gray: "#555555", dark_grey: "#555555",
+  blue: "#5555FF", green: "#55FF55", aqua: "#55FFFF", red: "#FF5555", light_purple: "#FF55FF", yellow: "#FFFF55", white: "#FFFFFF" };
+const DECOR = { bold: "b", b: "b", italic: "i", i: "i", em: "i", underlined: "u", u: "u", strikethrough: "s", st: "s", obfuscated: "o", obf: "o" };
+const KEYBINDS = { "key.drop": "Q", "key.swapOffhand": "F", "key.jump": "Space", "key.sneak": "Shift", "key.sprint": "Ctrl",
+  "key.use": "右クリック", "key.attack": "左クリック", "key.inventory": "E" };
+const PASSTHROUGH = new Set(["hover", "click", "insert", "insertion", "font", "shadow", "transition"]);
+const TAG_SHAPE = /^\/?!?[a-z0-9_#.\-]+(:[^<>]*)?$/i;
+
+function colorOf(arg) {
+  if (!arg) return null;
+  const a = arg.toLowerCase();
+  if (NAMED[a]) return NAMED[a];
+  if (/^#[0-9a-f]{6}$/.test(a)) return a;
+  return null;
+}
+function canonical(name) {
+  const n = name.toLowerCase().replace(/^!/, "");
+  if (n === "colour" || n === "c" || NAMED[n] || /^#[0-9a-f]{6}$/.test(n)) return "color";
+  if (DECOR[n]) return "deco-" + DECOR[n];
+  return n;
+}
+/** Parses a template into a tree; ph maps placeholder names to strings (shown as is) or trees. */
+function parseMM(src, ph) {
+  ph = ph || {};
+  const root = { tag: "root", children: [] };
+  const stack = [root];
+  let buf = "";
+  const top = () => stack[stack.length - 1];
+  const flush = () => { if (buf) { top().children.push({ text: buf }); buf = ""; } };
+  const open = (node) => { flush(); top().children.push(node); stack.push(node); };
+  const leaf = (node) => { flush(); top().children.push(node); };
+  for (let i = 0; i < src.length; ) {
+    const ch = src[i];
+    if (ch === "\\" && (src[i + 1] === "<" || src[i + 1] === "\\")) { buf += src[i + 1]; i += 2; continue; }
+    if (ch === "<") {
+      const end = src.indexOf(">", i + 1);
+      const inner = end > i ? src.slice(i + 1, end) : "";
+      if (inner && TAG_SHAPE.test(inner) && handle(inner)) { i = end + 1; continue; }
+    }
+    buf += ch; i++;
+  }
+  flush();
+  return root;
+
+  function handle(inner) {
+    if (inner[0] === "/") {
+      const want = canonical(inner.slice(1).split(":")[0]);
+      for (let k = stack.length - 1; k > 0; k--) if (stack[k].tag === want) { flush(); stack.length = k; return true; }
+      return true; // an unmatched closing tag is dropped
+    }
+    const parts = inner.split(":");
+    const raw = parts[0].toLowerCase();
+    const negate = raw.startsWith("!");
+    const name = raw.replace(/^!/, "");
+    if (Object.prototype.hasOwnProperty.call(ph, name)) {
+      const value = ph[name];
+      leaf(typeof value === "string" ? { text: value } : { tag: "component", children: [value] });
+      return true;
+    }
+    if (name === "newline" || name === "br") { leaf({ text: "\n" }); return true; }
+    if (name === "key") { leaf({ text: KEYBINDS[parts.slice(1).join(":")] || parts.slice(1).join(":") }); return true; }
+    if (name === "lang" || name === "tr" || name === "translate") { leaf({ text: parts.slice(1).join(":") }); return true; }
+    if (name === "reset") { flush(); stack.length = 1; return true; }
+    if (NAMED[name] || /^#[0-9a-f]{6}$/.test(name)) { open({ tag: "color", color: colorOf(name), children: [] }); return true; }
+    if (name === "color" || name === "colour" || name === "c") {
+      const c = colorOf(parts[1]); if (!c) return false;
+      open({ tag: "color", color: c, children: [] }); return true;
+    }
+    if (DECOR[name]) { open({ tag: "deco-" + DECOR[name], deco: DECOR[name], value: !negate, children: [] }); return true; }
+    if (name === "gradient") {
+      let colors = parts.slice(1).map(colorOf).filter(Boolean);
+      if (colors.length === 0) colors = ["#ffffff", "#000000"];
+      if (colors.length === 1) colors = [colors[0], colors[0]];
+      open({ tag: "gradient", colors, children: [] }); return true;
+    }
+    if (name === "rainbow") { open({ tag: "rainbow", children: [] }); return true; }
+    if (PASSTHROUGH.has(name)) { open({ tag: name, children: [] }); return true; }
+    return false;
+  }
+}
+function textLength(node) {
+  if (node.text !== undefined) return [...node.text].filter(c => c !== "\n").length;
+  return (node.children || []).reduce((n, c) => n + textLength(c), 0);
+}
+function hexToRgb(h) { return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); }
+function rgbToHex(rgb) { return "#" + rgb.map(v => Math.round(v).toString(16).padStart(2, "0")).join(""); }
+function gradientAt(colors, t) {
+  const seg = Math.min(colors.length - 2, Math.floor(t * (colors.length - 1)));
+  const local = t * (colors.length - 1) - seg;
+  const a = hexToRgb(colors[seg]), b = hexToRgb(colors[seg + 1]);
+  return rgbToHex(a.map((v, i) => v + (b[i] - v) * local));
+}
+function hsvHex(h) {
+  const f = (n) => { const k = (n + h * 6) % 6; return 255 * (1 - Math.max(0, Math.min(k, 4 - k, 1))); };
+  return rgbToHex([f(5), f(3), f(1)]);
+}
+/** Flattens a tree into styled runs: {text, color, b, i, u, s, o}. */
+function runs(tree, baseColor) {
+  const out = [];
+  walk(tree, { color: baseColor, b: false, i: false, u: false, s: false, o: false, fill: null, locked: false });
+  return out;
+  function emit(text, st) {
+    const last = out[out.length - 1];
+    const same = last && last.color === st.color && ["b", "i", "u", "s", "o"].every(k => last[k] === st[k]);
+    if (same) last.text += text; else out.push({ text, color: st.color, b: st.b, i: st.i, u: st.u, s: st.s, o: st.o });
+  }
+  function walk(node, st) {
+    if (node.text !== undefined) {
+      if (st.fill && !st.locked) {
+        for (const ch of node.text) {
+          if (ch === "\n") { emit(ch, st); continue; }
+          const t = st.fill.total <= 1 ? 0 : st.fill.pos.n / (st.fill.total - 1);
+          st.fill.pos.n++;
+          emit(ch, { ...st, color: st.fill.kind === "rainbow" ? hsvHex(t) : gradientAt(st.fill.colors, t) });
+        }
+      } else emit(node.text, st);
+      return;
+    }
+    let next = st;
+    if (node.tag === "color") next = { ...st, color: node.color, locked: true };
+    else if (node.deco) next = { ...st, [node.deco]: node.value };
+    else if (node.tag === "gradient" || node.tag === "rainbow")
+      next = { ...st, locked: false, fill: { kind: node.tag, colors: node.colors, total: textLength(node), pos: { n: 0 } } };
+    for (const child of node.children || []) walk(child, next);
+  }
+}
+function esc(s) { return s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+/** HTML for a template or tree, with Minecraft's text shadow (the color at a quarter brightness). */
+function html(treeOrTemplate, ph, baseColor) {
+  const tree = typeof treeOrTemplate === "string" ? parseMM(treeOrTemplate, ph) : treeOrTemplate;
+  return runs(tree, baseColor || "#ffffff").map(r => {
+    const shadow = rgbToHex(hexToRgb(r.color).map(v => v / 4));
+    const deco = [r.u && "underline", r.s && "line-through"].filter(Boolean).join(" ");
+    const style = `color:${r.color};text-shadow:0.11em 0.11em 0 ${shadow};font-weight:${r.b ? 800 : 600};font-style:${r.i ? "italic" : "normal"};` +
+      (deco ? `text-decoration:${deco};` : "");
+    return `<span class="${r.o ? "o" : ""}" style="${style}">${esc(r.text).replace(/\n/g, "<br>")}</span>`;
+  }).join("");
+}
+/** Same as MiniMessage.escapeTags for text put into a template. */
+function escapeTags(s) { return s.replace(/\\/g, "\\\\").replace(/</g, "\\<"); }
+
+// ---------- Defaults and state ----------
+const DISPLAY_KEYS = ["ranks.badge", "ranks.styles", "names.admin-tag", "names.full", "names.nametag", "chat.format",
+  "tab.header", "tab.ping.good", "tab.ping.ok", "tab.ping.bad", "sidebar.title", "sidebar.lines", "sidebar.course"];
+const LANGS = ["ja", "en"];
+const STORE_KEY = "catena-display-editor-v1";
+
+/** Same flattening as Messages.parse: nested keys joined with dots, lists joined with line breaks. */
+function flatten(obj, prefix, out) {
+  out = out || {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    const key = (prefix || "") + k;
+    if (v && typeof v === "object" && !Array.isArray(v)) flatten(v, key + ".", out);
+    else if (Array.isArray(v)) out[key] = v.map(String).join("\n");
+    else if (v !== null && v !== undefined) out[key] = String(v);
+  }
+  return out;
+}
+let DEFAULT_DISPLAY = null, DEFAULT_LANG = null;
+const state = { display: {}, lang: { ja: {}, en: {} } };
+const ui = { tab: "ranks", lang: "ja", focused: null, scene: "day", hint: 0, bar: "running" };
+const sample = { name: "Steve", rank: 7, admin: true, server: "Catena Online", address: "mc.catenaonline.net",
+  ping: 42, playtime: "12.5h", inCourse: true, course: "Lava Stairs", best: "87.5%", attempts: 241,
+  time: "12.35", limit: 30, percent: "64.2%", message: "こんにちは！ よろしく" };
+
+function notice(text, warn) {
+  const div = document.createElement("div");
+  div.className = "notice" + (warn ? " warn" : "");
+  div.textContent = text;
+  document.getElementById("notices").appendChild(div);
+}
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ } }
+function restore() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    for (const k of DISPLAY_KEYS) if (typeof saved.display?.[k] === "string") state.display[k] = saved.display[k];
+    for (const l of LANGS) for (const k of Object.keys(DEFAULT_LANG[l])) if (typeof saved.lang?.[l]?.[k] === "string") state.lang[l][k] = saved.lang[l][k];
+    return true;
+  } catch (e) { return false; }
+}
+function d(key) { return state.display[key]; }
+function t(key) { return state.lang[ui.lang][key]; }
+function lines(value) { return value === "" ? [] : value.split("\n"); }
+
+// ---------- Rendering the plugin's pieces (mirrors DisplayStyle and Participants) ----------
+function rankStyles() { return d("ranks.styles").split("\n"); }
+function rankTree(rank, text) {
+  const styles = rankStyles();
+  const style = styles[Math.min(Math.max(rank, 1), styles.length) - 1] || "<text>";
+  return parseMM(style.split("<text>").join(escapeTags(text)));
+}
+function badgeText(rank) {
+  const padded = rank < 10 ? " " + rank + " " : String(rank);
+  return d("ranks.badge").split("<rank_padded>").join(padded).split("<rank>").join(String(rank));
+}
+function fullTree(rank, admin, name) {
+  return parseMM(d("names.full"), { badge: rankTree(rank, badgeText(rank)), admin: admin ? parseMM(d("names.admin-tag")) : "", name: rankTree(rank, name) });
+}
+function render() {
+  const r = sample.rank;
+  // Name tag
+  document.getElementById("pv-nametag").innerHTML = html(d("names.nametag"), { badge: rankTree(r, badgeText(r)), name: rankTree(r, sample.name) });
+  // Chat
+  const me = fullTree(r, sample.admin, sample.name);
+  const chat = [
+    html(d("chat.format"), { player: me, message: sample.message }),
+    html(d("chat.format"), { player: fullTree(3, false, "Alex"), message: ui.lang === "ja" ? "GG！" : "GG!" }),
+    html(t("prefix") + (ui.lang === "ja" ? "セーブ地点を保存しました。" : "Checkpoint saved."))
+  ];
+  document.getElementById("pv-chat").innerHTML = chat.map(l => `<div>${l}</div>`).join("");
+  // TAB
+  const players = [{ name: sample.name, rank: r, admin: sample.admin }, { name: "Notch", rank: 13, admin: false },
+    { name: "Alex", rank: 3, admin: false }, { name: "Builder", rank: 9, admin: true }]
+    .sort((a, b) => ((b.admin ? 1000 : 0) + b.rank) - ((a.admin ? 1000 : 0) + a.rank) || a.name.localeCompare(b.name));
+  const pingKey = sample.ping < 100 ? "tab.ping.good" : sample.ping < 200 ? "tab.ping.ok" : "tab.ping.bad";
+  const hints = lines(t("tab.hints"));
+  const footer = html(t("tab.ping"), { ping: parseMM(d(pingKey), { ping: String(sample.ping) }) }) +
+    (hints.length ? "<br>" + html(hints[ui.hint % hints.length]) : "");
+  document.getElementById("pv-tab").innerHTML =
+    `<div>${html(d("tab.header"), { server: sample.server })}</div>` +
+    `<div class="rows">${players.map(p => `<div class="row"><span class="head"></span><span>${html(fullTree(p.rank, p.admin, p.name))}</span><span class="bars">▮▮▮▮</span></div>`).join("")}</div>` +
+    `<div>${footer}</div>`;
+  // Sidebar
+  const sph = { player: sample.name, badge: rankTree(r, badgeText(r)), playtime: sample.playtime, address: sample.address,
+    course: sample.inCourse ? sample.course : "", best: sample.inCourse ? sample.best : "", attempts: sample.inCourse ? String(sample.attempts) : "" };
+  const rows = [];
+  for (const line of lines(d("sidebar.lines"))) {
+    if (line.trim() !== "<course_block>") rows.push(line);
+    else if (sample.inCourse) rows.push(...lines(d("sidebar.course")));
+  }
+  const over = rows.length > 15;
+  document.getElementById("pv-sidebar").innerHTML =
+    `<div class="title">${html(d("sidebar.title"), { server: sample.server })}</div>` +
+    `<div class="lines">${rows.slice(0, 15).map(l => `<div>${html(l, sph)}</div>`).join("")}</div>` +
+    (over ? `<div class="help" style="color:#ffb547">15行を超えた分は表示されません</div>` : "");
+  // Action bar
+  document.getElementById("pv-actionbar").innerHTML = html(actionBar());
+  // Ranks
+  document.getElementById("pv-ranks").innerHTML = rankStyles().map((_, k) =>
+    `<div>${html(fullTree(k + 1, false, sample.name))}</div>`).join("");
+}
+function actionBar() {
+  const time = parseMM(t("time.seconds"), { value: sample.time });
+  const limit = parseMM(t("play.bar.limit"), { limit: parseMM(t("time.seconds"), { value: String(sample.limit) }) });
+  const percent = parseMM(t("play.bar.percent"), { percent: sample.percent });
+  const p = (key, ph) => parseMM(t(key), ph);
+  let parts;
+  switch (ui.bar) {
+    case "waiting": parts = [p("play.bar.waiting", { limit }), p("play.bar.retry")]; break;
+    case "running": parts = [p("play.bar.time", { time, limit }), percent, p("play.bar.retry")]; break;
+    case "goal": parts = [p("play.bar.goal", { time }), parseMM(t("play.bar.percent"), { percent: "100.0%" }), p("play.bar.retry")]; break;
+    case "unmeasured": parts = [p("play.bar.unmeasured")]; break;
+    case "p-waiting": parts = [p("play.bar.practice"), p("play.bar.practice.waiting"), percent, p("play.bar.to-save"), p("play.bar.save")]; break;
+    case "p-running": parts = [p("play.bar.practice"), p("play.bar.practice.running", { time }), percent, p("play.bar.to-save"), p("play.bar.save")]; break;
+    case "p-finished": parts = [p("play.bar.practice"), p("play.bar.practice.finished", { time }), percent, p("play.bar.to-save"), p("play.bar.save")]; break;
+    default: parts = [p("play.bar.practice"), p("play.bar.practice.goal"), parseMM(t("play.bar.percent"), { percent: "100.0%" }), p("play.bar.to-save"), p("play.bar.save")];
+  }
+  const sep = parseMM(t("play.bar.separator"));
+  const joined = { tag: "root", children: [] };
+  parts.forEach((part, k) => { if (k) joined.children.push(sep); joined.children.push(part); });
+  return joined;
+}
+
+// ---------- Form ----------
+const SECTIONS = [
+  { id: "ranks", title: "ランク" },
+  { id: "names", title: "名前とチャット", fields: [
+    { key: "names.admin-tag", label: "運営の印", help: "運営だけに付く。後ろの空白も含めて書く。" },
+    { key: "names.full", label: "チャットと TAB の名前", help: "<badge> ランクの札、<admin> 運営の印（なければ空）、<name> ランクの色の名前" },
+    { key: "names.nametag", label: "頭の上の名前", help: "<badge> <name>" },
+    { key: "chat.format", label: "チャットの書式", help: "<player> 上の「チャットと TAB の名前」、<message> 発言" },
+    { lang: "prefix", label: "システムメッセージの先頭", help: "プラグインからのお知らせの前に付く" }] },
+  { id: "tab", title: "TAB", fields: [
+    { key: "tab.header", label: "上部", help: "<server> サーバー名" },
+    { key: "tab.ping.good", label: "Ping（良い）", help: "<ping> ミリ秒。境目は config.yml の tab.ping-good（既定100）" },
+    { key: "tab.ping.ok", label: "Ping（普通）", help: "境目は tab.ping-ok（既定200）" },
+    { key: "tab.ping.bad", label: "Ping（悪い）" },
+    { lang: "tab.ping", label: "下部の Ping の行", help: "<ping> 上の色付きの数値" },
+    { lang: "tab.hints", label: "下部のヒント（1行に1つ、順番に切り替わる）", multi: true }] },
+  { id: "sidebar", title: "サイドバー", fields: [
+    { key: "sidebar.title", label: "タイトル", help: "<server> サーバー名" },
+    { key: "sidebar.lines", label: "行（1行に1つ、最大15行）", multi: true,
+      help: "<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> 接続先。<course_block> だけの行はコース中に下の行へ置き換わる" },
+    { key: "sidebar.course", label: "コース中だけの行", multi: true, help: "<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数" }] },
+  { id: "actionbar", title: "アクションバー", fields: [
+    { lang: "play.bar.separator", label: "区切り" },
+    { lang: "play.bar.waiting", label: "本番：開始前" },
+    { lang: "play.bar.time", label: "本番：計測中", help: "<time> タイム、<limit> 制限時間の部分" },
+    { lang: "play.bar.limit", label: "制限時間の部分", help: "<limit> 制限時間" },
+    { lang: "play.bar.goal", label: "本番：クリア", help: "<time>" },
+    { lang: "play.bar.percent", label: "到達率", help: "<percent>" },
+    { lang: "play.bar.retry", label: "リトライの案内", help: "<key:key.drop> はプレイヤーの操作キー（既定 Q）" },
+    { lang: "play.bar.unmeasured", label: "計測不能" },
+    { lang: "play.bar.practice", label: "練習：見出し" },
+    { lang: "play.bar.practice.waiting", label: "練習：開始前" },
+    { lang: "play.bar.practice.running", label: "練習：計測中", help: "<time>" },
+    { lang: "play.bar.practice.finished", label: "練習：確定", help: "<time>" },
+    { lang: "play.bar.practice.goal", label: "練習：ゴール" },
+    { lang: "play.bar.to-save", label: "セーブ地点へ戻る案内" },
+    { lang: "play.bar.save", label: "セーブの案内", help: "<key:key.swapOffhand> 既定 F" },
+    { lang: "time.seconds", label: "秒の書き方", help: "<value> 数値（例 12.35）" }] }
+];
+const BAR_SCENES = [["waiting", "本番：開始前"], ["running", "本番：計測中"], ["goal", "本番：クリア"], ["unmeasured", "計測不能"],
+  ["p-waiting", "練習：開始前"], ["p-running", "練習：計測中"], ["p-finished", "練習：確定"], ["p-goal", "練習：ゴール"]];
+
+function buildTabs() {
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML = "";
+  for (const s of SECTIONS) {
+    const b = document.createElement("button");
+    b.type = "button"; b.role = "tab"; b.textContent = s.title;
+    b.setAttribute("aria-selected", String(ui.tab === s.id));
+    b.onclick = () => { ui.tab = s.id; buildTabs(); buildPanel(); };
+    tabs.appendChild(b);
+  }
+}
+function fieldValue(f) { return f.key ? state.display[f.key] : state.lang[ui.lang][f.lang]; }
+function fieldDefault(f) { return f.key ? DEFAULT_DISPLAY[f.key] : DEFAULT_LANG[ui.lang][f.lang]; }
+function setField(f, value) {
+  if (f.key) state.display[f.key] = value; else state.lang[ui.lang][f.lang] = value;
+  save(); render();
+}
+function buildPanel() {
+  const panel = document.getElementById("panel");
+  panel.innerHTML = "";
+  const section = SECTIONS.find(s => s.id === ui.tab);
+  if (section.fields?.some(f => f.lang)) {
+    const p = document.createElement("p");
+    p.className = "help";
+    p.textContent = `言語ファイルの項目は「${ui.lang === "ja" ? "日本語" : "英語"}」を編集中です（サンプルの値の「言語」で切り替え）。`;
+    panel.appendChild(p);
+  }
+  if (ui.tab === "ranks") return buildRanks(panel);
+  for (const f of section.fields) panel.appendChild(fieldEl(f));
+}
+function fieldEl(f) {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+  const id = "f-" + (f.key || "lang-" + f.lang).replace(/[^a-z0-9]/gi, "-");
+  const label = document.createElement("label");
+  label.htmlFor = id;
+  label.innerHTML = `<span>${esc(f.label)}</span><span class="key">${esc(f.key || ui.lang + ".yml: " + f.lang)}</span>`;
+  const changed = document.createElement("span");
+  changed.className = "changed";
+  const reset = document.createElement("button");
+  reset.type = "button"; reset.className = "reset"; reset.textContent = "既定に戻す";
+  label.append(changed, reset);
+  const input = document.createElement(f.multi ? "textarea" : "input");
+  if (!f.multi) input.type = "text";
+  input.id = id; input.spellcheck = false;
+  input.value = fieldValue(f);
+  const sync = () => {
+    const dirty = fieldValue(f) !== fieldDefault(f);
+    changed.textContent = dirty ? "変更あり" : ""; reset.hidden = !dirty;
+  };
+  input.addEventListener("input", () => { setField(f, input.value); sync(); });
+  input.addEventListener("focus", () => focusInput(input, f.label));
+  reset.onclick = () => { input.value = fieldDefault(f); setField(f, input.value); sync(); };
+  sync();
+  wrap.append(label, input);
+  if (f.help) { const h = document.createElement("div"); h.className = "help"; h.textContent = f.help; wrap.appendChild(h); }
+  return wrap;
+}
+function buildRanks(panel) {
+  panel.appendChild(fieldEl({ key: "ranks.badge", label: "ランクの札", help: "<rank> 番号、<rank_padded> 1桁なら前後に空白。文字だけ（装飾は下の色で付く）" }));
+  const h = document.createElement("h3");
+  h.textContent = "ランクごとの色（<text> に札や名前が入る）";
+  panel.appendChild(h);
+  const errors = document.createElement("div");
+  errors.className = "error";
+  const styles = rankStyles();
+  styles.forEach((style, k) => {
+    const row = document.createElement("div");
+    row.className = "rank-row";
+    const num = document.createElement("span"); num.className = "num"; num.textContent = k + 1;
+    const input = document.createElement("input");
+    input.type = "text"; input.value = style; input.spellcheck = false;
+    input.setAttribute("aria-label", `ランク${k + 1}の色`);
+    const tools = document.createElement("span"); tools.className = "tools";
+    const c1 = document.createElement("input"); c1.type = "color"; c1.setAttribute("aria-label", `ランク${k + 1}の色1`);
+    const c2 = document.createElement("input"); c2.type = "color"; c2.setAttribute("aria-label", `ランク${k + 1}の色2`);
+    const found = (style.match(/#[0-9a-f]{6}/gi) || []);
+    c1.value = found[0] || "#ffffff"; c2.value = found[found.length - 1] || c1.value;
+    const solid = document.createElement("button"); solid.type = "button"; solid.textContent = "単色"; solid.title = "左の色1色にする";
+    const grad = document.createElement("button"); grad.type = "button"; grad.textContent = "2色"; grad.title = "左右の色でグラデーションにする";
+    const update = (value) => {
+      const all = rankStyles(); all[k] = value; state.display["ranks.styles"] = all.join("\n");
+      save(); render(); validateRanks(errors);
+    };
+    input.addEventListener("input", () => update(input.value));
+    input.addEventListener("focus", () => focusInput(input, `ランク${k + 1}`));
+    solid.onclick = () => { input.value = `<color:${c1.value}><text></color>`; update(input.value); };
+    grad.onclick = () => { input.value = `<gradient:${c1.value}:${c2.value}><text></gradient>`; update(input.value); };
+    tools.append(c1, c2, solid, grad);
+    row.append(num, input, tools);
+    panel.appendChild(row);
+  });
+  panel.appendChild(errors);
+  const reset = document.createElement("button");
+  reset.type = "button"; reset.textContent = "ランクの色をすべて既定に戻す";
+  reset.onclick = () => { state.display["ranks.styles"] = DEFAULT_DISPLAY["ranks.styles"]; save(); render(); buildPanel(); };
+  panel.appendChild(reset);
+  validateRanks(errors);
+}
+function validateRanks(el) {
+  const styles = rankStyles();
+  const bad = styles.map((s, k) => s.includes("<text>") ? null : k + 1).filter(Boolean);
+  el.textContent = bad.length ? `ランク ${bad.join("、")} に <text> がありません（このままだとサーバーが読み込みを拒否します）` : "";
+}
+function focusInput(input, name) {
+  ui.focused = input;
+  document.getElementById("target").textContent = `装飾の挿入先：${name}`;
+}
+function wrapSelection(kind) {
+  const el = ui.focused;
+  if (!el || !document.body.contains(el)) return;
+  const a = el.selectionStart, b = el.selectionEnd;
+  const c1 = document.getElementById("tb-color").value, c2 = document.getElementById("tb-color2").value;
+  const [open, close] = kind === "color" ? [`<color:${c1}>`, "</color>"] : kind === "gradient" ? [`<gradient:${c1}:${c2}>`, "</gradient>"] : [`<${kind}>`, `</${kind}>`];
+  el.value = el.value.slice(0, a) + open + el.value.slice(a, b) + close + el.value.slice(b);
+  el.focus();
+  el.setSelectionRange(a + open.length, b + open.length);
+  el.dispatchEvent(new Event("input"));
+}
+
+// ---------- Samples ----------
+function buildSamples() {
+  const box = document.getElementById("samples");
+  const items = [
+    ["lang", "言語", "select", [["ja", "日本語"], ["en", "English"]]],
+    ["name", "プレイヤー名", "text"], ["rank", "ランク", "select", Array.from({ length: 13 }, (_, k) => [k + 1, String(k + 1)])],
+    ["admin", "運営", "check"], ["ping", "Ping（ms）", "number"], ["inCourse", "コース中", "check"],
+    ["message", "チャットの発言", "text"], ["server", "サーバー名", "text"], ["address", "接続先", "text"],
+    ["course", "コース名", "text"], ["best", "自己ベスト", "text"], ["time", "タイム", "text"]
+  ];
+  for (const [key, label, type, options] of items) {
+    const l = document.createElement("label");
+    let input;
+    if (type === "select") {
+      input = document.createElement("select");
+      for (const [v, text] of options) { const o = document.createElement("option"); o.value = v; o.textContent = text; input.appendChild(o); }
+      input.value = key === "lang" ? ui.lang : sample[key];
+    } else {
+      input = document.createElement("input");
+      input.type = type === "check" ? "checkbox" : type;
+      if (type === "check") input.checked = sample[key]; else input.value = sample[key];
+    }
+    if (type === "check") l.className = "check";
+    input.addEventListener("input", () => {
+      if (key === "lang") { ui.lang = input.value; buildPanel(); }
+      else if (type === "check") sample[key] = input.checked;
+      else if (key === "rank" || key === "ping") sample[key] = Number(input.value) || 0;
+      else sample[key] = input.value;
+      render();
+    });
+    if (type === "check") l.append(input, document.createTextNode(label)); else l.append(label, input);
+    box.appendChild(l);
+  }
+}
+
+// ---------- Import and export ----------
+function q(s) { return JSON.stringify(s); }
+function listYaml(indent, value) {
+  const ls = lines(value);
+  return ls.length ? ls.map(l => `${indent}- ${q(l)}`).join("\n") : null;
+}
+function displayYaml() {
+  const L = (key, indent) => { const v = listYaml(indent, d(key)); return v === null ? " []" : "\n" + v; };
+  return [
+    "# Catena Online 表示設定（表示エディターで書き出し）",
+    "# サーバーの plugins/ParkourGauntlet/display.yml に置き、/gauntlet reload display で反映する。",
+    "ranks:",
+    `  badge: ${q(d("ranks.badge"))}`,
+    "  styles:" + L("ranks.styles", "    "),
+    "names:",
+    `  admin-tag: ${q(d("names.admin-tag"))}`,
+    `  full: ${q(d("names.full"))}`,
+    `  nametag: ${q(d("names.nametag"))}`,
+    "chat:",
+    `  format: ${q(d("chat.format"))}`,
+    "tab:",
+    `  header: ${q(d("tab.header"))}`,
+    "  ping:",
+    `    good: ${q(d("tab.ping.good"))}`,
+    `    ok: ${q(d("tab.ping.ok"))}`,
+    `    bad: ${q(d("tab.ping.bad"))}`,
+    "sidebar:",
+    `  title: ${q(d("sidebar.title"))}`,
+    "  lines:" + L("sidebar.lines", "    "),
+    "  course:" + L("sidebar.course", "    "),
+    ""
+  ].join("\n");
+}
+function changedLangKeys(lang) { return Object.keys(DEFAULT_LANG[lang]).filter(k => state.lang[lang][k] !== DEFAULT_LANG[lang][k]); }
+function langYaml(lang) {
+  const out = [`# Catena Online 言語ファイルの上書き（${lang}、表示エディターで書き出し）`,
+    `# サーバーの plugins/ParkourGauntlet/lang/${lang}.yml に置き、/gauntlet reload lang で反映する。`];
+  for (const k of changedLangKeys(lang)) {
+    if (k === "tab.hints") { const v = listYaml("  ", state.lang[lang][k]); out.push(v === null ? `${k}: []` : `${k}:\n${v}`); }
+    else out.push(`${k}: ${q(state.lang[lang][k])}`);
+  }
+  return out.join("\n") + "\n";
+}
+function download(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/yaml;charset=utf-8" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function buildExport() {
+  const card = document.getElementById("export-card");
+  card.hidden = false;
+  const out = document.getElementById("file-out");
+  out.innerHTML = "";
+  const files = [["display.yml", displayYaml(), "config/display.yml", true]];
+  for (const l of LANGS) files.push([`${l}.yml`, langYaml(l), `config/lang/${l}.yml`, changedLangKeys(l).length > 0]);
+  for (const [name, text, path, needed] of files) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const dl = document.createElement("button"); dl.type = "button"; dl.textContent = "ダウンロード"; dl.onclick = () => download(name, text);
+    const cp = document.createElement("button"); cp.type = "button"; cp.textContent = "コピー";
+    cp.onclick = async () => { try { await navigator.clipboard.writeText(text); cp.textContent = "コピーしました"; } catch (e) { cp.textContent = "コピーできませんでした"; } };
+    const info = document.createElement("span"); info.className = "help";
+    info.textContent = needed ? `→ ${path}` : `変更なし（置かなくてよい。置いてある場合は削除すると既定に戻る）`;
+    const strong = document.createElement("strong"); strong.textContent = name;
+    row.append(strong, dl, cp, info);
+    out.appendChild(row);
+  }
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+async function importFiles(files) {
+  if (!window.jsyaml) { notice("YAML を読む部品を読み込めませんでした（オフラインの可能性）。読み込みは使えません。", true); return; }
+  for (const file of files) {
+    try {
+      const flat = flatten(jsyaml.load(await file.text()) || {});
+      const displayKeys = Object.keys(flat).filter(k => DISPLAY_KEYS.includes(k));
+      const lang = /(^|[^a-z])en\.ya?ml$/i.test(file.name) ? "en" : /(^|[^a-z])ja\.ya?ml$/i.test(file.name) ? "ja" : null;
+      if (displayKeys.length && !lang) {
+        for (const k of displayKeys) state.display[k] = flat[k];
+        notice(`${file.name}：表示設定 ${displayKeys.length} 項目を読み込みました。`);
+      } else if (lang) {
+        const keys = Object.keys(flat).filter(k => k in DEFAULT_LANG[lang]);
+        for (const k of keys) state.lang[lang][k] = flat[k];
+        notice(`${file.name}：${lang} の言語項目 ${keys.length} 個を読み込みました（エディターで扱わない項目は無視）。`);
+      } else notice(`${file.name}：読み込める項目がありませんでした。`, true);
+    } catch (e) { notice(`${file.name} を読めませんでした：${e.message}`, true); }
+  }
+  save(); buildPanel(); render();
+}
+
+// ---------- Start ----------
+function start() {
+  if (!window.jsyaml) {
+    document.getElementById("notices").innerHTML = "";
+    notice("YAML を読む部品（js-yaml）を読み込めませんでした。インターネットに接続して開き直してください。", true);
+    return;
+  }
+  DEFAULT_DISPLAY = flatten(jsyaml.load(document.getElementById("default-display").textContent));
+  DEFAULT_LANG = JSON.parse(document.getElementById("default-lang").textContent);
+  state.display = { ...DEFAULT_DISPLAY };
+  for (const l of LANGS) state.lang[l] = { ...DEFAULT_LANG[l] };
+  if (restore()) notice("前回の編集内容を復元しました（このブラウザに保存されています）。");
+  buildSamples(); buildTabs(); buildPanel();
+  const bars = document.getElementById("bar-scenes");
+  for (const [id, label] of BAR_SCENES) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+    b.setAttribute("aria-pressed", String(ui.bar === id));
+    b.onclick = () => { ui.bar = id; [...bars.children].forEach(c => c.setAttribute("aria-pressed", String(c === b))); render(); };
+    bars.appendChild(b);
+  }
+  document.querySelectorAll("[data-wrap]").forEach(b => b.addEventListener("mousedown", e => { e.preventDefault(); wrapSelection(b.dataset.wrap); }));
+  document.getElementById("scene-toggle").onclick = (e) => {
+    ui.scene = ui.scene === "day" ? "night" : "day";
+    document.getElementById("scene").className = "scene " + ui.scene;
+    e.target.textContent = "背景：" + (ui.scene === "day" ? "昼" : "夜");
+  };
+  document.getElementById("hint-next").onclick = () => { ui.hint++; render(); };
+  document.getElementById("import-btn").onclick = () => document.getElementById("import").click();
+  document.getElementById("import").onchange = (e) => { importFiles([...e.target.files]); e.target.value = ""; };
+  document.getElementById("export-btn").onclick = buildExport;
+  document.getElementById("reset-all").onclick = () => {
+    if (!confirm("すべての項目を既定に戻しますか？（このブラウザに保存した編集内容も消えます）")) return;
+    state.display = { ...DEFAULT_DISPLAY };
+    for (const l of LANGS) state.lang[l] = { ...DEFAULT_LANG[l] };
+    save(); buildPanel(); render();
+  };
+  render();
+}
+start();
+</script>
+</body>
+</html>

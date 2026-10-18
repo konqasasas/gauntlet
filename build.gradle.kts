@@ -28,4 +28,8 @@ tasks.processResources {
 }
 tasks.withType<Jar>().configureEach { isPreserveFileTimestamps=false; isReproducibleFileOrder=true }
 dependencyLocking { lockAllConfigurations() }
-tasks.test { useJUnitPlatform() }
+tasks.test {
+    useJUnitPlatform()
+    // DisplayEditorDefaultsTest reads the web editor's embedded defaults.
+    inputs.file("web/editor/index.html").withPathSensitivity(PathSensitivity.RELATIVE)
+}

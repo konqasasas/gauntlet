@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       deploy:
-        description: VPS に反映するもの（プラグインはサーバーを再起動します）
+        description: VPS に反映するもの（plugin はサーバーを再起動、display は再起動なしで表示設定を読み直す）
         type: choice
-        options: [plugin, web, both, none]
+        options: [plugin, web, both, display, none]
         default: plugin
 
 permissions:
@@ -65,3 +65,10 @@ jobs:
       - name: Deploy web
         if: inputs.deploy == 'web' || inputs.deploy == 'both'
         run: tar -C web -cf - . | ssh -o BatchMode=yes "$VPS" deploy-web
+      - name: Deploy display settings
+        if: inputs.deploy == 'display'
+        run: |
+          cd config
+          files=$(ls display.yml lang/ja.yml lang/en.yml 2>/dev/null || true)
+          if [ -z "$files" ]; then echo "config/ has no display.yml or lang/*.yml" >&2; exit 1; fi
+          tar -cf - $files | ssh -o BatchMode=yes "$VPS" deploy-display

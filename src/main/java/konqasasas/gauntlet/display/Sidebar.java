@@ -5,7 +5,6 @@ import java.util.*;
 import java.util.function.Function;
 import konqasasas.gauntlet.data.PlayerData;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.*;
@@ -15,9 +14,9 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.scoreboard.*;
 
 /**
- * The sidebar, one scoreboard per player (always shown). Headings are English
- * only. The course part is shown only during a course, so a video shows which
- * course is being played. Each board also holds the team with every player:
+ * The sidebar, one scoreboard per player (always shown), laid out by sidebar.*
+ * of display.yml (not per language). The course part is shown only during a
+ * course, so a video shows which course is being played. Each board also holds the team with every player:
  * it hides vanilla name tags (NameTags draws them instead), turns off pushing
  * between players, and keeps invisible players fully invisible to each other.
  */
@@ -31,14 +30,15 @@ public final class Sidebar implements Listener {
     private final PlayerDisplay display;
     private final PlayerData data;
     private final Function<Player,CourseView> course;
-    private final Component title;
+    private final String server;
     private final String address;
     private final Map<UUID,Scoreboard> boards=new HashMap<>();
     private final Map<UUID,List<Component>> shown=new HashMap<>();
     private BukkitTask task;
 
-    public Sidebar(JavaPlugin plugin,PlayerDisplay display,PlayerData data,Component title,Function<Player,CourseView> course) {
-        this.plugin=plugin; this.display=display; this.data=data; this.title=title; this.course=course;
+    public Sidebar(JavaPlugin plugin,PlayerDisplay display,PlayerData data,Function<Player,CourseView> course) {
+        this.plugin=plugin; this.display=display; this.data=data; this.course=course;
+        server=plugin.getConfig().getString("server.name","Catena Online");
         address=plugin.getConfig().getString("server.address","mc.catenaonline.net");
     }
     public void start() {
@@ -62,7 +62,7 @@ public final class Sidebar implements Listener {
     }
     private void create(Player player) {
         Scoreboard board=Bukkit.getScoreboardManager().getNewScoreboard();
-        Objective objective=board.registerNewObjective("gauntlet",Criteria.DUMMY,title);
+        Objective objective=board.registerNewObjective("gauntlet",Criteria.DUMMY,display.style().sidebarTitle(server));
         objective.setDisplaySlot(DisplaySlot.SIDEBAR);
         objective.numberFormat(NumberFormat.blank());
         Team team=board.registerNewTeam(HIDE_TEAM);
@@ -81,7 +81,10 @@ public final class Sidebar implements Listener {
         Scoreboard board=boards.get(player.getUniqueId());
         Objective objective=board==null ? null : board.getObjective("gauntlet");
         if(objective==null) return;
-        List<Component> lines=lines(player);
+        DisplayStyle style=display.style();
+        Component title=style.sidebarTitle(server);
+        if(!title.equals(objective.displayName())) objective.displayName(title);
+        List<Component> lines=lines(player,style);
         List<Component> before=shown.getOrDefault(player.getUniqueId(),List.of());
         for(int i=0;i<MAX_LINES;i++) {
             // Entries starting with # are hidden from the sidebar by the client.
@@ -94,27 +97,11 @@ public final class Sidebar implements Listener {
         }
         shown.put(player.getUniqueId(),lines);
     }
-    private List<Component> lines(Player player) {
-        List<Component> lines=new ArrayList<>();
-        lines.add(Component.empty());
-        lines.add(heading("Player")); lines.add(value(Component.text(player.getName())));
-        lines.add(heading("Rank")); lines.add(value(display.badge(player)));
-        lines.add(heading("Playtime")); lines.add(value(Component.text(hours(data.playtimeMs(player)))));
-        lines.add(Component.empty());
+    private List<Component> lines(Player player,DisplayStyle style) {
         CourseView view=course.apply(player);
-        if(view!=null) {
-            lines.add(Component.text("───────────",NamedTextColor.GRAY));
-            lines.add(heading("Course")); lines.add(value(Component.text(view.name())));
-            lines.add(heading("Best").append(Component.text(" "+view.best(),NamedTextColor.WHITE)));
-            lines.add(heading("Attempts").append(Component.text(" "+view.attempts(),NamedTextColor.WHITE)));
-            lines.add(Component.empty());
-        }
-        lines.add(Component.text(address,NamedTextColor.YELLOW));
-        return lines;
+        return style.sidebar(new DisplayStyle.SidebarValues(player.getName(),display.badge(player),hours(data.playtimeMs(player)),address,
+                view==null ? null : new DisplayStyle.CourseValues(view.name(),view.best(),view.attempts())));
     }
-    /** Headings in a strong color: gray was hard to read on the light sidebar background. */
-    private static Component heading(String text) { return Component.text(text+":",NamedTextColor.GOLD); }
-    private static Component value(Component text) { return Component.text(" ").append(text.colorIfAbsent(NamedTextColor.WHITE)); }
     /** "12.5h" */
     public static String hours(long millis) { return String.format(Locale.ROOT,"%.1fh",millis/3_600_000.0); }
 }

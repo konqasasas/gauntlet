@@ -158,6 +158,41 @@ GitHub に預けるのは、デプロイ専用の鍵です。VPS 側で `gauntle
 
 `VPS_SSH_KEY` は秘密鍵です。GitHub の Secrets 以外には貼らないでください。鍵を取り消すときは、VPS の `~/.ssh/authorized_keys` から `gauntlet-ci` の行を消します。
 
+## 表示設定（チャット・TAB・サイドバー・アクションバー）
+
+名前・ランクの色・チャットの書式・TAB・サイドバーは `display.yml`、アクションバーやシステムメッセージの文言は言語ファイルで決まります。どちらも **Web エディター**（`web/editor/index.html`、公開後は `https://catenaonline.net/editor/`）で、プレビューを見ながら編集して書き出せます。
+
+1. エディターで編集し、「書き出す」でファイルを保存します（編集内容はブラウザに自動保存されます。既存のファイルは「読み込む」で開けます）。
+2. リポジトリの `config/` に置きます。
+
+   | ファイル | 置き場所 | 中身 |
+   |---|---|---|
+   | `display.yml` | `config/display.yml` | 表示設定（全項目） |
+   | `ja.yml` / `en.yml` | `config/lang/ja.yml` / `config/lang/en.yml` | 言語ファイルのうち変えた項目だけ。変えていない言語は置かない |
+
+3. 手元のサーバーで試します。ゲーム内（またはサーバーのコンソール）で再読み込みすると、再起動なしで変わります。
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -Display -Local
+   ```
+
+   ```text
+   /gauntlet reload display
+   /gauntlet reload lang
+   ```
+
+4. 本番に反映します（サーバーは再起動しません）。
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -Display
+   ```
+
+   GitHub Actions の Run workflow で `display` を選んでも同じです。
+
+- サーバーには `config/` にあるファイルだけが置かれます。`config/` から消したファイルはサーバーからも消え、プラグイン同梱の既定値に戻ります。
+- 書式の誤り（ランクの色が13個ない、`<text>` がない など）があると、再読み込みは拒否されて前の見た目のまま残ります。その状態で再起動しても、プラグインは既定の見た目で起動します（ログに `Ignoring display.yml` が出ます）。
+- エディターに埋め込んだ既定値は、テスト（`DisplayEditorDefaultsTest`）でプラグイン同梱のファイルと一致するか確かめています。同梱の `display.yml` や言語ファイルを変えたら、エディター側の既定値も合わせてください。
+
 ## Web サイト（`catenaonline.net`）
 
 `web/` の静的ページを nginx で配信し、Let's Encrypt で HTTPS にします。証明書は certbot が自動で更新します。

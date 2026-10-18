@@ -1,0 +1,78 @@
+# Parkour Gauntlet 表示設定（名前・チャット・TAB・サイドバー）
+#
+# 書式は MiniMessage（例：<gold>金色</gold>、<gradient:#ffb347:#ff5f6d>グラデーション</gradient>）。
+# <...> のうち、各項目の説明にある名前は値が差し込まれる（例：<name> はプレイヤー名）。
+# サーバーでは plugins/ParkourGauntlet/display.yml に書いた項目だけがこのファイルを上書きする。
+# 変更後は /gauntlet reload display で、再起動せずに反映される。
+# Web エディター（web/editor/）で見た目を確かめながら編集できる。
+
+# ランク（1〜13）
+ranks:
+  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"13"）。
+  # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
+  badge: "[<rank_padded>]"
+  # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜13（13個ちょうど）。
+  styles:
+    - "<color:#d9d9d9><text></color>"
+    - "<color:#8bd36b><text></color>"
+    - "<color:#3fbf7f><text></color>"
+    - "<color:#4fc3f7><text></color>"
+    - "<color:#4f7dff><text></color>"
+    - "<color:#b07cff><text></color>"
+    - "<gradient:#ff9a5a:#ff4f6a><text></gradient>"
+    - "<gradient:#ffe06b:#ff9620><text></gradient>"
+    - "<gradient:#5ee7ff:#7c5cff><text></gradient>"
+    - "<gradient:#ff7eb6:#8a5cff><text></gradient>"
+    - "<gradient:#ff5f5f:#ffd84d:#5dffb0><text></gradient>"
+    - "<gradient:#4dc9ff:#d36bff:#ff5fa2><text></gradient>"
+    - "<gradient:#ffffff:#ffd54a:#ff7a1a:#ffd54a:#ffffff><text></gradient>"
+
+# プレイヤー名の表示
+names:
+  # 運営の印（gauntlet.display.admin を持つ人だけ）。後ろの空白も含めて書く。
+  admin-tag: "<red><bold>[ADMIN]</bold></red> "
+  # チャットと TAB の名前。<badge> ランクの札、<admin> 運営の印（なければ空）、<name> ランクの色の名前
+  full: "<badge> <admin><name>"
+  # 頭の上の名前。<badge> <name>
+  nametag: "<badge> <name>"
+
+# チャット。<player> は names.full、<message> は発言（翻訳されることがある）
+chat:
+  format: "<player>: <message>"
+
+# TAB
+tab:
+  # 上部。<server> は config.yml の server.name
+  header: "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  # 下部の Ping の数字の色（境目のミリ秒は config.yml の tab.ping-good / ping-ok）。
+  # <ping> は数値。下部の文全体は言語ファイルの tab.ping と tab.hints。
+  ping:
+    good: "<green><ping>ms"
+    ok: "<yellow><ping>ms"
+    bad: "<red><ping>ms"
+
+# 右側のサイドバー（最大15行）
+sidebar:
+  # タイトル。<server>
+  title: "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  # 各行。<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> config.yml の server.address。
+  # "<course_block>" だけの行は、コース中に下の course の行に置き換わる（コース外では消える）。
+  lines:
+    - ""
+    - "<gold>Player:"
+    - " <white><player>"
+    - "<gold>Rank:"
+    - " <badge>"
+    - "<gold>Playtime:"
+    - " <white><playtime>"
+    - ""
+    - "<course_block>"
+    - "<yellow><address>"
+  # コース中だけの行。<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数
+  course:
+    - "<gray>───────────"
+    - "<gold>Course:"
+    - " <white><course>"
+    - "<gold>Best:</gold><white> <best>"
+    - "<gold>Attempts:</gold><white> <attempts>"
+    - ""
