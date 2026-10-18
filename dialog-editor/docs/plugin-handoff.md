@@ -109,6 +109,7 @@ payload の ID（`c01` や `emote_01`）は見本の仮の値。実際のコー�
 - Paper の API でパックを送り（URL と SHA-1）、**読み込み完了（SUCCESSFULLY_LOADED）を待ってから**画面を開く。読み込み前に開くと画像タイルや空白フォントが無く、レイアウトが崩れる。
 - 既存のサーバーパックがある場合は、追加のパックとして送るか、統合する。統合するときは `assets/dcg/` と `credits.txt` をそのまま入れる。
 - `credits.txt` は使ったフォントのクレジット（5x5 Pixel、CC BY-SA 3.0）。パックに残すこと。
+- **今のプラグイン（2026-10-18）**: 参加時に、このパックと BetterModel のパックを別々のパックとして送っている（`pack/ResourcePacks`、gauntlet の [docs/VPS_SERVER.md](../../docs/VPS_SERVER.md) の「リソースパック」）。**読み込み完了を待ってから画面を開く処理はまだない**（[maintenance.md](maintenance.md) の「残っていること」）。
 
 ## 6. まだできていないこと（エディター側）
 
@@ -152,9 +153,9 @@ Paper 26.3 のサーバーと 26.3 のクライアントで確かめ、エディ
 
 ## 8. 実機で未確認のこと（優先順）
 
-エディターの検証は、Minecraft クライアントの規則（字幅計算・折り返し）を再現した画素単位の照合まで。**実機での表示はまだ一度も確認していない。** 最初に次を確かめてほしい。
+エディターの検証は、Minecraft クライアントの規則（字幅計算・折り返し）を再現した画素単位の照合まで。2026-10-18 に実機で一部を確かめた（7.5）。残りは次のとおり。
 
-1. `dialog_list`（`dialogs: []`、`exit_action` なし）が受け付けられ、フッターが消えること。
+1. ~~`dialog_list`（`dialogs: []`、`exit_action` なし）が受け付けられ、フッターが消えること。~~ 確認済み（7.5）。
 2. 画像タイルの位置・大きさ（GUIスケール 2〜4）と、クリック領域が見た目と合うこと。
 3. ゲーム内フォントの文字の位置と幅（日本語・英語、太字、影）。
 4. `show_dialog` での画面移動と、`after_action: none` での送り直しの体感（ちらつき）。
@@ -167,6 +168,7 @@ Paper 26.3 のサーバーと 26.3 のクライアントで確かめ、エディ
 
 - 起動: `node server.mjs`（`http://127.0.0.1:4320/`）。初回は `node tools/fetch-vanilla.mjs`。
 - CLI: `node cli.mjs help`。画面の一覧は `node cli.mjs status`、書き出しは `node cli.mjs export`。
-- 見本の作り直し: `examples/*_mock.mjs`。例: `node examples/top_menu_mock.mjs --replace > ops.json` の後に `node cli.mjs batch ops.json`。
+- 見本の作り直し: `examples/*_mock.mjs`。例: `node examples/top_menu_mock.mjs --replace > ops.json` の後に `node cli.mjs batch ops.json`。**画面が作り直され、エディターでの手作業が上書きされる**ので、デザイナーが触り始めた今は気軽に流さない（[maintenance.md](maintenance.md)）。
+- 直すときの決まりごと（テスト・点検・比較の手順）と今の状態は [maintenance.md](maintenance.md)。
 - 配色: テーマの色の名前（`@panel.bg` など）で参照している。デザイナー向けの説明は `docs/theme.md`。
 - 自作アイコンの候補: `docs/icon-candidates.md`。

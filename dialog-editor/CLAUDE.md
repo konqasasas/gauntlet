@@ -5,7 +5,10 @@ Minecraft Java 26.3 / Paper 向け、Dialog + リソースパックのGUIエデ�
 - GUIを編集するときは `data/project.json` を直接書き換えず、エディター起動中に `node cli.mjs ...`（または `/api/ops`）を使う。検証・Undo履歴・ブラウザー同期が保たれる。使い方は `node cli.mjs help`、操作の一覧は `node cli.mjs schema`。
 - 見た目の確認は `node cli.mjs preview <画面> --mode compiled -o <png>` でPNGを出して読む。
 - 編集操作は `lib/model.mjs`（UI/API/CLI共通）、出力方式は `lib/compile.mjs`、クライアント規則の再現は `lib/simulate.mjs`。
-- 変更後は `npm test`。
+- 変更後は `npm test`。`lib/` を変えたら `server.mjs` を再起動する（古いコードのまま動き続ける）。
+- 内部の作り（展開・書き出し）を変えたら `node tools/compare-projects.mjs <前の project.json> <後の project.json>` で、画面・状態ごとに画素・文字・クリック範囲が変わっていないか確かめる。
+- `examples/*_mock.mjs` は流さない（画面が作り直され、エディターでの手作業が上書きされる）。今は `data/project.json` が正本で、本番では VPS のエディターのデータが正本。
+- 今の状態・残課題・クライアントの癖の要約は docs/maintenance.md。
 - Node は `C:\Program Files\nodejs`（PATHに無い場合あり）。
 - 文字: render=game（ゲーム内フォント、y は9の倍数）が既定。見出しは英語限定で 5x5 Pixel を render=baked + pixel=true で焼き込む。ゲーム内フォントの資源は `node tools/fetch-vanilla.mjs` で data/vanilla/ に用意する。
 - 私用領域の文字（space フォント等）はコード中で数値（0xE000 など）で扱う。ツール入力に書いたエスケープ表記が実際の文字に変換されることがあるため。

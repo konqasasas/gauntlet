@@ -43,7 +43,9 @@ node server.mjs
 
 ## プラグインへの引き継ぎ
 
-Paper プラグインは別プロジェクトで作る。受け取るもの・画面の移動・custom のID一覧・未実装の機能・実機で未確認のことは [docs/plugin-handoff.md](docs/plugin-handoff.md)。
+Paper プラグインは同じ gauntlet リポジトリにある（`src/`）。受け取るもの・画面の移動・custom のID一覧・未実装の機能・実機で未確認のことは [docs/plugin-handoff.md](docs/plugin-handoff.md)。
+
+エディターを直すときの決まりごと（テスト・見た目の点検・作り直し前後の比較）、今の状態、残っていることは [docs/maintenance.md](docs/maintenance.md)。
 
 ## テーマ（色）
 
