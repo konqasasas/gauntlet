@@ -159,6 +159,9 @@ if ($Web) {
     $site = Join-Path $PSScriptRoot 'web'
     & scp -q -r "$site\*" "${Target}:/var/www/$Domain/"
     if ($LASTEXITCODE -ne 0) { throw "Upload of web/ to $Target failed." }
+    # Folders copied from Windows can arrive unreadable for nginx (403); make everything world-readable.
+    & ssh $Target "chmod -R u=rwX,go=rX /var/www/$Domain"
+    if ($LASTEXITCODE -ne 0) { throw "Fixing permissions on $Target failed." }
     Write-Host "Site uploaded: https://$Domain/"
     return
 }
