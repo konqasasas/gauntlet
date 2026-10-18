@@ -29,10 +29,10 @@ class DisplayStyleTest {
         assertEquals("[ 1 ] Steve: hi",plain(s.chat(s.full(s.badge(1),false,name),Component.text("hi"))));
         assertEquals("◆ Catena Online ◆",plain(s.tabHeader("Catena Online")));
         assertEquals("◆ Catena Online ◆",plain(s.sidebarTitle("Catena Online")));
-        assertEquals(TextColor.fromHexString("#d9d9d9"),colors(name).getFirst());
+        assertEquals(TextColor.fromHexString("#e9dfc6"),colors(name).getFirst());
     }
     @Test void gradientRanksColorEachLetter() throws IOException {
-        List<TextColor> colors=colors(bundled().rank(7,"Gradient"));
+        List<TextColor> colors=colors(bundled().rank(11,"Gradient"));
         assertEquals(8,colors.size());
         assertNotEquals(colors.getFirst(),colors.getLast());
     }
@@ -44,9 +44,9 @@ class DisplayStyleTest {
     @Test void pingRanges() throws IOException {
         DisplayStyle s=bundled();
         assertEquals("50ms",plain(s.ping(50,100,200)));
-        assertEquals(NamedTextColor.GREEN,colors(s.ping(50,100,200)).getFirst());
-        assertEquals(NamedTextColor.YELLOW,colors(s.ping(150,100,200)).getFirst());
-        assertEquals(NamedTextColor.RED,colors(s.ping(200,100,200)).getFirst());
+        assertEquals(TextColor.fromHexString("#79c2ad"),colors(s.ping(50,100,200)).getFirst());
+        assertEquals(TextColor.fromHexString("#e2c27a"),colors(s.ping(150,100,200)).getFirst());
+        assertEquals(TextColor.fromHexString("#e06a4f"),colors(s.ping(200,100,200)).getFirst());
     }
     @Test void sidebarInsertsTheCourseOnlyDuringACourse() throws IOException {
         DisplayStyle s=bundled();

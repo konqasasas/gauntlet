@@ -1,6 +1,6 @@
 # Parkour Gauntlet 表示設定（名前・チャット・TAB・サイドバー）
 #
-# 書式は MiniMessage（例：<gold>金色</gold>、<gradient:#ffb347:#ff5f6d>グラデーション</gradient>）。
+# 書式は MiniMessage（例：<gold>金色</gold>、<gradient:#e2c27a:#b8924a>グラデーション</gradient>）。
 # <...> のうち、各項目の説明にある名前は値が差し込まれる（例：<name> はプレイヤー名）。
 # サーバーでは plugins/ParkourGauntlet/display.yml に書いた項目だけがこのファイルを上書きする。
 # 変更後は /gauntlet reload display で、再起動せずに反映される。
@@ -12,23 +12,26 @@ ranks:
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
   badge: "[<rank_padded>]"
   # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜11（11個ちょうど）。
+  # メニュー（Dialog）のテーマの色を、暗いチャット欄でも読める明るさにしたもの。旅の空の移り変わりに合わせ、
+  # 段階ごとに系統をそろえる（入国 I: 生成り / 前期 II〜IV: 昼の空・緑青 / 中期 V〜VII: 真鍮〜夕暮れ /
+  # 後期 VIII〜X: 暮れ〜黄昏 / 最古 XI: 星空）。Signum の黄緑には寄せない。
   styles:
-    - "<color:#d9d9d9><text></color>"
-    - "<color:#8bd36b><text></color>"
-    - "<color:#3fbf7f><text></color>"
-    - "<color:#4fc3f7><text></color>"
-    - "<color:#4f7dff><text></color>"
-    - "<color:#b07cff><text></color>"
-    - "<gradient:#ff9a5a:#ff4f6a><text></gradient>"
-    - "<gradient:#ffe06b:#ff9620><text></gradient>"
-    - "<gradient:#5ee7ff:#7c5cff><text></gradient>"
-    - "<gradient:#ff7eb6:#8a5cff><text></gradient>"
-    - "<gradient:#ff5f5f:#ffd84d:#5dffb0><text></gradient>"
+    - "<color:#e9dfc6><text></color>"
+    - "<color:#a9d3e8><text></color>"
+    - "<color:#6fb8d8><text></color>"
+    - "<color:#79c2ad><text></color>"
+    - "<color:#e2c27a><text></color>"
+    - "<color:#e9a25f><text></color>"
+    - "<color:#e07a5c><text></color>"
+    - "<color:#d8677f><text></color>"
+    - "<color:#b77fd6><text></color>"
+    - "<color:#8f8fe6><text></color>"
+    - "<gradient:#8f8fe6:#f6efdc:#e2c27a><text></gradient>"
 
 # プレイヤー名の表示
 names:
   # 運営の印（gauntlet.display.admin を持つ人だけ）。後ろの空白も含めて書く。
-  admin-tag: "<red><bold>[ADMIN]</bold></red> "
+  admin-tag: "<color:#e06a4f><bold>[ADMIN]</bold></color> "
   # チャットと TAB の名前。<badge> ランクの札、<admin> 運営の印（なければ空）、<name> ランクの色の名前
   full: "<badge> <admin><name>"
   # 頭の上の名前。<badge> <name>
@@ -41,43 +44,43 @@ chat:
 # TAB
 tab:
   # 上部。<server> は config.yml の server.name
-  header: "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  header: "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
   # 下部の Ping の数字の色（境目のミリ秒は config.yml の tab.ping-good / ping-ok）。
   # <ping> は数値。下部の文全体は言語ファイルの tab.ping と tab.hints。
   ping:
-    good: "<green><ping>ms"
-    ok: "<yellow><ping>ms"
-    bad: "<red><ping>ms"
+    good: "<color:#79c2ad><ping>ms"
+    ok: "<color:#e2c27a><ping>ms"
+    bad: "<color:#e06a4f><ping>ms"
 
 # 右側のサイドバー（最大15行）
 sidebar:
   # タイトル。<server>
-  title: "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  title: "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
   # 各行。<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> config.yml の server.address。
   # "<course_block>" だけの行は、コース中に下の course の行に置き換わる（コース外では消える）。
   lines:
     - ""
-    - "<gold>Player:"
-    - " <white><player>"
-    - "<gold>Rank:"
+    - "<color:#e2c27a>Player:"
+    - " <color:#f6efdc><player>"
+    - "<color:#e2c27a>Rank:"
     - " <badge>"
-    - "<gold>Playtime:"
-    - " <white><playtime>"
+    - "<color:#e2c27a>Playtime:"
+    - " <color:#f6efdc><playtime>"
     - ""
     - "<course_block>"
-    - "<yellow><address>"
+    - "<color:#cdbf9c><address>"
   # コース中だけの行。<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数
   course:
-    - "<gray>───────────"
-    - "<gold>Course:"
-    - " <white><course>"
-    - "<gold>Best:</gold><white> <best>"
-    - "<gold>Attempts:</gold><white> <attempts>"
+    - "<color:#8f8470>───────────"
+    - "<color:#e2c27a>Course:"
+    - " <color:#f6efdc><course>"
+    - "<color:#e2c27a>Best:</color><color:#f6efdc> <best>"
+    - "<color:#e2c27a>Attempts:</color><color:#f6efdc> <attempts>"
     - ""
 
 # サーバー一覧で名前の下に出る説明（2行まで。言語は分けられない）。
 # <server> サーバー名、<online> 接続中の人数、<max> 最大人数。
 # 空のリスト（motd: []）にすると server.properties の motd を使う。
 motd:
-  - "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
-  - "<gray>Block-placing parkour</gray> <dark_gray>|</dark_gray> <white>Java 26.3"
+  - "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
+  - "<color:#cdbf9c>Block-placing parkour</color> <color:#8f8470>|</color> <color:#f6efdc>Java 26.3"
