@@ -61,10 +61,18 @@ public final class DisplayStyle {
     public Component rank(int rank,String text) {
         return MINI.deserialize(rankStyles.get(Math.clamp(rank,1,RANKS)-1).replace("<text>",MINI.escapeTags(text)));
     }
-    /** "[ 1 ]" for one digit, "[11]" for two, with the default badge. */
+    /** "VII" with the default badge; "[<rank_padded>]" gives "[ 7 ]" and "[11]". */
     public String badgeText(int rank) {
         String padded=rank<10 ? " "+rank+" " : String.valueOf(rank);
-        return values.get("ranks.badge").replace("<rank_padded>",padded).replace("<rank>",String.valueOf(rank));
+        return values.get("ranks.badge").replace("<rank_roman>",roman(rank)).replace("<rank_padded>",padded).replace("<rank>",String.valueOf(rank));
+    }
+    /** Roman numerals in ASCII letters (the game font has them; the Unicode numerals may fall back to another font). */
+    static String roman(int n) {
+        StringBuilder out=new StringBuilder();
+        int[] values={1000,900,500,400,100,90,50,40,10,9,5,4,1};
+        String[] letters={"M","CM","D","CD","C","XC","L","XL","X","IX","V","IV","I"};
+        for(int i=0;i<values.length;i++) for(;n>=values[i];n-=values[i]) out.append(letters[i]);
+        return out.toString();
     }
     public Component badge(int rank) { return rank(rank,badgeText(rank)); }
     /** Chat and TAB: badge, admin tag when admin, name. */

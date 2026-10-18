@@ -215,32 +215,32 @@
 
 # ランク（1〜11）
 ranks:
-  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
+  # ランク番号の札。<rank_roman> はローマ数字（"VII"）、<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
-  badge: "[<rank_padded>]"
+  badge: "<rank_roman>"
   # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜11（11個ちょうど）。
-  # メニュー（Dialog）のテーマの色を、暗いチャット欄でも読める明るさにしたもの。旅の空の移り変わりに合わせ、
-  # 段階ごとに系統をそろえる（入国 I: 生成り / 前期 II〜IV: 昼の空・緑青 / 中期 V〜VII: 真鍮〜夕暮れ /
-  # 後期 VIII〜X: 暮れ〜黄昏 / 最古 XI: 星空）。Signum の黄緑には寄せない。
+  # 旅の空の移り変わりを色味の順番で表し、暗いチャット欄でも読めるよう明るさはそろえる
+  # （入国 I: 朝もや / 前期 II〜IV: 昼の空 / 中期 V〜VII: 金〜夕焼け / 後期 VIII〜X: 黄昏、1つ前の色とのグラデーション /
+  # 最古 XI: 夜明け前のすみれから真鍮へ）。Signum の黄緑と、UI の真鍮・橙・朱には寄せない。
   styles:
-    - "<color:#e9dfc6><text></color>"
-    - "<color:#a9d3e8><text></color>"
-    - "<color:#6fb8d8><text></color>"
-    - "<color:#79c2ad><text></color>"
-    - "<color:#e2c27a><text></color>"
-    - "<color:#e9a25f><text></color>"
-    - "<color:#e07a5c><text></color>"
-    - "<color:#d8677f><text></color>"
-    - "<color:#b77fd6><text></color>"
-    - "<color:#8f8fe6><text></color>"
-    - "<gradient:#8f8fe6:#f6efdc:#e2c27a><text></gradient>"
+    - "<color:#dfe6ea><text></color>"
+    - "<color:#a6d4f2><text></color>"
+    - "<color:#74b6f0><text></color>"
+    - "<color:#6f93ee><text></color>"
+    - "<color:#f7e07a><text></color>"
+    - "<color:#ffb98a><text></color>"
+    - "<color:#f25d78><text></color>"
+    - "<gradient:#e97ac8:#f25d78><text></gradient>"
+    - "<gradient:#c98bf0:#e97ac8><text></gradient>"
+    - "<gradient:#9f8ff5:#c98bf0><text></gradient>"
+    - "<gradient:#9f8ff5:#e8c97f><text></gradient>"
 
 # プレイヤー名の表示
 names:
   # 運営の印（gauntlet.display.admin を持つ人だけ）。後ろの空白も含めて書く。
-  admin-tag: "<color:#e06a4f><bold>[ADMIN]</bold></color> "
+  admin-tag: "<color:#e06a4f>[ADMIN]</color> "
   # チャットと TAB の名前。<badge> ランクの札、<admin> 運営の印（なければ空）、<name> ランクの色の名前
-  full: "<badge> <admin><name>"
+  full: "<admin><badge> <name>"
   # 頭の上の名前。<badge> <name>
   nametag: "<badge> <name>"
 
@@ -251,7 +251,7 @@ chat:
 # TAB
 tab:
   # 上部。<server> は config.yml の server.name
-  header: "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
+  header: "<bold><gradient:#b8924a:#e8c97f:#b8924a>◆ <server> ◆</gradient></bold>"
   # 下部の Ping の数字の色（境目のミリ秒は config.yml の tab.ping-good / ping-ok）。
   # <ping> は数値。下部の文全体は言語ファイルの tab.ping と tab.hints。
   ping:
@@ -262,79 +262,75 @@ tab:
 # 右側のサイドバー（最大15行）
 sidebar:
   # タイトル。<server>
-  title: "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
+  title: "<bold><gradient:#b8924a:#e8c97f:#b8924a>◆ <server> ◆</gradient></bold>"
   # 各行。<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> config.yml の server.address。
   # "<course_block>" だけの行は、コース中に下の course の行に置き換わる（コース外では消える）。
   lines:
     - ""
-    - "<color:#e2c27a>Player:"
-    - " <color:#f6efdc><player>"
-    - "<color:#e2c27a>Rank:"
-    - " <badge>"
-    - "<color:#e2c27a>Playtime:"
-    - " <color:#f6efdc><playtime>"
+    - "<color:#79c2ad>Player: <color:#e9dfc6><player>"
+    - "<color:#79c2ad>Rank: <badge>"
+    - "<color:#79c2ad>Playtime: <color:#e9dfc6><playtime>"
     - ""
     - "<course_block>"
-    - "<color:#cdbf9c><address>"
+    - "<color:#e9a25f><address></color>"
   # コース中だけの行。<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数
   course:
     - "<color:#8f8470>───────────"
-    - "<color:#e2c27a>Course:"
-    - " <color:#f6efdc><course>"
-    - "<color:#e2c27a>Best:</color><color:#f6efdc> <best>"
-    - "<color:#e2c27a>Attempts:</color><color:#f6efdc> <attempts>"
+    - "<color:#79c2ad>Course: <color:#e9dfc6><course>"
+    - "<color:#79c2ad>Best: <color:#e9dfc6><best>"
+    - "<color:#79c2ad>Attempts: <color:#e9dfc6><attempts>"
     - ""
 
 # サーバー一覧で名前の下に出る説明（2行まで。言語は分けられない）。
 # <server> サーバー名、<online> 接続中の人数、<max> 最大人数。
 # 空のリスト（motd: []）にすると server.properties の motd を使う。
 motd:
-  - "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
-  - "<color:#cdbf9c>Block-placing parkour</color> <color:#8f8470>|</color> <color:#f6efdc>Java 26.3"
+  - "<bold><gradient:#b8924a:#e8c97f:#b8924a>◆ <server> ◆</gradient></bold>"
+  - "<color:#79c2ad>Block-placing parkour</color> <color:#8f8470>|</color> <color:#e9dfc6>Java 26.3"
 </script>
 <script type="application/json" id="default-lang">
 {
   "ja": {
-    "prefix": "<gray>[Gauntlet]</gray> ",
+    "prefix": "<color:#e2c27a>[Gauntlet]</color> ",
     "time.seconds": "<value>s",
-    "tab.ping": "<gray>Ping <ping>",
-    "tab.hints": "<yellow>Tips</yellow> <gray>ブロックは空中でも置ける！\n<yellow>Tips</yellow> <gray>本番中は1番を持ってQでいつでもリトライ\n<yellow>Tips</yellow> <gray>練習ではFでセーブ、Qでセーブ地点へ\n<yellow>Tips</yellow> <gray>/settings で言語や音量を変えられる",
-    "play.bar.separator": " <gray>|</gray> ",
-    "play.bar.unmeasured": "<red>計測不能：クライアントのtick通知が届いていません",
-    "play.bar.waiting": "<gray>動くと計測開始",
-    "play.bar.time": "<white><time></white><limit>",
-    "play.bar.limit": "<gray> / <limit>",
-    "play.bar.goal": "<gold>クリア <time>",
-    "play.bar.percent": "<white><percent>",
-    "play.bar.retry": "<yellow>[<key:key.drop>]</yellow> <gray>リトライ",
-    "play.bar.practice": "<aqua>練習",
-    "play.bar.practice.waiting": "<gray>動くと区間計測開始",
-    "play.bar.practice.running": "<white>区間 <time>",
-    "play.bar.practice.finished": "<white>区間 <time></white> <gray>（確定）",
-    "play.bar.practice.goal": "<gold>ゴール",
-    "play.bar.to-save": "<yellow>[<key:key.drop>]</yellow> <gray>セーブ地点へ",
-    "play.bar.save": "<yellow>[<key:key.swapOffhand>]</yellow> <gray>セーブ"
+    "tab.ping": "<color:#b8924a>Ping</color> <ping>",
+    "tab.hints": "<color:#79c2ad>Tips:</color> <color:#e9dfc6>ブロックは空中でも置ける！</color>\n<color:#79c2ad>Tips:</color> <color:#e9dfc6>本番中は1番を持ってQでいつでもリトライ</color>\n<color:#79c2ad>Tips:</color> <color:#e9dfc6>練習ではFでセーブ、Qでセーブ地点へ</color>\n<color:#79c2ad>Tips:</color> <color:#e9dfc6>/settings で言語や音量を変えられる</color>",
+    "play.bar.separator": "<color:#8f8470> | </color>",
+    "play.bar.unmeasured": "<color:#e06a4f>計測不能：クライアントのtick通知が届いていません</color>",
+    "play.bar.waiting": "<color:#cdbf9c>動くと計測開始</color> ",
+    "play.bar.time": "<color:#e9dfc6><time></color><limit>",
+    "play.bar.limit": "<color:#cdbf9c> / <limit></color>",
+    "play.bar.goal": "<color:#e2c27a>クリア <time></color>",
+    "play.bar.percent": "<color:#e9dfc6><percent></color>",
+    "play.bar.retry": "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>リトライ</color>",
+    "play.bar.practice": "<color:#6fb8d8>練習中</color>",
+    "play.bar.practice.waiting": "<color:#e9dfc6>動くと計測開始</color>",
+    "play.bar.practice.running": "<color:#e9dfc6><time></color>",
+    "play.bar.practice.finished": "<color:#e9dfc6><time></color>",
+    "play.bar.practice.goal": "<color:#e2c27a>ゴール</color>",
+    "play.bar.to-save": "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>セーブ地点へ</color>",
+    "play.bar.save": "<color:#e9a25f>[<key:key.swapOffhand>]</color> <color:#cdbf9c>セーブ</color>"
   },
   "en": {
-    "prefix": "<gray>[Gauntlet]</gray> ",
+    "prefix": "<color:#e2c27a>[Gauntlet]</color> ",
     "time.seconds": "<value>s",
-    "tab.ping": "<gray>Ping <ping>",
-    "tab.hints": "<yellow>Tips</yellow> <gray>You can place blocks in mid-air!\n<yellow>Tips</yellow> <gray>Hold slot 1 and press Q to retry at any time\n<yellow>Tips</yellow> <gray>In practice, F saves and Q goes back to the save\n<yellow>Tips</yellow> <gray>/settings changes language and volume",
-    "play.bar.separator": " <gray>|</gray> ",
-    "play.bar.unmeasured": "<red>Not measured: your client is not reporting ticks",
-    "play.bar.waiting": "<gray>Move to start",
-    "play.bar.time": "<white><time></white><limit>",
-    "play.bar.limit": "<gray> / <limit>",
-    "play.bar.goal": "<gold>Clear <time>",
-    "play.bar.percent": "<white><percent>",
-    "play.bar.retry": "<yellow>[<key:key.drop>]</yellow> <gray>Retry",
-    "play.bar.practice": "<aqua>Practice",
-    "play.bar.practice.waiting": "<gray>Move to time a segment",
-    "play.bar.practice.running": "<white>Segment <time>",
-    "play.bar.practice.finished": "<white>Segment <time></white> <gray>(done)",
-    "play.bar.practice.goal": "<gold>Goal",
-    "play.bar.to-save": "<yellow>[<key:key.drop>]</yellow> <gray>To save",
-    "play.bar.save": "<yellow>[<key:key.swapOffhand>]</yellow> <gray>Save"
+    "tab.ping": "<color:#b8924a>Ping</color> <ping>",
+    "tab.hints": "<color:#79c2ad>Tips:</color> <color:#e9dfc6>You can place blocks in mid-air!</color>\n<color:#79c2ad>Tips:</color> <color:#e9dfc6>Hold slot 1 and press Q to retry at any time</color>\n<color:#79c2ad>Tips:</color> <color:#e9dfc6>In practice, F saves and Q goes back to the save</color>\n<color:#79c2ad>Tips:</color> <color:#e9dfc6>/settings changes language and volume</color>",
+    "play.bar.separator": "<color:#8f8470> | </color>",
+    "play.bar.unmeasured": "<color:#e06a4f>Not measured: your client is not reporting ticks</color>",
+    "play.bar.waiting": "<color:#cdbf9c>Move to start</color> ",
+    "play.bar.time": "<color:#e9dfc6><time></color><limit>",
+    "play.bar.limit": "<color:#cdbf9c> / <limit></color>",
+    "play.bar.goal": "<color:#e2c27a>Clear <time></color>",
+    "play.bar.percent": "<color:#e9dfc6><percent></color>",
+    "play.bar.retry": "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>Retry</color>",
+    "play.bar.practice": "<color:#6fb8d8>Practicing</color>",
+    "play.bar.practice.waiting": "<color:#e9dfc6>Move to start</color>",
+    "play.bar.practice.running": "<color:#e9dfc6><time></color>",
+    "play.bar.practice.finished": "<color:#e9dfc6><time></color>",
+    "play.bar.practice.goal": "<color:#e2c27a>Goal</color>",
+    "play.bar.to-save": "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>To save</color>",
+    "play.bar.save": "<color:#e9a25f>[<key:key.swapOffhand>]</color> <color:#cdbf9c>Save</color>"
   }
 }
 </script>
@@ -492,7 +488,7 @@ function escapeTags(s) { return s.replace(/\\/g, "\\\\").replace(/</g, "\\<"); }
 // ---------- Checks (mistakes the preview alone does not show) ----------
 const SIDEBAR_NAMES = ["player", "badge", "playtime", "address", "course", "best", "attempts"];
 const RULES = {
-  "ranks.badge": { allowed: ["rank", "rank_padded"], plain: true },
+  "ranks.badge": { allowed: ["rank_roman", "rank", "rank_padded"], plain: true },
   "names.admin-tag": { allowed: [] },
   "names.full": { allowed: ["badge", "admin", "name"], required: ["name"] },
   "names.nametag": { allowed: ["badge", "name"], required: ["name"] },
@@ -610,8 +606,11 @@ function flatten(obj, prefix, out) {
   return out;
 }
 let DEFAULT_DISPLAY = null, DEFAULT_LANG = null;
-// メニュー（Dialog）のテーマの色を、暗い背景で読める明るさにしたもの
-const DEFAULT_PALETTE = ["#f6efdc", "#e9dfc6", "#cdbf9c", "#e2c27a", "#b8924a", "#79c2ad", "#a9d3e8", "#6fb8d8", "#e9a25f", "#e07a5c", "#e06a4f", "#b77fd6", "#8f8fe6"];
+// メニュー（Dialog）のテーマの色を、暗い背景で読める明るさにしたもの。
+// 先頭はサーバーのテーマカラー（真鍮。明るい #e2c27a・基本 #b8924a・サーバー名の光 #e8c97f）、
+// 続いて UI の色（本文・補助・区切り・見出しの緑青・目立たせる橙・警告の朱・練習の空色）、最後にランクの色
+const DEFAULT_PALETTE = ["#e2c27a", "#b8924a", "#e8c97f", "#e9dfc6", "#cdbf9c", "#8f8470", "#79c2ad", "#e9a25f", "#e06a4f", "#6fb8d8",
+  "#dfe6ea", "#a6d4f2", "#74b6f0", "#6f93ee", "#f7e07a", "#ffb98a", "#f25d78", "#e97ac8", "#c98bf0", "#9f8ff5"];
 const state = { display: {}, lang: { ja: {}, en: {} }, palette: [...DEFAULT_PALETTE] };
 const ui = { tab: "ranks", lang: "ja", focused: null, scene: "day", hint: 0, bar: "running" };
 const sample = { name: "Steve", rank: 7, admin: true, server: "Catena Online", address: "mc.catenaonline.net",
@@ -664,9 +663,15 @@ function rankTree(rank, text) {
   const style = styles[Math.min(Math.max(rank, 1), styles.length) - 1] || "<text>";
   return parseMM(style.split("<text>").join(escapeTags(text)));
 }
+function roman(n) {
+  const table = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+  let out = "";
+  for (const [value, letters] of table) for (; n >= value; n -= value) out += letters;
+  return out;
+}
 function badgeText(rank) {
   const padded = rank < 10 ? " " + rank + " " : String(rank);
-  return d("ranks.badge").split("<rank_padded>").join(padded).split("<rank>").join(String(rank));
+  return d("ranks.badge").split("<rank_roman>").join(roman(rank)).split("<rank_padded>").join(padded).split("<rank>").join(String(rank));
 }
 function fullTree(rank, admin, name) {
   return parseMM(d("names.full"), { badge: rankTree(rank, badgeText(rank)), admin: admin ? parseMM(d("names.admin-tag")) : "", name: rankTree(rank, name) });
@@ -852,7 +857,7 @@ function fieldEl(f) {
   return wrap;
 }
 function buildRanks(panel) {
-  panel.appendChild(fieldEl({ key: "ranks.badge", label: "ランクの札", help: "<rank> 番号、<rank_padded> 1桁なら前後に空白。文字だけ（装飾は下の色で付く）" }));
+  panel.appendChild(fieldEl({ key: "ranks.badge", label: "ランクの札", help: "<rank_roman> ローマ数字（VII）、<rank> 番号、<rank_padded> 1桁なら前後に空白。文字だけ（装飾は下の色で付く）" }));
   const h = document.createElement("h3");
   h.textContent = `ランクごとの色（${RANK_COUNT}ランク。<text> に札や名前が入る）`;
   panel.appendChild(h);

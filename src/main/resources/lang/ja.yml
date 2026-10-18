@@ -3,7 +3,7 @@
 # editor.* は運営向けで、当面は日本語のみ（英語の表示でも日本語を出す）。
 # 一覧（リスト）は1行ずつ表示される。
 
-prefix: "<gray>[Gauntlet]</gray> "
+prefix: "<color:#e2c27a>[Gauntlet]</color> "
 time.seconds: "<value>s"
 
 # ---- 参加者モード ----
@@ -49,21 +49,21 @@ play.segment.invalid: "区間タイム：無効（飛行または計測不能）
 play.segment.chat: "練習：<segment>"
 
 # アクションバー。部品を play.bar.separator でつなぐ
-play.bar.separator: " <gray>|</gray> "
-play.bar.unmeasured: "<red>計測不能：クライアントのtick通知が届いていません"
-play.bar.waiting: "<gray>動くと計測開始"
-play.bar.time: "<white><time></white><limit>"
-play.bar.limit: "<gray> / <limit>"
-play.bar.goal: "<gold>クリア <time>"
-play.bar.percent: "<white><percent>"
-play.bar.retry: "<yellow>[<key:key.drop>]</yellow> <gray>リトライ"
-play.bar.practice: "<aqua>練習"
-play.bar.practice.waiting: "<gray>動くと区間計測開始"
-play.bar.practice.running: "<white>区間 <time>"
-play.bar.practice.finished: "<white>区間 <time></white> <gray>（確定）"
-play.bar.practice.goal: "<gold>ゴール"
-play.bar.to-save: "<yellow>[<key:key.drop>]</yellow> <gray>セーブ地点へ"
-play.bar.save: "<yellow>[<key:key.swapOffhand>]</yellow> <gray>セーブ"
+play.bar.separator: "<color:#8f8470> | </color>"
+play.bar.unmeasured: "<color:#e06a4f>計測不能：クライアントのtick通知が届いていません</color>"
+play.bar.waiting: "<color:#cdbf9c>動くと計測開始</color> "
+play.bar.time: "<color:#e9dfc6><time></color><limit>"
+play.bar.limit: "<color:#cdbf9c> / <limit></color>"
+play.bar.goal: "<color:#e2c27a>クリア <time></color>"
+play.bar.percent: "<color:#e9dfc6><percent></color>"
+play.bar.retry: "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>リトライ</color>"
+play.bar.practice: "<color:#6fb8d8>練習中</color>"
+play.bar.practice.waiting: "<color:#e9dfc6>動くと計測開始</color>"
+play.bar.practice.running: "<color:#e9dfc6><time></color>"
+play.bar.practice.finished: "<color:#e9dfc6><time></color>"
+play.bar.practice.goal: "<color:#e2c27a>ゴール</color>"
+play.bar.to-save: "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>セーブ地点へ</color>"
+play.bar.save: "<color:#e9a25f>[<key:key.swapOffhand>]</color> <color:#cdbf9c>セーブ</color>"
 
 play.item.mode-official.name: "練習／本番を切り替え"
 play.item.mode-official.lore:
@@ -93,13 +93,13 @@ lobby.block.lore:
   - "<gray>置いたブロックはしばらくすると消える"
 
 # ---- TAB ----
-tab.ping: "<gray>Ping <ping>"
+tab.ping: "<color:#b8924a>Ping</color> <ping>"
 resourcepack.prompt: "<gold>Catena Online</gold> のメニューとエモートの表示に使うリソースパックです。"
 tab.hints:
-  - "<yellow>Tips</yellow> <gray>ブロックは空中でも置ける！"
-  - "<yellow>Tips</yellow> <gray>本番中は1番を持ってQでいつでもリトライ"
-  - "<yellow>Tips</yellow> <gray>練習ではFでセーブ、Qでセーブ地点へ"
-  - "<yellow>Tips</yellow> <gray>/settings で言語や音量を変えられる"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>ブロックは空中でも置ける！</color>"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>本番中は1番を持ってQでいつでもリトライ</color>"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>練習ではFでセーブ、Qでセーブ地点へ</color>"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>/settings で言語や音量を変えられる</color>"
 
 # ---- コースの状態など ----
 problem.no-region: "範囲が未設定"

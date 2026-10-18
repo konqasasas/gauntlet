@@ -52,7 +52,7 @@ class MessagesTest {
         Files.writeString(dir.resolve("en.yml"),"prefix: \"[X] \"\nonly.override: \"o\"\n");
         Messages m=Messages.load(getClass().getClassLoader(),dir,null);
         assertEquals("[X] ",m.template("en","prefix"));
-        assertEquals("<gray>[Gauntlet]</gray> ",m.template("ja","prefix"),"Other languages keep the bundled text");
+        assertEquals("<color:#e2c27a>[Gauntlet]</color> ",m.template("ja","prefix"),"Other languages keep the bundled text");
         assertEquals("o",m.template("ja","only.override"),"Japanese falls back to English");
         assertEquals(m.template("ja","editor.admin-only"),m.template("en","editor.admin-only"),"Editor texts fall back to Japanese");
         assertNull(m.template("en","no.such.key"));

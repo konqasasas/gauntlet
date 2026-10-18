@@ -8,32 +8,32 @@
 
 # ランク（1〜11）
 ranks:
-  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
+  # ランク番号の札。<rank_roman> はローマ数字（"VII"）、<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
-  badge: "[<rank_padded>]"
+  badge: "<rank_roman>"
   # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜11（11個ちょうど）。
-  # メニュー（Dialog）のテーマの色を、暗いチャット欄でも読める明るさにしたもの。旅の空の移り変わりに合わせ、
-  # 段階ごとに系統をそろえる（入国 I: 生成り / 前期 II〜IV: 昼の空・緑青 / 中期 V〜VII: 真鍮〜夕暮れ /
-  # 後期 VIII〜X: 暮れ〜黄昏 / 最古 XI: 星空）。Signum の黄緑には寄せない。
+  # 旅の空の移り変わりを色味の順番で表し、暗いチャット欄でも読めるよう明るさはそろえる
+  # （入国 I: 朝もや / 前期 II〜IV: 昼の空 / 中期 V〜VII: 金〜夕焼け / 後期 VIII〜X: 黄昏、1つ前の色とのグラデーション /
+  # 最古 XI: 夜明け前のすみれから真鍮へ）。Signum の黄緑と、UI の真鍮・橙・朱には寄せない。
   styles:
-    - "<color:#e9dfc6><text></color>"
-    - "<color:#a9d3e8><text></color>"
-    - "<color:#6fb8d8><text></color>"
-    - "<color:#79c2ad><text></color>"
-    - "<color:#e2c27a><text></color>"
-    - "<color:#e9a25f><text></color>"
-    - "<color:#e07a5c><text></color>"
-    - "<color:#d8677f><text></color>"
-    - "<color:#b77fd6><text></color>"
-    - "<color:#8f8fe6><text></color>"
-    - "<gradient:#8f8fe6:#f6efdc:#e2c27a><text></gradient>"
+    - "<color:#dfe6ea><text></color>"
+    - "<color:#a6d4f2><text></color>"
+    - "<color:#74b6f0><text></color>"
+    - "<color:#6f93ee><text></color>"
+    - "<color:#f7e07a><text></color>"
+    - "<color:#ffb98a><text></color>"
+    - "<color:#f25d78><text></color>"
+    - "<gradient:#e97ac8:#f25d78><text></gradient>"
+    - "<gradient:#c98bf0:#e97ac8><text></gradient>"
+    - "<gradient:#9f8ff5:#c98bf0><text></gradient>"
+    - "<gradient:#9f8ff5:#e8c97f><text></gradient>"
 
 # プレイヤー名の表示
 names:
   # 運営の印（gauntlet.display.admin を持つ人だけ）。後ろの空白も含めて書く。
-  admin-tag: "<color:#e06a4f><bold>[ADMIN]</bold></color> "
+  admin-tag: "<color:#e06a4f>[ADMIN]</color> "
   # チャットと TAB の名前。<badge> ランクの札、<admin> 運営の印（なければ空）、<name> ランクの色の名前
-  full: "<badge> <admin><name>"
+  full: "<admin><badge> <name>"
   # 頭の上の名前。<badge> <name>
   nametag: "<badge> <name>"
 
@@ -44,7 +44,7 @@ chat:
 # TAB
 tab:
   # 上部。<server> は config.yml の server.name
-  header: "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
+  header: "<bold><gradient:#b8924a:#e8c97f:#b8924a>◆ <server> ◆</gradient></bold>"
   # 下部の Ping の数字の色（境目のミリ秒は config.yml の tab.ping-good / ping-ok）。
   # <ping> は数値。下部の文全体は言語ファイルの tab.ping と tab.hints。
   ping:
@@ -55,32 +55,28 @@ tab:
 # 右側のサイドバー（最大15行）
 sidebar:
   # タイトル。<server>
-  title: "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
+  title: "<bold><gradient:#b8924a:#e8c97f:#b8924a>◆ <server> ◆</gradient></bold>"
   # 各行。<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> config.yml の server.address。
   # "<course_block>" だけの行は、コース中に下の course の行に置き換わる（コース外では消える）。
   lines:
     - ""
-    - "<color:#e2c27a>Player:"
-    - " <color:#f6efdc><player>"
-    - "<color:#e2c27a>Rank:"
-    - " <badge>"
-    - "<color:#e2c27a>Playtime:"
-    - " <color:#f6efdc><playtime>"
+    - "<color:#79c2ad>Player: <color:#e9dfc6><player>"
+    - "<color:#79c2ad>Rank: <badge>"
+    - "<color:#79c2ad>Playtime: <color:#e9dfc6><playtime>"
     - ""
     - "<course_block>"
-    - "<color:#cdbf9c><address>"
+    - "<color:#e9a25f><address></color>"
   # コース中だけの行。<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数
   course:
     - "<color:#8f8470>───────────"
-    - "<color:#e2c27a>Course:"
-    - " <color:#f6efdc><course>"
-    - "<color:#e2c27a>Best:</color><color:#f6efdc> <best>"
-    - "<color:#e2c27a>Attempts:</color><color:#f6efdc> <attempts>"
+    - "<color:#79c2ad>Course: <color:#e9dfc6><course>"
+    - "<color:#79c2ad>Best: <color:#e9dfc6><best>"
+    - "<color:#79c2ad>Attempts: <color:#e9dfc6><attempts>"
     - ""
 
 # サーバー一覧で名前の下に出る説明（2行まで。言語は分けられない）。
 # <server> サーバー名、<online> 接続中の人数、<max> 最大人数。
 # 空のリスト（motd: []）にすると server.properties の motd を使う。
 motd:
-  - "<bold><gradient:#f6efdc:#e2c27a:#b8924a>◆ <server> ◆</gradient></bold>"
-  - "<color:#cdbf9c>Block-placing parkour</color> <color:#8f8470>|</color> <color:#f6efdc>Java 26.3"
+  - "<bold><gradient:#b8924a:#e8c97f:#b8924a>◆ <server> ◆</gradient></bold>"
+  - "<color:#79c2ad>Block-placing parkour</color> <color:#8f8470>|</color> <color:#e9dfc6>Java 26.3"

@@ -20,16 +20,17 @@ class DisplayStyleTest {
 
     @Test void defaultsKeepTheFormerLook() throws IOException {
         DisplayStyle s=bundled();
-        assertEquals("[ 1 ]",s.badgeText(1));
-        assertEquals("[11]",s.badgeText(11));
+        assertEquals("I",s.badgeText(1));
+        assertEquals("VII",s.badgeText(7));
+        assertEquals("XI",s.badgeText(11));
         Component name=s.rank(1,"Steve");
-        assertEquals("[ 1 ] [ADMIN] Steve",plain(s.full(s.badge(1),true,name)));
-        assertEquals("[ 1 ] Steve",plain(s.full(s.badge(1),false,name)));
-        assertEquals("[ 1 ] Steve",plain(s.nametag(s.badge(1),name)));
-        assertEquals("[ 1 ] Steve: hi",plain(s.chat(s.full(s.badge(1),false,name),Component.text("hi"))));
+        assertEquals("[ADMIN] I Steve",plain(s.full(s.badge(1),true,name)));
+        assertEquals("I Steve",plain(s.full(s.badge(1),false,name)));
+        assertEquals("I Steve",plain(s.nametag(s.badge(1),name)));
+        assertEquals("I Steve: hi",plain(s.chat(s.full(s.badge(1),false,name),Component.text("hi"))));
         assertEquals("◆ Catena Online ◆",plain(s.tabHeader("Catena Online")));
         assertEquals("◆ Catena Online ◆",plain(s.sidebarTitle("Catena Online")));
-        assertEquals(TextColor.fromHexString("#e9dfc6"),colors(name).getFirst());
+        assertEquals(TextColor.fromHexString("#dfe6ea"),colors(name).getFirst());
     }
     @Test void gradientRanksColorEachLetter() throws IOException {
         List<TextColor> colors=colors(bundled().rank(11,"Gradient"));
@@ -52,11 +53,11 @@ class DisplayStyleTest {
         DisplayStyle s=bundled();
         Component badge=s.badge(1);
         List<String> outside=plain(s.sidebar(new DisplayStyle.SidebarValues("Steve",badge,"1.5h","mc.catenaonline.net",null)));
-        assertEquals(List.of("","Player:"," Steve","Rank:"," [ 1 ]","Playtime:"," 1.5h","","mc.catenaonline.net"),outside);
+        assertEquals(List.of("","Player: Steve","Rank: I","Playtime: 1.5h","","mc.catenaonline.net"),outside);
         List<String> inside=plain(s.sidebar(new DisplayStyle.SidebarValues("Steve",badge,"1.5h","mc.catenaonline.net",
                 new DisplayStyle.CourseValues("Lava Stairs","87%",3))));
-        assertEquals(List.of("","Player:"," Steve","Rank:"," [ 1 ]","Playtime:"," 1.5h","",
-                "───────────","Course:"," Lava Stairs","Best: 87%","Attempts: 3","","mc.catenaonline.net"),inside);
+        assertEquals(List.of("","Player: Steve","Rank: I","Playtime: 1.5h","",
+                "───────────","Course: Lava Stairs","Best: 87%","Attempts: 3","","mc.catenaonline.net"),inside);
     }
     @Test void serverListDescription() throws IOException {
         assertEquals("◆ Catena Online ◆\nBlock-placing parkour | Java 26.3",plain(bundled().motd("Catena Online",3,20)));
@@ -73,6 +74,12 @@ class DisplayStyleTest {
         DisplayStyle s=bundled();
         assertEquals("Steve R1",plain(s.full(s.badge(1),true,s.rank(1,"Steve"))),"A format without <admin> leaves the tag out");
         assertEquals("◆ X ◆",plain(s.tabHeader("X")),"Other keys keep the bundled text");
+    }
+    @Test void badgeCanStillUseArabicNumbers() throws IOException {
+        Files.writeString(dir.resolve("display.yml"),"ranks:\n  badge: \"[<rank_padded>]\"\n");
+        DisplayStyle s=bundled();
+        assertEquals("[ 1 ]",s.badgeText(1));
+        assertEquals("[11]",s.badgeText(11));
     }
     @Test void invalidRankStylesAreRejected() throws IOException {
         Files.writeString(dir.resolve("display.yml"),"ranks:\n  styles:\n    - \"<red><text>\"\n");

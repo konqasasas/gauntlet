@@ -1,7 +1,7 @@
 # English messages. Values are MiniMessage (<gold>…</gold> styles, <time> arguments).
 # Same keys as ja.yml. editor.* keys (builder screens) are Japanese only for now.
 
-prefix: "<gray>[Gauntlet]</gray> "
+prefix: "<color:#e2c27a>[Gauntlet]</color> "
 time.seconds: "<value>s"
 
 # ---- Participant mode ----
@@ -47,21 +47,21 @@ play.segment.invalid: "Segment: no time (flight or not measured)"
 play.segment.chat: "Practice: <segment>"
 
 # Action bar. Parts are joined with play.bar.separator
-play.bar.separator: " <gray>|</gray> "
-play.bar.unmeasured: "<red>Not measured: your client is not reporting ticks"
-play.bar.waiting: "<gray>Move to start"
-play.bar.time: "<white><time></white><limit>"
-play.bar.limit: "<gray> / <limit>"
-play.bar.goal: "<gold>Clear <time>"
-play.bar.percent: "<white><percent>"
-play.bar.retry: "<yellow>[<key:key.drop>]</yellow> <gray>Retry"
-play.bar.practice: "<aqua>Practice"
-play.bar.practice.waiting: "<gray>Move to time a segment"
-play.bar.practice.running: "<white>Segment <time>"
-play.bar.practice.finished: "<white>Segment <time></white> <gray>(done)"
-play.bar.practice.goal: "<gold>Goal"
-play.bar.to-save: "<yellow>[<key:key.drop>]</yellow> <gray>To save"
-play.bar.save: "<yellow>[<key:key.swapOffhand>]</yellow> <gray>Save"
+play.bar.separator: "<color:#8f8470> | </color>"
+play.bar.unmeasured: "<color:#e06a4f>Not measured: your client is not reporting ticks</color>"
+play.bar.waiting: "<color:#cdbf9c>Move to start</color> "
+play.bar.time: "<color:#e9dfc6><time></color><limit>"
+play.bar.limit: "<color:#cdbf9c> / <limit></color>"
+play.bar.goal: "<color:#e2c27a>Clear <time></color>"
+play.bar.percent: "<color:#e9dfc6><percent></color>"
+play.bar.retry: "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>Retry</color>"
+play.bar.practice: "<color:#6fb8d8>Practicing</color>"
+play.bar.practice.waiting: "<color:#e9dfc6>Move to start</color>"
+play.bar.practice.running: "<color:#e9dfc6><time></color>"
+play.bar.practice.finished: "<color:#e9dfc6><time></color>"
+play.bar.practice.goal: "<color:#e2c27a>Goal</color>"
+play.bar.to-save: "<color:#e9a25f>[<key:key.drop>]</color> <color:#cdbf9c>To save</color>"
+play.bar.save: "<color:#e9a25f>[<key:key.swapOffhand>]</color> <color:#cdbf9c>Save</color>"
 
 play.item.mode-official.name: "Switch practice / official"
 play.item.mode-official.lore:
@@ -91,13 +91,13 @@ lobby.block.lore:
   - "<gray>Placed blocks vanish after a while"
 
 # ---- TAB ----
-tab.ping: "<gray>Ping <ping>"
+tab.ping: "<color:#b8924a>Ping</color> <ping>"
 resourcepack.prompt: "This resource pack shows the <gold>Catena Online</gold> menus and emotes."
 tab.hints:
-  - "<yellow>Tips</yellow> <gray>You can place blocks in mid-air!"
-  - "<yellow>Tips</yellow> <gray>Hold slot 1 and press Q to retry at any time"
-  - "<yellow>Tips</yellow> <gray>In practice, F saves and Q goes back to the save"
-  - "<yellow>Tips</yellow> <gray>/settings changes language and volume"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>You can place blocks in mid-air!</color>"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>Hold slot 1 and press Q to retry at any time</color>"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>In practice, F saves and Q goes back to the save</color>"
+  - "<color:#79c2ad>Tips:</color> <color:#e9dfc6>/settings changes language and volume</color>"
 
 # ---- Course state ----
 problem.no-region: "no region"
