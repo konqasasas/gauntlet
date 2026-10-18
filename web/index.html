@@ -6,24 +6,29 @@
 <title>Catena Online</title>
 <meta name="description" content="Minecraft Java版 パルクールサーバー Catena Online。接続先 mc.catenaonline.net">
 <meta name="color-scheme" content="dark light">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' rx='3' transform='rotate(45 16 16)' fill='%23ff7a59'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='6' width='20' height='20' rx='3' transform='rotate(45 16 16)' fill='%23b8924a'/%3E%3C/svg%3E">
 <style>
+  /* ゲーム内と同じ色: 石の地、生成りの文字、テーマカラーの真鍮（中央が光るグラデーション） */
   :root {
-    --bg: #101216;
-    --panel: #181b21;
-    --line: #2a2f38;
-    --text: #eef0f4;
-    --muted: #9aa3b2;
-    --accent-a: #ffb347;
-    --accent-b: #ff5f6d;
+    --bg: #1b1a18;
+    --panel: #262420;
+    --line: #3d3934;
+    --text: #e9dfc6;
+    --muted: #a8a196;
+    --brass: #b8924a;
+    --brass-hi: #e8c97f;
+    --on-brass: #2a241b;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f6f4f1;
-      --panel: #ffffff;
-      --line: #e3ded6;
-      --text: #1b1d22;
-      --muted: #5f6673;
+      --bg: #efe7d4;
+      --panel: #f8f2e3;
+      --line: #cdbf9c;
+      --text: #2a241b;
+      --muted: #5e5444;
+      --brass: #8a6a2e;
+      --brass-hi: #b8924a;
+      --on-brass: #f8f2e3;
     }
   }
   * { box-sizing: border-box; }
@@ -40,7 +45,7 @@
   main { width: 100%; max-width: 560px; text-align: center; }
   .mark {
     width: 44px; height: 44px; margin: 0 auto 20px;
-    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    background: linear-gradient(135deg, var(--brass), var(--brass-hi), var(--brass));
     border-radius: 6px;
     transform: rotate(45deg);
   }
@@ -48,7 +53,7 @@
     margin: 0;
     font-size: clamp(2.2rem, 9vw, 3.4rem);
     letter-spacing: 0.02em;
-    background: linear-gradient(90deg, var(--accent-a), var(--accent-b));
+    background: linear-gradient(90deg, var(--brass), var(--brass-hi), var(--brass));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -73,8 +78,8 @@
     border: 0; border-radius: 8px;
     padding: 10px 16px;
     font: inherit; font-weight: 600;
-    color: #1b1d22;
-    background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+    color: var(--on-brass);
+    background: var(--brass);
     cursor: pointer;
   }
   button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
