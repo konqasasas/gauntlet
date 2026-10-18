@@ -1,14 +1,14 @@
-import { renderScreen, renderElement, cssColor } from '/lib/raster.mjs';
-import { frameLayout, drawFrame } from '/lib/frame.mjs';
-import { GlyphAtlas, gameTextItems, drawGameTextItems, gameTextCodepoints } from '/lib/gametext.mjs';
+import { renderScreen, renderElement, cssColor } from './lib/raster.mjs';
+import { frameLayout, drawFrame } from './lib/frame.mjs';
+import { GlyphAtlas, gameTextItems, drawGameTextItems, gameTextCodepoints } from './lib/gametext.mjs';
 import {
   LINE, ELEMENT_TYPES, ACTION_TYPES, FOOTER_ACTION_TYPES, INPUT_TYPES, AFTER_ACTIONS, FITS, ALIGNS, SKIN_SLOTS,
   MAX_BODY_WIDTH, MIN_BODY_WIDTH, TEXT_RENDERS, clickRows, resolveScreen, isTokenRef, themeUsers,
   TEXT_STYLE_KEYS, applyTextStyle, textStyleUsers, findGroup, groupChain, groupMembers, lockedGroups, hiddenGroups,
-} from '/lib/model.mjs';
-import { elementShown, stateMatches, stateKeys, parseConditions, combineStates, formatCondition } from '/lib/states.mjs';
-import { isComponentRef, findComponent, COMPONENT_PREFIX, H_CONSTRAINTS, V_CONSTRAINTS, BIND_TARGETS, componentUsers } from '/lib/components.mjs';
-import { lintScreen, ownerId } from '/lib/lint.mjs';
+} from './lib/model.mjs';
+import { elementShown, stateMatches, stateKeys, parseConditions, combineStates, formatCondition } from './lib/states.mjs';
+import { isComponentRef, findComponent, COMPONENT_PREFIX, H_CONSTRAINTS, V_CONSTRAINTS, BIND_TARGETS, componentUsers } from './lib/components.mjs';
+import { lintScreen, ownerId } from './lib/lint.mjs';
 
 // ---- 状態 ----------------------------------------------------------------
 const st = {
@@ -63,7 +63,7 @@ async function fetchGlyphs() {
   const cps = [...glyphWanted].slice(0, 1500);
   if (!cps.length) return;
   try {
-    const r = await api('GET', `/api/vanilla/glyphs?cp=${cps.map((c) => c.toString(16)).join(',')}`);
+    const r = await api('GET', `api/vanilla/glyphs?cp=${cps.map((c) => c.toString(16)).join(',')}`);
     for (const cp of cps) {
       glyphWanted.delete(cp);
       const g = r.glyphs[cp.toString(16)];
@@ -88,14 +88,14 @@ let customFonts = [];
 const pixelFonts = new Map(); // family -> ドット単位のビットマップ（サーバーで変換済み）
 async function loadCustomFonts() {
   try {
-    const [r, pf] = await Promise.all([api('GET', '/api/fonts'), api('GET', '/api/pixelfonts')]);
+    const [r, pf] = await Promise.all([api('GET', 'api/fonts'), api('GET', 'api/pixelfonts')]);
     for (const [k, v] of Object.entries(pf)) pixelFonts.set(k, v);
     const dl = $('#fontList');
     customFonts = r.custom || [];
     for (const f of customFonts) {
       if (!pixelFonts.has(f.family)) {
         // ドットフォント以外はブラウザーにも読み込む（読めないフォントはプレビューだけ代替表示）
-        const face = new FontFace(JSON.stringify(f.family), `url(/fonts/${encodeURIComponent(f.file)})`);
+        const face = new FontFace(JSON.stringify(f.family), `url(fonts/${encodeURIComponent(f.file)})`);
         document.fonts.add(face);
         face.load().then(() => draw()).catch(() => {});
       }
@@ -246,7 +246,7 @@ function setStatus(text, err = false) {
 }
 
 async function load() {
-  st.snap = await api('GET', '/api/project');
+  st.snap = await api('GET', 'api/project');
   const exists = isComponentRef(st.screenId) ? !!findComponent(project(), st.screenId.slice(COMPONENT_PREFIX.length)) : project().screens.some((s) => s.id === st.screenId);
   if (!st.screenId || !exists) st.screenId = project().screens[0]?.id ?? null;
   pruneSelection();
@@ -259,7 +259,7 @@ async function load() {
 async function commit(ops, label) {
   flushNudge(false);
   try {
-    st.snap = await api('POST', '/api/ops', { revision: st.snap.revision, operations: ops, label, source: 'editor' });
+    st.snap = await api('POST', 'api/ops', { revision: st.snap.revision, operations: ops, label, source: 'editor' });
     setStatus(`保存 r${st.snap.revision}`);
     pruneSelection();
     syncImages();
@@ -280,7 +280,7 @@ function syncImages() {
     if (st.images.has(id)) continue;
     const img = new Image();
     img.onload = () => draw();
-    img.src = `/assets/${encodeURIComponent(a.file)}`;
+    img.src = `assets/${encodeURIComponent(a.file)}`;
     st.images.set(id, img);
   }
 }
@@ -293,7 +293,7 @@ function scheduleCompileInfo() {
     if (!s) return;
     if (s.isComponent) { st.compileInfo = null; renderDiag(); return; }
     try {
-      st.compileInfo = { screenId: s.id, ...(await api('GET', `/api/compile/${s.id}?${stateParam(s).slice(1)}`)) };
+      st.compileInfo = { screenId: s.id, ...(await api('GET', `api/compile/${s.id}?${stateParam(s).slice(1)}`)) };
       if (st.mode === 'edit') { draw(); if (selected()) renderInspector(); } else renderDiag();
       if (st.mode === 'compiled') loadCompiledImage();
     } catch (e) { st.diagHtml = null; $('#diag').innerHTML = `<div class="e">${esc(e.message)}</div>`; }
@@ -311,7 +311,7 @@ function loadCompiledImage() {
   const z = st.zoom || fitZoom(vp.width, vp.height);
   const img = new Image();
   img.onload = () => { st.compiledImg = img; draw(); };
-  img.src = `/api/preview/${s.id}.png?mode=compiled&clicks=${$('#clickChk').checked ? 1 : 0}&zoom=${z}&vw=${vp.width}&vh=${vp.height}&r=${st.snap.revision}${stateParam(s)}`;
+  img.src = `api/preview/${s.id}.png?mode=compiled&clicks=${$('#clickChk').checked ? 1 : 0}&zoom=${z}&vw=${vp.width}&vh=${vp.height}&r=${st.snap.revision}${stateParam(s)}`;
 }
 
 // ---- 描画 ----------------------------------------------------------------
@@ -853,7 +853,7 @@ stage.addEventListener('drop', async (ev) => {
 
 async function uploadAsset(file) {
   try {
-    const r = await api('POST', '/api/assets', file, { 'X-Filename': encodeURIComponent(file.name), 'X-Source': 'editor' });
+    const r = await api('POST', 'api/assets', file, { 'X-Filename': encodeURIComponent(file.name), 'X-Source': 'editor' });
     st.snap = { revision: r.revision, project: r.project, canUndo: r.canUndo, canRedo: r.canRedo };
     syncImages(); renderAll();
     return r.asset;
@@ -960,11 +960,11 @@ function flushNudge(send) {
   const op = { op: 'patch_elements', screen: s.id, patches: els.map((e) => ({ element: e.id, values: { x: e.x, y: e.y } })) };
   const label = `移動 ${els.length > 1 ? `${els.length}個` : els[0].id}`;
   if (send) commit([op], label);
-  else api('POST', '/api/ops', { revision: st.snap.revision, operations: [op], label, source: 'editor' }).then((r) => { st.snap = r; }).catch(() => load());
+  else api('POST', 'api/ops', { revision: st.snap.revision, operations: [op], label, source: 'editor' }).then((r) => { st.snap = r; }).catch(() => load());
 }
 
-async function undo() { try { st.snap = await api('POST', '/api/undo', { source: 'editor' }); pruneSelection(); renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
-async function redo() { try { st.snap = await api('POST', '/api/redo', { source: 'editor' }); pruneSelection(); renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
+async function undo() { try { st.snap = await api('POST', 'api/undo', { source: 'editor' }); pruneSelection(); renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
+async function redo() { try { st.snap = await api('POST', 'api/redo', { source: 'editor' }); pruneSelection(); renderAll(); scheduleCompileInfo(); } catch (e) { setStatus(e.message, true); } }
 $('#undoBtn').onclick = undo;
 $('#redoBtn').onclick = redo;
 
@@ -1307,7 +1307,7 @@ function renderAssets() {
     li.onclick = () => openAsset(id);
     if (st.asset === id) li.classList.add('on');
     const img = document.createElement('img');
-    img.src = `/assets/${encodeURIComponent(a.file)}`;
+    img.src = `assets/${encodeURIComponent(a.file)}`;
     img.alt = a.name;
     li.append(img, btn('✕', '素材を削除（未使用のみ）', (ev) => { ev.stopPropagation(); commit([{ op: 'remove_asset', asset: id }], `素材削除 ${a.name}`); }));
     li.lastChild.classList.add('del');
@@ -2425,14 +2425,14 @@ $('#exportBtn').onclick = async () => {
   flushNudge(true);
   setStatus('書き出し中…');
   try {
-    const r = await api('POST', '/api/export', { revision: st.snap.revision });
+    const r = await api('POST', 'api/export', { revision: st.snap.revision });
     const m = r.manifest;
     const errs = r.report.errors, warns = r.report.warnings;
     $('#exportBody').innerHTML = `
       <p>${errs.length ? `<span style="color:var(--danger)">エラー ${errs.length} 件</span>` : '検証OK'} / 注意 ${warns.length} 件</p>
-      <p><a href="/api/exports/latest/resourcepack.zip">resourcepack.zip</a> <span class="mono">${m.resourcePack.sha1}</span> (${(m.resourcePack.bytes / 1024).toFixed(1)} KB)<br>
-      <a href="/api/exports/latest/datapack.zip">datapack.zip</a> <span class="mono">${m.dataPack.sha1}</span><br>
-      <a href="/api/exports/latest/manifest.json">manifest.json</a></p>
+      <p><a href="api/exports/latest/resourcepack.zip">resourcepack.zip</a> <span class="mono">${m.resourcePack.sha1}</span> (${(m.resourcePack.bytes / 1024).toFixed(1)} KB)<br>
+      <a href="api/exports/latest/datapack.zip">datapack.zip</a> <span class="mono">${m.dataPack.sha1}</span><br>
+      <a href="api/exports/latest/manifest.json">manifest.json</a></p>
       <p class="note">保存先: <span class="mono">${esc(r.dir)}</span></p>
       <p class="note">試し方: リソースパックを有効にし、データパックをワールドの datapacks に入れて <span class="mono">/reload</span> 後、<span class="mono">/dialog show @s ${esc(m.namespace)}:${esc(m.screens[0]?.id || '')}</span>（または <span class="mono">/function ${esc(m.namespace)}:open/${esc(m.screens[0]?.id || '')}</span>）。</p>
       ${errs.length || warns.length ? `<pre>${esc([...errs, ...warns].join('\n'))}</pre>` : ''}`;
@@ -2460,7 +2460,7 @@ $('#clickChk').addEventListener('change', () => { if (st.mode === 'compiled') lo
 
 // ---- 同期（CLI/API からの変更を反映） -----------------------------------------------
 function connectEvents() {
-  const es = new EventSource('/api/events');
+  const es = new EventSource('api/events');
   es.addEventListener('change', (ev) => {
     const d = JSON.parse(ev.data);
     if (d.revision !== st.snap?.revision) { load(); if (d.source !== 'editor') setStatus(`外部の変更を反映 r${d.revision}（${d.source}）`); }

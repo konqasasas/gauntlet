@@ -13,6 +13,8 @@ import { auditAllStates } from './lib/audit.mjs';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.DCG_PORT || 4320);
 const HOST = '127.0.0.1';
+// 逆プロキシ越しに使うときに編集（POST）を許す Origin（カンマ区切り。例: https://catenaonline.net）
+const ALLOWED_ORIGINS = new Set((process.env.DCG_ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean));
 const DATA = path.resolve(process.env.DCG_DATA || path.join(ROOT, 'data'));
 const EXPORTS = path.resolve(process.env.DCG_EXPORTS || path.join(ROOT, 'exports'));
 const VANILLA = path.resolve(process.env.DCG_VANILLA || path.join(DATA, 'vanilla'));
@@ -59,6 +61,7 @@ async function readJson(req) {
 function checkOrigin(req) {
   const origin = req.headers.origin;
   if (!origin) return true;
+  if (ALLOWED_ORIGINS.has(origin)) return true;
   try {
     const u = new URL(origin);
     return (u.hostname === '127.0.0.1' || u.hostname === 'localhost') && Number(u.port || 80) === PORT;
