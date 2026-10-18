@@ -80,6 +80,10 @@ class DialogTemplatesTest {
         assertFalse(DialogTemplates.matches("sound.system=70",Map.of()));
         assertTrue(DialogTemplates.matches("ui_lang!=ja",Map.of()));
         assertFalse(DialogTemplates.matches("bad condition",Map.of()));
+        // & でつないだ条件はすべて満たすときだけ
+        assertTrue(DialogTemplates.matches("tab=sound&muted!=on",Map.of("tab","sound")));
+        assertFalse(DialogTemplates.matches("tab=sound&muted!=on",Map.of("tab","sound","muted","on")));
+        assertFalse(DialogTemplates.matches("tab=sound&",Map.of("tab","sound")));
     }
     @Test void loadsFilesByName(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("settings.json"),DIALOG);

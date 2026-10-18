@@ -69,12 +69,19 @@ public final class DialogTemplates {
         return out;
     }
 
-    /** key=value: the value is exactly that; key!=value: anything else, a missing value too. */
+    /**
+     * key=value: the value is exactly that; key!=value: anything else, a missing value too.
+     * Conditions joined with &amp; must all hold (a group's state and its members' states).
+     */
     static boolean matches(String condition,Map<String,String> values) {
-        var m=CONDITION.matcher(condition);
-        if(!m.matches()) return false;
-        boolean equal=m.group(3).equals(values.get(m.group(1)));
-        return m.group(2).equals("=")==equal;
+        String[] parts=condition.split("&",-1);
+        for(String part:parts) {
+            var m=CONDITION.matcher(part);
+            if(!m.matches()) return false;
+            boolean equal=m.group(3).equals(values.get(m.group(1)));
+            if(m.group(2).equals("=")!=equal) return false;
+        }
+        return true;
     }
 
     // Adventure reads a custom click's payload only as SNBT text, while the editor writes it as JSON.
