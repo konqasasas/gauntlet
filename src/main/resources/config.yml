@@ -15,6 +15,15 @@ tab:
   # ヒントの切り替え間隔（秒）。文言は lang/*.yml の tab.hints
   hint-seconds: 20
 
+# メニュー（Dialog エディターの雛形。plugins/ParkourGauntlet/menu/）
+menu:
+  # 役割ごとの画面。空なら、台帳風のメニュー（home / settings）があればそれ、なければ以前のメニュー（top_menu / settings）
+  screens:
+    # /menu で開く画面
+    home: ""
+    # 設定を変えたあと、戻り先の指定がないときに開く画面
+    settings: ""
+
 # リソースパック（メニューの画像・フォントと、エモート用の BetterModel のパック）
 resource-packs:
   # 参加時に送る。publish-dir がないサーバー（手元の試験用など）では何もしない

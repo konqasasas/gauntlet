@@ -88,6 +88,9 @@ if ($Menu) {
         $runtime = Join-Path $PSScriptRoot 'run\paper-26.3'
         Sync-Folder $templates (Join-Path $runtime 'plugins\ParkourGauntlet\menu') '*.json'
         Write-Host "Copied $(@(Get-ChildItem -LiteralPath $templates -Filter '*.json').Count) templates"
+        # Each screen's default states (Sync-Folder removed the old one with the other *.json).
+        $manifest = Join-Path $menuDir 'manifest.json'
+        if (Test-Path -LiteralPath $manifest) { Copy-Item -LiteralPath $manifest -Destination (Join-Path $runtime 'plugins\ParkourGauntlet\menu\manifest.json') -Force }
         $datapack = Join-Path $menuDir 'datapack.zip'
         $target = Join-Path $runtime 'world\datapacks\dialog-custom-gui.zip'
         $reloadDatapack = $false

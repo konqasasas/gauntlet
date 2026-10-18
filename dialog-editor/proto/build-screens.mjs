@@ -6,7 +6,7 @@
 // 同じ画面の中では値の見た目（トグル・音量・選んでいる言語など）だけを状態で出し分ける。
 //
 //   node proto/build-screens.mjs [--url http://127.0.0.1:4320]
-import { uploadArt, ops, fixed, img, nine, txt, hot, rect, inst, act, open, when, ledgerBase, heading, label, screenBase } from './kit.mjs';
+import { LIVE, S, uploadArt, ops, fixed, img, nine, txt, hot, rect, inst, act, open, when, ledgerBase, heading, label, screenBase } from './kit.mjs';
 
 const A = await uploadArt();
 const STEPS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
@@ -34,7 +34,7 @@ function limenRow(id, x, y, done) {
   return out;
 }
 
-const home = screenBase('proto_home', '試作: ホーム', [
+const home = screenBase(S('home'), '試作: ホーム', [
   ...ledgerBase(A, 0),
   // 左: 続きから（正統な試練なので空と尖塔を添える）
   nine('cont_card', A.card, 8, 21, 252, 157, { constraints: fixed }),
@@ -49,35 +49,35 @@ const home = screenBase('proto_home', '試作: ホーム', [
   txt('cont_done', '3 / 10 ・ Culmen まだ', 100, 108, 150, '@ink'),
   ...limenRow('cont_limen', 16, 126, 3),
   inst('cont_go', 'ui_button', 16, 144, 128, 21, 'primary', { label: '続きから辿る', tooltip: 'Limen 3-4 から始めます', action: act('dcg:rankup_start', {}) }),
-  inst('cont_map', 'ui_button', 150, 144, 102, 21, 'normal', { label: '鎖を見る', tooltip: 'Passus（ランクアップの進行）を開く', action: open('proto_passus') }),
+  inst('cont_map', 'ui_button', 150, 144, 102, 21, 'normal', { label: '鎖を見る', tooltip: 'Passus（ランクアップの進行）を開く', action: open(S('passus')) }),
 
   // 右: 3枚のカード（見出しの行の 6 上から、見出し・空き・2行）
   nine('rec_card', A.card, 266, 21, 178, 49, { constraints: fixed }),
   ...heading('rec_h', { ja: '最近の記録', en: 'Recent' }, 274, 27, 162),
   txt('rec_1', '3-3   0:41.20', 274, 45, 100, '@ink'), txt('rec_1b', 'ベスト更新', 376, 45, 60, '@verdigris.dark', { align: 'right' }),
   txt('rec_2', '3-2   0:38.02', 274, 54, 100, '@ink'),
-  click('rec_hs1', 266, 45, 178, open('proto_ledger'), '名簿で記録を見る'),
-  click('rec_hs2', 266, 54, 178, open('proto_ledger'), '名簿で記録を見る'),
+  click('rec_hs1', 266, 45, 178, open(S('ledger')), '名簿で記録を見る'),
+  click('rec_hs2', 266, 54, 178, open(S('ledger')), '名簿で記録を見る'),
 
   nine('ntc_card', A.card, 266, 75, 178, 49, { constraints: fixed }),
   ...heading('ntc_h', { ja: '守り手の掲示', en: 'Notice' }, 274, 81, 162),
   img('ntc_badge', A.badge_unread, 430, 82, 6, 6),
   txt('ntc_1', '10/17  新しい試練「天空回廊」', 274, 99, 162, '@ink'),
   txt('ntc_2', 'ほかに未読 2 件', 274, 108, 162, '@ink.faint'),
-  click('ntc_hs1', 266, 99, 178, open('proto_notices'), 'お知らせを開く（未読 3 件）'),
-  click('ntc_hs2', 266, 108, 178, open('proto_notices'), 'お知らせを開く（未読 3 件）'),
+  click('ntc_hs1', 266, 99, 178, open(S('notices')), 'お知らせを開く（未読 3 件）'),
+  click('ntc_hs2', 266, 108, 178, open(S('notices')), 'お知らせを開く（未読 3 件）'),
 
   nine('gal_card', A.card, 266, 129, 178, 49, { constraints: fixed }),
   ...heading('gal_h', { ja: '展示場から', en: 'Gallery' }, 274, 135, 162),
   txt('gal_1', '天空回廊', 274, 153, 80, '@ink'), txt('gal_1b', '★★★★★', 376, 153, 60, '@brass.dark', { align: 'right' }),
   txt('gal_2', '作 Alex ・ 辿った人 120', 274, 162, 162, '@ink.sub'),
-  click('gal_hs1', 266, 153, 178, open('proto_gallery'), '展示場でこの試練を見る'),
-  click('gal_hs2', 266, 162, 178, open('proto_gallery'), '展示場でこの試練を見る'),
+  click('gal_hs1', 266, 153, 178, open(S('gallery')), '展示場でこの試練を見る'),
+  click('gal_hs2', 266, 162, 178, open(S('gallery')), '展示場でこの試練を見る'),
 
   // 下の段
   txt('me_name', 'Steve', 12, 189, 40, '@sky.3'),
   txt('me_rank', 'Anulus III', 50, 189, 80, '@ink.sub'),
-  inst('help', 'ui_button', 358, 180, 86, 21, 'normal', { label: '遊び方', tooltip: '操作のコツやルール', action: open('proto_help') }),
+  inst('help', 'ui_button', 358, 180, 86, 21, 'normal', { label: '遊び方', tooltip: '操作のコツやルール', action: open(S('help')) }),
 ]);
 
 // ======================= Passus（ランクアップの進行マップ）=======================
@@ -142,7 +142,7 @@ const passusDetail = [
   ]),
   inst('px_go', 'ui_button_v', 14, 171, 120, 21, 'primary', { label: '挑戦する' }, { variantBy: { key: 'era_lock', map: { on: 'disabled' }, else: 'primary' } }),
   click('px_go_hs', 14, 180, 120, act('dcg:passus_start', {}), '選んだ Limen に挑戦する（この先の時代は選べません）'),
-  inst('px_ledger', 'ui_button', 140, 171, 120, 21, 'normal', { label: 'この時代の名簿', tooltip: '名簿でこの時代の記録を見る', action: open('proto_ledger') }),
+  inst('px_ledger', 'ui_button', 140, 171, 120, 21, 'normal', { label: 'この時代の名簿', tooltip: '名簿でこの時代の記録を見る', action: open(S('ledger')) }),
 ];
 
 const PASSUS_STATE = {
@@ -150,7 +150,7 @@ const PASSUS_STATE = {
   ...Object.fromEntries(ROMAN.map((_, k) => [`ring${k}`, k < 2 ? 'done' : k === 2 ? 'now' : 'lock'])),
   ...Object.fromEntries(Array.from({ length: 11 }, (_, k) => [`limen${k}`, k < 3 ? 'done' : k === 3 ? 'now' : 'todo'])),
 };
-const passus = screenBase('proto_passus', '試作: Passus', [...ledgerBase(A, 1), ...passusTop, ...passusEra, ...passusCards, ...passusDetail], PASSUS_STATE);
+const passus = screenBase(S('passus'), '試作: Passus', [...ledgerBase(A, 1), ...passusTop, ...passusEra, ...passusCards, ...passusDetail], PASSUS_STATE);
 
 // ======================= 展示場（市井の試練）=======================
 // 背景は布張り（正統な試練ではないので尖塔は付けない）。左: 検索・並べ替え・絞り込み、中: カード 2列×3段、右: 選んだ試練の詳細
@@ -229,22 +229,22 @@ const galleryDetail = [
   click('gd_go_hs', 316, 162, 124, act('dcg:gallery_start', {}), '選んだ試練に挑戦する'),
 ];
 
-const gallery = screenBase('proto_gallery', '試作: 展示場', [
+const gallery = screenBase(S('gallery'), '試作: 展示場', [
   ...ledgerBase(A, 2),
   nine('cloth', A.panel_cloth, 4, 18, 444, 194, { nineFill: 'tile' }),
   ...galleryLeft, ...galleryGrid, ...galleryDetail,
 ], { sort: 'popular', f_open: 'on', f_done: 'off', f_fav: 'off', f_easy: 'on', f_hard: 'off', selected: '0', fav_sel: 'on' });
 
 // ======================= 設定 =======================
-const CATS = [['general', '一般', 'proto_settings', 'General'], ['sound', 'サウンド', 'proto_settings_sound', 'Sound'], ['profile', 'プロフィール', 'proto_settings_profile', 'Profile'],
-  ['friend', 'フレンド', 'proto_settings_friend', 'Friend'], ['chat', 'チャット', 'proto_settings_chat', 'Chat']];
+const CATS = [['general', '一般', S('settings'), 'General'], ['sound', 'サウンド', S('settings_sound'), 'Sound'], ['profile', 'プロフィール', S('settings_profile'), 'Profile'],
+  ['friend', 'フレンド', S('settings_friend'), 'Friend'], ['chat', 'チャット', S('settings_chat'), 'Chat']];
 const UI_LANGS = [['auto', '自動（クライアントの言語）'], ['ja', '日本語'], ['en', 'English']];
 const TR_LANGS = [['ui', 'UI言語に合わせる'], ['ja', '日本語 (ja)'], ['en', 'English (en)'], ['ko', '한국어 (ko)'], ['zh-CN', '简体中文 (zh-CN)'], ['zh-TW', '繁體中文 (zh-TW)'],
   ['es', 'Español (es)'], ['pt', 'Português (pt)'], ['fr', 'Français (fr)'], ['de', 'Deutsch (de)'], ['ru', 'Русский (ru)'], ['it', 'Italiano (it)'], ['th', 'ไทย (th)'], ['vi', 'Tiếng Việt (vi)'], ['id', 'Bahasa Indonesia (id)']];
 // null は空けておく枠（ベトナム語は上下の記号が行からはみ出すので、上を空けて列の一番下に置く）
 const TR_LIST_ORDER = ['ui', 'ja', 'en', 'ko', 'zh-CN', 'zh-TW', 'es', 'th', 'pt', 'fr', 'de', 'ru', 'it', 'id', null, 'vi'];
 const DEFAULTS = { ui_lang: 'auto', translate_auto: 'on', translate_lang: 'ja', 'sound.system': '70', 'sound.course': '30' };
-const set = (key, value) => act('dcg:settings_set', { key, value });
+const set = (key, value, back = S('settings')) => act('dcg:settings_set', { key, value, back });
 
 // 状態の値ごとの文字（同じ場所に重ね、値に合うものだけ出る）
 const valueTexts = (id, key, items, x, y, w, color, extra = {}) =>
@@ -294,29 +294,29 @@ function general(openList) {
     ...heading('lang_h', { ja: '言語', en: 'Language' }, 100, 45, 340),
     txt('ui_lang_l', 'UI言語', 104, 63, 88, '@ink'),
     inst('ui_lang_dd', 'ui_dropdown', 196, 54, 180, 21, uiOpen ? 'open' : 'closed',
-      { label: '', tooltip: uiOpen ? 'クリックで一覧を閉じる' : 'クリックで一覧を開く', action: open(uiOpen ? 'proto_settings' : 'proto_settings_ui_lang') }),
+      { label: '', tooltip: uiOpen ? 'クリックで一覧を閉じる' : 'クリックで一覧を開く', action: open(uiOpen ? S('settings') : S('settings_ui_lang')) }),
     ...valueTexts('ui_lang_v', 'ui_lang', UI_LANGS, 201, 63, 150, '@ink'),
     // 翻訳（UI言語の一覧が開いているときは、一覧の下になるので出さない）
     ...(uiOpen ? [] : [
       ...heading('tr_h', { ja: '翻訳', en: 'Translate' }, 100, 81, 340),
       txt('tr_auto_l', '自動翻訳', 104, 99, 88, '@ink'),
       inst('tr_auto', 'ui_toggle_v', 196, 99, 22, 9, 'on', {}, { variantBy: { key: 'translate_auto', map: { on: 'on' }, else: 'off' } }),
-      click('tr_auto_hs', 196, 99, 22, act('dcg:settings_toggle', { key: 'translate_auto' }), '自動翻訳（クリックで切り替え）'),
+      click('tr_auto_hs', 196, 99, 22, act('dcg:settings_toggle', { key: 'translate_auto', back: S('settings') }), '自動翻訳（クリックで切り替え）'),
       txt('tr_auto_on', 'ON', 224, 99, 30, '@verdigris.dark', { state: 'translate_auto=on' }),
       txt('tr_auto_off', 'OFF', 224, 99, 30, '@ink.faint', { state: 'translate_auto=off' }),
     ]),
     txt('tr_lang_l', '翻訳先', 104, 117, 88, '@ink', { state: 'translate_auto=on' }),
     txt('tr_lang_l_off', '翻訳先', 104, 117, 88, '@ink.faint', { state: 'translate_auto=off' }),
     ...(trOpen
-      ? [inst('tr_dd', 'ui_dropdown', 196, 108, 180, 21, 'open', { label: '', tooltip: 'クリックで一覧を閉じる', action: open('proto_settings') })]
+      ? [inst('tr_dd', 'ui_dropdown', 196, 108, 180, 21, 'open', { label: '', tooltip: 'クリックで一覧を閉じる', action: open(S('settings')) })]
       : [inst('tr_dd', 'ui_dropdown_v', 196, 108, 180, 21, 'closed', { label: '' }, { variantBy: { key: 'translate_auto', map: { off: 'disabled' }, else: 'closed' } }),
-        click('tr_dd_hs', 196, 117, 180, act('dcg:settings_dropdown', { key: 'translate_lang', screen: 'proto_settings_translate' }), 'クリックで一覧を開く（自動翻訳が ON のとき）')]),
+        click('tr_dd_hs', 196, 117, 180, act('dcg:settings_dropdown', { key: 'translate_lang', screen: S('settings_translate') }), 'クリックで一覧を開く（自動翻訳が ON のとき）')]),
     ...when('translate_auto=on', valueTexts('tr_v', 'translate_lang', TR_LANGS, 201, 117, 150, '@ink')),
     ...when('translate_auto=off', valueTexts('tr_vo', 'translate_lang', TR_LANGS, 201, 117, 150, '@ink.faint')),
     // 翻訳先の一覧が開いているときは、注意書きと「初期値に戻す」は一覧の下になるので出さない
     ...(trOpen ? [] : [
       txt('tr_note', '自動翻訳が ON のとき、チャットをこの言語に訳します', 104, 135, 336, '@ink.faint'),
-      inst('reset', 'ui_button', 316, 180, 124, 21, 'normal', { label: 'この欄を初期値に戻す', tooltip: '確認してから戻します', action: open('proto_settings_reset') }),
+      inst('reset', 'ui_button', 316, 180, 124, 21, 'normal', { label: 'この欄を初期値に戻す', tooltip: '確認してから戻します', action: open(S('settings_reset')) }),
     ]),
     ...(uiOpen ? ddList('ui_lang_list', 196, 63, 180, 'ui_lang', UI_LANGS) : []),
     // 15言語は 8 行 × 2 列（タイ語とベトナム語は上下の記号がはみ出すので、隣の行と重ならない場所に置く）
@@ -329,10 +329,10 @@ function sliderRow(key, label, y) {
   const id = sid(key);
   return [
     txt(`${id}_l`, label, 104, y, 88, '@ink'),
-    inst(`${id}_dec`, 'ui_step', 196, y, 12, 9, 'left', { tooltip: `${label}を 10% 下げる`, action: act('dcg:settings_step', { key, delta: -10 }) }),
+    inst(`${id}_dec`, 'ui_step', 196, y, 12, 9, 'left', { tooltip: `${label}を 10% 下げる`, action: act('dcg:settings_step', { key, delta: -10, back: S('settings_sound') }) }),
     inst(`${id}_s`, 'ui_slider_v', 211, y, 100, 9, 'v100', {}, { variantBy: { key, map: Object.fromEntries(STEPS.map((s) => [String(s), `v${s}`])), else: 'v100' } }),
-    ...STEPS.slice(1).map((s) => click(`${id}_h${s}`, 211 + s - 10, y, 10, set(key, s), `${s}% にする`)),
-    inst(`${id}_inc`, 'ui_step', 314, y, 12, 9, 'right', { tooltip: `${label}を 10% 上げる`, action: act('dcg:settings_step', { key, delta: 10 }) }),
+    ...STEPS.slice(1).map((s) => click(`${id}_h${s}`, 211 + s - 10, y, 10, set(key, s, S('settings_sound')), `${s}% にする`)),
+    inst(`${id}_inc`, 'ui_step', 314, y, 12, 9, 'right', { tooltip: `${label}を 10% 上げる`, action: act('dcg:settings_step', { key, delta: 10, back: S('settings_sound') }) }),
     ...valueTexts(`${id}_v`, key, STEPS.map((s) => [String(s), `${s}%`]), 330, y, 28, '@ink', { align: 'right' }),
   ];
 }
@@ -341,7 +341,7 @@ const sound = () => [
   ...sliderRow('sound.system', 'システム音', 63),
   ...sliderRow('sound.course', 'コースの演出音', 81),
   txt('snd_note', '音量を変えると、その音量で試しの音が鳴ります', 104, 99, 336, '@ink.faint'),
-  inst('reset', 'ui_button', 316, 180, 124, 21, 'normal', { label: 'この欄を初期値に戻す', tooltip: '確認してから戻します', action: open('proto_settings_sound_reset') }),
+  inst('reset', 'ui_button', 316, 180, 124, 21, 'normal', { label: 'この欄を初期値に戻す', tooltip: '確認してから戻します', action: open(S('settings_sound_reset')) }),
 ];
 const later = (cat, title, note) => [
   ...heading(`${cat}_h`, { ja: CATS.find(([c]) => c === cat)[1], en: title }, 100, 45, 340),
@@ -350,7 +350,7 @@ const later = (cat, title, note) => [
 ];
 
 // 確認ダイアログ: 下の画面は絵だけを残して暗くし（文字は常に手前に描かれるので出さない）、上に小さな紙の面
-function confirmScreen(id, title, under, question, back) {
+function confirmScreen(id, title, under, question, back, keys) {
   const shapes = under.filter((e) => e.type === 'image' || e.type === 'rect');
   return screenBase(id, title, [
     ...shapes,
@@ -359,7 +359,7 @@ function confirmScreen(id, title, under, question, back) {
     ...heading('cf_h', { ja: '初期値に戻す', en: 'Reset' }, 126, 72, 200),
     txt('cf_q', question, 126, 90, 200, '@ink', { align: 'center' }),
     txt('cf_n', 'この操作は取り消せません', 126, 99, 200, '@ink.sub', { align: 'center' }),
-    inst('cf_ok', 'ui_button', 136, 108, 92, 21, 'danger', { label: '初期値に戻す', tooltip: '戻して設定に戻ります', action: act('dcg:settings_reset', { back }) }),
+    inst('cf_ok', 'ui_button', 136, 108, 92, 21, 'danger', { label: '初期値に戻す', tooltip: '戻して設定に戻ります', action: act('dcg:settings_reset', { back, keys: keys.join(',') }) }), // payload の配列はプラグインが読まないので文字列
     inst('cf_no', 'ui_button', 234, 108, 82, 21, 'normal', { label: 'やめる', tooltip: '何もせずに戻ります', action: open(back) }),
   ]);
 }
@@ -388,7 +388,7 @@ function ledgerControls(open) {
   return [
     ...label('lg_course_l', { ja: 'コース', en: 'Course' }, 8, 27, 40, '@ink'),
     inst('lg_course_dd', 'ui_dropdown', 52, 18, 168, 21, open ? 'open' : 'closed',
-      { label: '', tooltip: open ? 'クリックで一覧を閉じる' : 'クリックでコースを選ぶ', action: open ? act('dcg:open', { screen: 'proto_ledger' }) : act('dcg:open', { screen: 'proto_ledger_course' }) }),
+      { label: '', tooltip: open ? 'クリックで一覧を閉じる' : 'クリックでコースを選ぶ', action: open ? act('dcg:open', { screen: S('ledger') }) : act('dcg:open', { screen: S('ledger_course') }) }),
     ...valueTexts('lg_course_v', 'course', LEDGER_COURSES, 57, 27, 140, '@ink'),
     ...label('lg_period_l', { ja: '期間', en: 'Period' }, 236, 27, 30, '@ink'),
     ...[['week', '今週'], ['all', '全期間']].flatMap(([v, name], k) => {
@@ -443,8 +443,8 @@ const ledgerFooter = [
   txt('lg_me_1', 'ベスト  1:12.40（10/18）　・　ひとつ上の順位まで  0.50 秒', 8, 189, 436, '@ink.sub'),
 ];
 const LEDGER_STATE = { course: 'c01', period: 'week', page: '1' };
-const ledger = screenBase('proto_ledger', '試作: 名簿', [...ledgerBase(A, 3), ...ledgerControls(false), ...ledgerTable(false), ...ledgerFooter], LEDGER_STATE);
-const ledgerCourse = screenBase('proto_ledger_course', '試作: 名簿 - コースの一覧', [
+const ledger = screenBase(S('ledger'), '試作: 名簿', [...ledgerBase(A, 3), ...ledgerControls(false), ...ledgerTable(false), ...ledgerFooter], LEDGER_STATE);
+const ledgerCourse = screenBase(S('ledger_course'), '試作: 名簿 - コースの一覧', [
   ...ledgerBase(A, 3), ...ledgerControls(true), ...ledgerTable(true),
   ...ddList('lg_list', 52, 27, 168, 'course', LEDGER_COURSES, 1, (value) => act('dcg:ledger_course', { course: value })),
 ], LEDGER_STATE);
@@ -457,7 +457,7 @@ const PROFILE_STATS = [
   ['繋いだ Limen', '23'], ['越えた Culmen', '2'], ['展示場でクリア', '5 / 30'],
   ['総プレイ時間', '12:40'], ['Umbra と辿った', '18 回'],
 ];
-const profile = screenBase('proto_profile', '試作: プロフィール', [
+const profile = screenBase(S('profile'), '試作: プロフィール', [
   ...ledgerBase(A, 4),
   // 左: 名刺
   nine('pf_card', A.card, 8, 21, 140, 184, { constraints: fixed }),
@@ -471,7 +471,7 @@ const profile = screenBase('proto_profile', '試作: プロフィール', [
   ...heading('pf_comp_h', { ja: '相棒', en: 'Companion' }, 16, 72, 124),
   img('pf_comp', A.companion, 54, 90, 48, 40),
   txt('pf_comp_t', '姿と名前は未定', 16, 135, 124, '@ink.faint', { align: 'center' }),
-  inst('pf_privacy', 'ui_button', 16, 171, 124, 21, 'normal', { label: '公開範囲を変える', tooltip: '設定のプロフィールを開く', action: open('proto_settings_profile') }),
+  inst('pf_privacy', 'ui_button', 16, 171, 124, 21, 'normal', { label: '公開範囲を変える', tooltip: '設定のプロフィールを開く', action: open(S('settings_profile')) }),
 
   // 右上: 自分の鎖
   ...heading('pf_chain_h', { ja: '自分の鎖', en: 'Your chain' }, 156, 27, 288, '3 / 11 の輪'),
@@ -502,12 +502,12 @@ const profile = screenBase('proto_profile', '試作: プロフィール', [
 // 左: 一覧（1件 2 行 × 7 件、ページ送り）、右: 選んだお知らせの本文と、関係する画面へのボタン
 // 見た目の状態: open（選んでいる件 0〜6）、unread0〜6（on / off）、has_link（選んでいる件に関係する画面があるか）。中身はこの試作では見本（本番はプラグインが差し込む）
 const NOTICES = [
-  ['10/17', '新しい試練「天空回廊」', ['展示場に、Alex さんの新しい試練', '「天空回廊」が並びました。★5 の難しい', '試練です。挑戦した人は 120 人を越えました。'], ['展示場で見る', 'proto_gallery']],
-  ['10/15', 'Anulus IV の Culmen を公開', ['Anulus IV の最後の試練、Culmen を', '公開しました。越えると Anulus V の', '土地へ進めます。'], ['Passus を開く', 'proto_passus']],
-  ['10/12', '設定に「コースの演出音」', ['コースのトリガーで鳴る音の大きさを、', '設定のサウンドで変えられるようにしました。'], ['設定を開く', 'proto_settings_sound']],
+  ['10/17', '新しい試練「天空回廊」', ['展示場に、Alex さんの新しい試練', '「天空回廊」が並びました。★5 の難しい', '試練です。挑戦した人は 120 人を越えました。'], ['展示場で見る', S('gallery')]],
+  ['10/15', 'Anulus IV の Culmen を公開', ['Anulus IV の最後の試練、Culmen を', '公開しました。越えると Anulus V の', '土地へ進めます。'], ['Passus を開く', S('passus')]],
+  ['10/12', '設定に「コースの演出音」', ['コースのトリガーで鳴る音の大きさを、', '設定のサウンドで変えられるようにしました。'], ['設定を開く', S('settings_sound')]],
   ['10/01', '試験を始めました', ['Catena の試験を始めました。', '不具合を見つけたら、運営に知らせてください。'], null],
   ['09/28', 'ロビーの門を新しくしました', ['国の入口の門を作り直しました。'], null],
-  ['09/20', '名簿に「全期間」を追加', ['名簿で、今週の記録と全期間の記録を', '切り替えられるようにしました。'], ['名簿を開く', 'proto_ledger']],
+  ['09/20', '名簿に「全期間」を追加', ['名簿で、今週の記録と全期間の記録を', '切り替えられるようにしました。'], ['名簿を開く', S('ledger')]],
   ['09/15', 'Catena へようこそ', ['ようこそ。最初の Limen から、', '鎖を辿ってみてください。'], null],
 ];
 // 1件 1 行（日付と題名）。件の間は 1 行あける。本文は行ごとに分けて渡す
@@ -515,7 +515,7 @@ const NOTICES = [
 const NOTICE_Y = (k) => 45 + k * 18;
 const LIST_W = 196, SHEET_X = 210;
 
-const notices = screenBase('proto_notices', '試作: お知らせ', [
+const notices = screenBase(S('notices'), '試作: お知らせ', [
   ...ledgerBase(A, -1),
   // 左: 一覧
   nine('nt_list', A.card, 8, 21, LIST_W, 184, { constraints: fixed }),
@@ -557,7 +557,7 @@ const bakedRow = (id, label, family, size, y, text) => [
   txt(`${id}_l`, label, 14, y, 120, '@ink.sub'),
   { id, type: 'text', x: 140, y: y + (size > 8 ? -4 : 0), w: 300, h: size > 8 ? 17 : 9, text, render: 'baked', fontFamily: family, fontSize: size, pixel: true, wordSpacing: 0, color: '@ink', shadow: false, lineHeight: 1, constraints: fixed },
 ];
-const fontsScreen = screenBase('proto_fonts', '試作: 見出しの書体', [
+const fontsScreen = screenBase(S('fonts'), '試作: 見出しの書体', [
   ...ledgerBase(A, -1),
   ...heading('f_h', { ja: '見出しの書体', en: 'Heading fonts' }, 14, 27, 424),
   ...bakedRow('f_px', '5x5 Pixel 8（今まで）', '5x5 Pixel', 8, 45, 'LANGUAGE  ANULUS III  PASSUS'),
@@ -572,16 +572,16 @@ const fontsScreen = screenBase('proto_fonts', '試作: 見出しの書体', [
 const settingsGeneral = [...settingsCommon('general'), ...general(null)];
 const settingsSound = [...settingsCommon('sound'), ...sound()];
 const screens = [
-  home, fontsScreen, passus, gallery, ledger, ledgerCourse, profile, notices,
-  screenBase('proto_settings', '試作: 設定 - 一般', settingsGeneral, DEFAULTS),
-  screenBase('proto_settings_ui_lang', '試作: 設定 - UI言語の一覧', [...settingsCommon('general'), ...general('ui_lang')], DEFAULTS),
-  screenBase('proto_settings_translate', '試作: 設定 - 翻訳先の一覧', [...settingsCommon('general'), ...general('translate_lang')], DEFAULTS),
-  confirmScreen('proto_settings_reset', '試作: 設定 - 一般を初期値に戻す', settingsGeneral, '一般の設定を初期値に戻しますか？', 'proto_settings'),
-  screenBase('proto_settings_sound', '試作: 設定 - サウンド', settingsSound, DEFAULTS),
-  confirmScreen('proto_settings_sound_reset', '試作: 設定 - サウンドを初期値に戻す', settingsSound, 'サウンドの設定を初期値に戻しますか？', 'proto_settings_sound'),
-  screenBase('proto_settings_profile', '試作: 設定 - プロフィール', [...settingsCommon('profile'), ...later('profile', 'Profile', '公開範囲・表示する内容など')]),
-  screenBase('proto_settings_friend', '試作: 設定 - フレンド', [...settingsCommon('friend'), ...later('friend', 'Friend', 'フレンド申請の受け付けなど（フレンド機能を作るときに決める）')]),
-  screenBase('proto_settings_chat', '試作: 設定 - チャット', [...settingsCommon('chat'), ...later('chat', 'Chat', 'チャットチャンネルなど（チャットを設計するときに決める）')]),
+  home, ...(LIVE ? [] : [fontsScreen]), passus, gallery, ledger, ledgerCourse, profile, notices,
+  screenBase(S('settings'), '試作: 設定 - 一般', settingsGeneral, DEFAULTS),
+  screenBase(S('settings_ui_lang'), '試作: 設定 - UI言語の一覧', [...settingsCommon('general'), ...general('ui_lang')], DEFAULTS),
+  screenBase(S('settings_translate'), '試作: 設定 - 翻訳先の一覧', [...settingsCommon('general'), ...general('translate_lang')], DEFAULTS),
+  confirmScreen(S('settings_reset'), '試作: 設定 - 一般を初期値に戻す', settingsGeneral, '一般の設定を初期値に戻しますか？', S('settings'), ['ui_lang', 'translate_auto', 'translate_lang']),
+  screenBase(S('settings_sound'), '試作: 設定 - サウンド', settingsSound, DEFAULTS),
+  confirmScreen(S('settings_sound_reset'), '試作: 設定 - サウンドを初期値に戻す', settingsSound, 'サウンドの設定を初期値に戻しますか？', S('settings_sound'), ['sound.system', 'sound.course']),
+  screenBase(S('settings_profile'), '試作: 設定 - プロフィール', [...settingsCommon('profile'), ...later('profile', 'Profile', '公開範囲・表示する内容など')]),
+  screenBase(S('settings_friend'), '試作: 設定 - フレンド', [...settingsCommon('friend'), ...later('friend', 'Friend', 'フレンド申請の受け付けなど（フレンド機能を作るときに決める）')]),
+  screenBase(S('settings_chat'), '試作: 設定 - チャット', [...settingsCommon('chat'), ...later('chat', 'Chat', 'チャットチャンネルなど（チャットを設計するときに決める）')]),
 ];
 
 await ops([

@@ -13,34 +13,63 @@ import com.google.gson.*;
  * "&lt;namespace&gt;:state:&lt;condition&gt;" (key=value or key!=value); each part draws
  * and steps back to where it started, so dropping the ones that do not match
  * keeps every body line its width. See the editor's lib/states.mjs.
+ * The editor's manifest.json (beside the templates) gives each screen's default
+ * state values, used for the states the plugin does not know (sample values).
  */
 public final class DialogTemplates {
     private static final Pattern CONDITION=Pattern.compile("([a-z0-9_.]{1,32})(!?=)([A-Za-z0-9_.-]{1,32})");
     private final String namespace;
+    private static final String MANIFEST="manifest.json";
     private final Map<String,JsonObject> screens;
+    private final Map<String,Map<String,String>> defaults;
 
-    private DialogTemplates(String namespace,Map<String,JsonObject> screens) { this.namespace=namespace; this.screens=Map.copyOf(screens); }
-    public static DialogTemplates empty(String namespace) { return new DialogTemplates(namespace,Map.of()); }
+    private DialogTemplates(String namespace,Map<String,JsonObject> screens,Map<String,Map<String,String>> defaults) {
+        this.namespace=namespace; this.screens=Map.copyOf(screens); this.defaults=Map.copyOf(defaults);
+    }
+    public static DialogTemplates empty(String namespace) { return new DialogTemplates(namespace,Map.of(),Map.of()); }
 
-    /** Every *.json in dir, by file name. A missing dir reads as no templates. */
+    /** Every *.json in dir (but manifest.json), by file name. A missing dir reads as no templates. */
     public static DialogTemplates load(String namespace,Path dir) throws IOException {
         Map<String,JsonObject> screens=new HashMap<>();
+        Map<String,Map<String,String>> defaults=new HashMap<>();
         if(Files.isDirectory(dir)) try(DirectoryStream<Path> files=Files.newDirectoryStream(dir,"*.json")) {
             for(Path file:files) {
                 String name=file.getFileName().toString();
-                try { screens.put(name.substring(0,name.length()-5),JsonParser.parseString(Files.readString(file,StandardCharsets.UTF_8)).getAsJsonObject()); }
+                JsonObject json;
+                try { json=JsonParser.parseString(Files.readString(file,StandardCharsets.UTF_8)).getAsJsonObject(); }
                 catch(JsonParseException|IllegalStateException e) { throw new IOException("Unreadable menu template "+file+": "+e.getMessage(),e); }
+                if(name.equals(MANIFEST)) defaults.putAll(defaults(json));
+                else screens.put(name.substring(0,name.length()-5),json);
             }
         }
-        return new DialogTemplates(namespace,screens);
+        return new DialogTemplates(namespace,screens,defaults);
+    }
+    /** screens[].states.defaults of the editor's manifest, by screen id. */
+    static Map<String,Map<String,String>> defaults(JsonObject manifest) {
+        Map<String,Map<String,String>> out=new HashMap<>();
+        if(!(manifest.get("screens") instanceof JsonArray list)) return out;
+        for(JsonElement e:list) {
+            if(!(e instanceof JsonObject screen) || !(screen.get("id") instanceof JsonPrimitive id)) continue;
+            Map<String,String> values=new HashMap<>();
+            if(screen.get("states") instanceof JsonObject states && states.get("defaults") instanceof JsonObject d)
+                for(var entry:d.entrySet()) if(entry.getValue() instanceof JsonPrimitive p) values.put(entry.getKey(),p.getAsString());
+            out.put(id.getAsString(),Map.copyOf(values));
+        }
+        return out;
     }
     public Set<String> screens() { return screens.keySet(); }
     public boolean has(String screen) { return screens.containsKey(screen); }
+    /** The screen's default state values (from manifest.json); empty without a manifest. */
+    public Map<String,String> defaults(String screen) { return defaults.getOrDefault(screen,Map.of()); }
 
     /** The screen with only the states matching values, ready for the component serializer; null if there is no template. */
     public JsonObject select(String screen,Map<String,String> values) {
         JsonObject template=screens.get(screen);
-        return template==null ? null : select(template,namespace,values);
+        if(template==null) return null;
+        // The player's values win; the defaults fill in the states the plugin does not know.
+        Map<String,String> all=new HashMap<>(defaults(screen));
+        all.putAll(values);
+        return select(template,namespace,all);
     }
 
     static JsonObject select(JsonObject dialog,String namespace,Map<String,String> values) {

@@ -6,6 +6,9 @@ const args = process.argv.slice(2);
 const i = args.indexOf('--url');
 export const BASE = (i >= 0 ? args[i + 1] : process.env.DCG_URL || 'http://127.0.0.1:4320').replace(/\/$/, '');
 export const ART = path.join(import.meta.dirname, 'art');
+// --live: 本番のメニューとして作る（画面名に proto_ を付けず、題の「試作: 」も外す。プラグインの /menu は home を開く）
+export const LIVE = args.includes('--live');
+export const S = (name) => (LIVE ? name : `proto_${name}`);
 
 export async function api(method, url, body, headers = {}) {
   const res = await fetch(BASE + url, { method, headers, body });
@@ -67,9 +70,9 @@ export function ledgerBase(A, active, { unread = 3 } = {}) {
     nine('paper', A.panel_paper, 4, 18, 444, 194, { nineFill: 'tile' }),
     ...TABS.map(([label, screen, en], k) =>
       inst(`tab_${k}`, 'ui_tab', 4 + k * 73, 0, 72, 20, `${k === active ? 'on' : 'off'}${isLatin(label) ? '_latin' : ''}`,
-        { label: isLatin(label) ? label.toUpperCase() : label, label_en: en.toUpperCase(), tooltip: k === active ? '表示中' : `${label}を開く`, action: k === active ? { type: 'none', value: '', payload: '' } : open(`proto_${screen}`) })),
-    inst('ic_bell', 'ui_icon', 394, 0, 16, 18, unread ? 'bell_unread' : 'bell', { tooltip: unread ? `お知らせ（未読 ${unread} 件）` : 'お知らせ', action: open('proto_notices') }),
-    inst('ic_settings', 'ui_icon', 412, 0, 16, 18, 'settings', { tooltip: '設定', action: open('proto_settings') }),
+        { label: isLatin(label) ? label.toUpperCase() : label, label_en: en.toUpperCase(), tooltip: k === active ? '表示中' : `${label}を開く`, action: k === active ? { type: 'none', value: '', payload: '' } : open(S(screen)) })),
+    inst('ic_bell', 'ui_icon', 394, 0, 16, 18, unread ? 'bell_unread' : 'bell', { tooltip: unread ? `お知らせ（未読 ${unread} 件）` : 'お知らせ', action: open(S('notices')) }),
+    inst('ic_settings', 'ui_icon', 412, 0, 16, 18, 'settings', { tooltip: '設定', action: open(S('settings')) }),
     inst('ic_close', 'ui_icon', 430, 0, 16, 18, 'close', { tooltip: '閉じる（Esc）', action: act('dcg:close', {}) }),
   ];
 }
@@ -106,7 +109,7 @@ export function heading(id, label, x, y, w, note) {
   ];
 }
 export const screenBase = (id, title, elements, stateDefaults = {}) => ({
-  id, title, showTitle: false, width: W, height: H, background: '#00000000',
+  id, title: LIVE ? title.replace(/^試作: /, '') : title, showTitle: false, width: W, height: H, background: '#00000000',
   canCloseWithEscape: true, pause: false, afterAction: 'none', footer: { type: 'none', columns: 1, buttons: [], exitAction: false },
   // lang は表示に使う言語（ja / en）。UI言語が「自動」のときはクライアントの言語で決めて、プラグインが渡す
   elements, groups: [], stateDefaults: { lang: 'ja', ...stateDefaults }, inputs: [],

@@ -72,7 +72,7 @@ public final class DialogMenu implements Listener,CommandExecutor {
         }
     }
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
-        if(sender instanceof Player player) open(player,"top_menu");
+        if(sender instanceof Player player) open(player,screen("home","home","top_menu"));
         else Msg.send(sender,"settings.console");
         return true;
     }
@@ -115,7 +115,27 @@ public final class DialogMenu implements Listener,CommandExecutor {
         }
         return values;
     }
-    private Map<String,String> values(Player player) { return values(data,player); }
+    private Map<String,String> values(Player player) {
+        Map<String,String> values=values(data,player);
+        // The language the screen draws its headings in (ja / en; "auto" resolved from the client).
+        values.put("lang",data.uiLanguage(player));
+        return values;
+    }
+    /**
+     * A screen named in config.yml (menu.screens.<role>), else the first of the fallbacks that has a template:
+     * the ledger-style menu is "home" / "settings", the earlier one "top_menu" / "settings".
+     */
+    private String screen(String role,String... fallbacks) {
+        String configured=plugin.getConfig().getString("menu.screens."+role);
+        if(configured!=null && !configured.isBlank()) return configured;
+        for(String s:fallbacks) if(templates.has(s)) return s;
+        return fallbacks[0];
+    }
+    /** Where a settings click returns to: the screen it names ("back"), else the settings screen. */
+    private String back(DialogPayload payload) {
+        String back=payload.get("back");
+        return back!=null && back.matches("[a-z0-9_]{1,48}") && templates.has(back) ? back : screen("settings","settings");
+    }
 
     /** A footer-less dialog_list screen from its JSON; null for other kinds, which are left to the datapack. */
     private static Dialog build(JsonObject json) {
@@ -168,13 +188,21 @@ public final class DialogMenu implements Listener,CommandExecutor {
                 Setting<?> setting=Settings.byKey(String.valueOf(payload.get("key")));
                 if(setting==null || !setting.menu()) { Msg.send(player,"menu.unavailable"); return; }
                 edit(player,setting,action,payload);
-                // Also from the translation target screen: back to the settings.
-                open(player,"settings");
+                // Also from a list screen (translation target, UI language): back to the screen the click names.
+                open(player,back(payload));
             }
             case "settings_reset" -> {
-                for(Setting<?> setting:Settings.ALL) if(setting.menu()) reset(player,setting);
+                // "keys" (comma separated) limits the reset to one category; without it every menu setting.
+                Set<String> keys=payload.get("keys")==null ? null : Set.of(payload.get("keys").split(","));
+                for(Setting<?> setting:Settings.ALL) if(setting.menu() && (keys==null || keys.contains(setting.key()))) reset(player,setting);
                 Sounds.system(player,Sound.UI_BUTTON_CLICK,0.5f,1f);
-                open(player,"settings");
+                open(player,back(payload));
+            }
+            // A closed dropdown opens the screen with its list.
+            case "settings_dropdown" -> {
+                String screen=payload.get("screen");
+                if(screen==null || !screen.matches("[a-z0-9_]{1,48}")) { Msg.send(player,"menu.unavailable"); return; }
+                open(player,screen);
             }
             default -> Msg.send(player,"menu.unavailable");
         }

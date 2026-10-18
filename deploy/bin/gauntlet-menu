@@ -58,6 +58,8 @@ install -d -o minecraft -g minecraft -m 2770 "$MENU"
 for f in "$MENU"/*.json; do [[ -f $work/x/templates/$(basename "$f") ]] || { rm -f -- "$f"; echo "Removed $(basename "$f")"; }; done
 for f in "${uploaded[@]}"; do install -o minecraft -g minecraft -m 0660 "$f" "$MENU/$(basename "$f")"; done
 echo "Installed ${#uploaded[@]} templates"
+# The editor's manifest gives each screen's default states (the loop above removed an old one).
+if [[ -f $work/x/manifest.json ]]; then install -o minecraft -g minecraft -m 0660 "$work/x/manifest.json" "$MENU/manifest.json"; fi
 
 # Datapack: the fallback dialogs (dcg:<screen>) for screens the plugin cannot build itself.
 datapack_changed=0

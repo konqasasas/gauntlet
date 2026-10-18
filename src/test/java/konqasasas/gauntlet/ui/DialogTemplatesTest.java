@@ -93,4 +93,19 @@ class DialogTemplatesTest {
         assertNull(t.select("missing",Map.of()));
         assertTrue(DialogTemplates.load("dcg",dir.resolve("none")).screens().isEmpty());
     }
+    @Test void manifestGivesDefaultsAndIsNotAScreen(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("settings.json"),DIALOG);
+        Files.writeString(dir.resolve("manifest.json"),"""
+            {"format":"dialog-custom-gui/manifest","screens":[
+              {"id":"settings","states":{"keys":{},"defaults":{"translate_auto":"off","ui_lang":"ja","lang":"ja"}}},
+              {"id":"no_states"}]}""");
+        DialogTemplates t=DialogTemplates.load("dcg",dir);
+        assertEquals(Set.of("settings"),t.screens(),"manifest.json is not a screen");
+        assertEquals(Map.of("translate_auto","off","ui_lang","ja","lang","ja"),t.defaults("settings"));
+        assertEquals(Map.of(),t.defaults("no_states"));
+        assertEquals(Map.of(),t.defaults("missing"));
+        // A state the player has no value for falls back to the default; the player's values win.
+        assertEquals(List.of("A","off","other","\n"),texts(t.select("settings",Map.of())));
+        assertEquals(List.of("A","on","not-ja","other","\n"),texts(t.select("settings",Map.of("translate_auto","on","ui_lang","en"))));
+    }
 }
