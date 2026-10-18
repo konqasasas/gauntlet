@@ -125,6 +125,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             tabList.start();
             sidebar.start();
             getServer().getPluginManager().registerEvents(new ChatFormat(display),this);
+            getServer().getPluginManager().registerEvents(new ServerListMotd(display,getConfig().getString("server.name","Catena Online")),this);
             getServer().getPluginManager().registerEvents(new PlayerContact(),this);
             invisibleGear=new InvisibleGear();
             getServer().getPluginManager().registerEvents(invisibleGear,this);

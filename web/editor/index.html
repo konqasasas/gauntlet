@@ -48,6 +48,9 @@
   .help { color: var(--muted); font-size: 12px; margin-top: 3px; }
   .help code { font-size: 12px; }
   .error { color: var(--warn); font-size: 12px; margin-top: 3px; }
+  .error.strong { color: #ff6b6b; font-weight: 600; }
+  .tabs .count { margin-left: 4px; font-size: 11px; color: var(--warn); }
+  .tabs button[aria-selected="true"] .count { color: #1b1d22; }
   .samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 12px; }
   .samples label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 2px; }
   .samples input[type="text"], .samples input[type="number"], .samples select { background: var(--input); border: 1px solid var(--line);
@@ -95,6 +98,17 @@
   .file-out { display: grid; gap: 8px; }
   .file-out .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
   .file-out .row strong { min-width: 9em; }
+  .palette { display: inline-flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .swatch { width: 22px; height: 22px; padding: 0; border-radius: 4px; border: 1px solid var(--line); }
+  .serverlist { display: flex; gap: 8px; width: min(100%, 440px); padding: 4px; background: #1e1b18;
+    background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 6px, transparent 6px 12px); border: 2px solid #8a8a8a; white-space: normal; }
+  .serverlist .icon { width: 64px; height: 64px; flex: none; background: #2b2b2b; display: grid; place-items: center; }
+  .serverlist .icon span { width: 30px; height: 30px; transform: rotate(45deg); border-radius: 4px; background: linear-gradient(135deg, #ffb347, #ff5f6d); }
+  .serverlist .info { min-width: 0; flex: 1; }
+  .serverlist .top { display: flex; gap: 8px; }
+  .serverlist .name { color: #fff; }
+  .serverlist .count { margin-left: auto; color: #808080; white-space: nowrap; }
+  .serverlist .motd div { white-space: pre; overflow: hidden; max-width: 300px; }
   .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 </style>
 </head>
@@ -105,6 +119,7 @@
   <label class="sr" for="import">ファイルを読み込む</label>
   <input type="file" id="import" accept=".yml,.yaml" multiple hidden>
   <button type="button" id="import-btn" title="display.yml、ja.yml、en.yml を読み込む">読み込む</button>
+  <button type="button" id="share-btn" title="編集内容をリンクにしてコピーする">共有リンク</button>
   <button type="button" id="reset-all">すべて既定に戻す</button>
   <button type="button" class="primary" id="export-btn">書き出す</button>
 </header>
@@ -121,14 +136,18 @@
       <div class="tabs" role="tablist" id="tabs"></div>
       <div class="toolbar" id="toolbar">
         <span class="target" id="target">入力欄を選ぶと、ここから装飾を入れられます</span>
-        <input type="color" id="tb-color" value="#ff7a59" aria-label="色">
+        <input type="color" id="tb-color" value="#ffb347" aria-label="色" list="brand-palette">
         <button type="button" data-wrap="color">色</button>
-        <input type="color" id="tb-color2" value="#5ee7ff" aria-label="グラデーションの2色目">
+        <input type="color" id="tb-color2" value="#ff5f6d" aria-label="グラデーションの2色目" list="brand-palette">
         <button type="button" data-wrap="gradient">グラデーション</button>
         <button type="button" data-wrap="bold"><b>B</b></button>
         <button type="button" data-wrap="italic"><i>I</i></button>
         <button type="button" data-wrap="underlined"><u>U</u></button>
         <button type="button" data-wrap="strikethrough"><s>S</s></button>
+        <span class="target">パレット</span>
+        <span class="palette" id="palette"></span>
+        <button type="button" id="palette-add" title="左の色をパレットに加える">＋</button>
+        <datalist id="brand-palette"></datalist>
       </div>
       <div id="panel"></div>
     </section>
@@ -169,6 +188,15 @@
       </div>
       <h3>アクションバーの場面</h3>
       <div class="bar-controls" id="bar-scenes"></div>
+      <h3>サーバー一覧</h3>
+      <div class="mc serverlist">
+        <div class="icon" aria-hidden="true"><span></span></div>
+        <div class="info">
+          <div class="top"><span class="name">Catena Online</span><span class="count" id="pv-count"></span></div>
+          <div class="motd" id="pv-motd"></div>
+        </div>
+      </div>
+      <p class="help">一覧の名前（Catena Online）は、プレイヤーがサーバーを追加したときに付けた名前です。説明は2行目まで、はみ出した部分は切れます。</p>
       <h3>ランク一覧</h3>
       <div class="mc ranks-grid" id="pv-ranks"></div>
     </section>
@@ -185,12 +213,12 @@
 # 変更後は /gauntlet reload display で、再起動せずに反映される。
 # Web エディター（web/editor/）で見た目を確かめながら編集できる。
 
-# ランク（1〜13）
+# ランク（1〜11）
 ranks:
-  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"13"）。
+  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
   badge: "[<rank_padded>]"
-  # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜13（13個ちょうど）。
+  # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜11（11個ちょうど）。
   styles:
     - "<color:#d9d9d9><text></color>"
     - "<color:#8bd36b><text></color>"
@@ -203,8 +231,6 @@ ranks:
     - "<gradient:#5ee7ff:#7c5cff><text></gradient>"
     - "<gradient:#ff7eb6:#8a5cff><text></gradient>"
     - "<gradient:#ff5f5f:#ffd84d:#5dffb0><text></gradient>"
-    - "<gradient:#4dc9ff:#d36bff:#ff5fa2><text></gradient>"
-    - "<gradient:#ffffff:#ffd54a:#ff7a1a:#ffd54a:#ffffff><text></gradient>"
 
 # プレイヤー名の表示
 names:
@@ -255,6 +281,13 @@ sidebar:
     - "<gold>Best:</gold><white> <best>"
     - "<gold>Attempts:</gold><white> <attempts>"
     - ""
+
+# サーバー一覧で名前の下に出る説明（2行まで。言語は分けられない）。
+# <server> サーバー名、<online> 接続中の人数、<max> 最大人数。
+# 空のリスト（motd: []）にすると server.properties の motd を使う。
+motd:
+  - "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  - "<gray>Block-placing parkour</gray> <dark_gray>|</dark_gray> <white>Java 26.3"
 </script>
 <script type="application/json" id="default-lang">
 {
@@ -328,8 +361,9 @@ function canonical(name) {
   if (DECOR[n]) return "deco-" + DECOR[n];
   return n;
 }
-/** Parses a template into a tree; ph maps placeholder names to strings (shown as is) or trees. */
-function parseMM(src, ph) {
+/** Parses a template into a tree; ph maps placeholder names to strings (shown as is) or trees.
+ *  diag (optional) collects tag-shaped names nobody understands and closing tags without an opening one. */
+function parseMM(src, ph, diag) {
   ph = ph || {};
   const root = { tag: "root", children: [] };
   const stack = [root];
@@ -344,7 +378,10 @@ function parseMM(src, ph) {
     if (ch === "<") {
       const end = src.indexOf(">", i + 1);
       const inner = end > i ? src.slice(i + 1, end) : "";
-      if (inner && TAG_SHAPE.test(inner) && handle(inner)) { i = end + 1; continue; }
+      if (inner && TAG_SHAPE.test(inner)) {
+        if (handle(inner)) { i = end + 1; continue; }
+        if (diag) diag.unknown.push(inner.split(":")[0].replace(/^!/, ""));
+      }
     }
     buf += ch; i++;
   }
@@ -355,6 +392,7 @@ function parseMM(src, ph) {
     if (inner[0] === "/") {
       const want = canonical(inner.slice(1).split(":")[0]);
       for (let k = stack.length - 1; k > 0; k--) if (stack[k].tag === want) { flush(); stack.length = k; return true; }
+      if (diag) diag.stray.push(inner.slice(1));
       return true; // an unmatched closing tag is dropped
     }
     const parts = inner.split(":");
@@ -448,9 +486,112 @@ function html(treeOrTemplate, ph, baseColor) {
 /** Same as MiniMessage.escapeTags for text put into a template. */
 function escapeTags(s) { return s.replace(/\\/g, "\\\\").replace(/</g, "\\<"); }
 
+// ---------- Checks (mistakes the preview alone does not show) ----------
+const SIDEBAR_NAMES = ["player", "badge", "playtime", "address", "course", "best", "attempts"];
+const RULES = {
+  "ranks.badge": { allowed: ["rank", "rank_padded"], plain: true },
+  "names.admin-tag": { allowed: [] },
+  "names.full": { allowed: ["badge", "admin", "name"], required: ["name"] },
+  "names.nametag": { allowed: ["badge", "name"], required: ["name"] },
+  "chat.format": { allowed: ["player", "message"], required: ["player", "message"] },
+  "tab.header": { allowed: ["server"] },
+  "tab.ping.good": { allowed: ["ping"], required: ["ping"] },
+  "tab.ping.ok": { allowed: ["ping"], required: ["ping"] },
+  "tab.ping.bad": { allowed: ["ping"], required: ["ping"] },
+  "sidebar.title": { allowed: ["server"] },
+  "sidebar.lines": { allowed: [...SIDEBAR_NAMES, "course_block"], perLine: true, maxLines: 15 },
+  "sidebar.course": { allowed: SIDEBAR_NAMES, perLine: true },
+  "motd": { allowed: ["server", "online", "max"], maxLines: 2, errorOverLines: true }
+};
+const STYLE_NAMES = [...Object.keys(NAMED), ...Object.keys(DECOR), "color", "gradient", "rainbow", "reset", "newline", "br", "key"];
+function distance(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return dp[a.length][b.length];
+}
+/** Placeholder names a template uses (tag-shaped names that are not styles). */
+function namesIn(template) {
+  const diag = { unknown: [], stray: [] };
+  parseMM(template, {}, diag);
+  return new Set(diag.unknown.map(n => n.toLowerCase()));
+}
+/** Problems in one template: [{level: "error"|"warn", text}]. */
+function check(template, allowed, required, plain) {
+  const out = [];
+  const diag = { unknown: [], stray: [] };
+  const ph = Object.fromEntries(allowed.map(n => [n, ""]));
+  parseMM(template, ph, diag);
+  for (const name of new Set(diag.unknown)) {
+    const near = [...allowed, ...STYLE_NAMES].filter(n => distance(n, name.toLowerCase()) <= 2).sort((a, b) => distance(a, name) - distance(b, name))[0];
+    out.push({ level: "warn", text: near ? `<${name}> は使えません。<${near}> の打ち間違い？` : `<${name}> は知らないタグです（ゲームではそのまま文字で出ます）` });
+  }
+  for (const name of new Set(diag.stray)) out.push({ level: "warn", text: `</${name}> に対応する開くタグがありません` });
+  for (const name of required || []) if (!new RegExp(`<${name}[:>]`).test(template))
+    out.push({ level: "warn", text: `<${name}> がありません（その値が表示されなくなります）` });
+  if (plain) {
+    const tags = (template.match(/<\/?[a-z_#!][^<>]*>/gi) || []).filter(t => !allowed.includes(t.replace(/[<>\/]/g, "")));
+    if (tags.length) out.push({ level: "warn", text: `札には装飾タグは使えません（${tags.join(" ")} は文字のまま出ます）。色はランクごとの色で付きます` });
+  }
+  return out;
+}
+function checkDisplay(key) {
+  const rule = RULES[key];
+  if (!rule) return [];
+  const value = state.display[key];
+  const out = [];
+  const ls = lines(value);
+  if (rule.perLine) ls.forEach((l, k) => check(l, rule.allowed, rule.required, rule.plain).forEach(p => out.push({ ...p, text: `${k + 1}行目：${p.text}` })));
+  else out.push(...check(value, rule.allowed, rule.required, rule.plain));
+  if (rule.maxLines && ls.length > rule.maxLines)
+    out.push({ level: rule.errorOverLines ? "error" : "warn", text: `${ls.length}行あります。表示されるのは${rule.maxLines}行まで${rule.errorOverLines ? "（サーバーが読み込みを拒否します）" : ""}` });
+  return out;
+}
+function checkRank(k) {
+  const style = rankStyles()[k];
+  const out = check(style, ["text"], [], false);
+  if (!style.includes("<text>")) out.unshift({ level: "error", text: "<text> がありません（サーバーが読み込みを拒否します）" });
+  return out;
+}
+function checkLang(lang, key) {
+  const value = state.lang[lang][key];
+  const expected = new Set([...namesIn(DEFAULT_LANG.ja[key]), ...namesIn(DEFAULT_LANG.en[key])]);
+  const out = check(value, [...expected], [...expected], false);
+  const other = lang === "ja" ? "en" : "ja";
+  const mine = namesIn(value), theirs = namesIn(state.lang[other][key]);
+  const onlyMine = [...mine].filter(n => expected.has(n) && !theirs.has(n));
+  const onlyTheirs = [...theirs].filter(n => expected.has(n) && !mine.has(n));
+  if (onlyMine.length || onlyTheirs.length)
+    out.push({ level: "warn", text: `${other === "en" ? "英語" : "日本語"}と差し込み名が違います（${[...onlyMine.map(n => "こちらだけ <" + n + ">"), ...onlyTheirs.map(n => "あちらだけ <" + n + ">")].join("、")}）` });
+  return out;
+}
+/** Every problem, for the tab badges and the export summary. */
+function allProblems() {
+  const out = [];
+  for (const key of Object.keys(RULES)) for (const p of checkDisplay(key)) out.push({ ...p, where: key });
+  rankStyles().forEach((_, k) => checkRank(k).forEach(p => out.push({ ...p, where: `ranks.styles ランク${k + 1}` })));
+  if (rankStyles().length !== RANK_COUNT) out.push({ level: "error", where: "ranks.styles", text: `ランクの色は${RANK_COUNT}個必要です（今は${rankStyles().length}個）` });
+  for (const lang of LANGS) for (const key of Object.keys(DEFAULT_LANG[lang])) for (const p of checkLang(lang, key)) out.push({ ...p, where: `${lang}.yml ${key}` });
+  return out;
+}
+function sectionOf(where) {
+  if (where.startsWith("ranks")) return "ranks";
+  if (where.startsWith("names") || where.startsWith("chat") || / prefix$/.test(where)) return "names";
+  if (where.startsWith("tab") || / tab\./.test(where)) return "tab";
+  if (where.startsWith("sidebar")) return "sidebar";
+  if (where.startsWith("motd")) return "motd";
+  return "actionbar";
+}
+function diagHtml(problems) {
+  return problems.map(p => `<div class="${p.level === "error" ? "error strong" : "error"}">${p.level === "error" ? "✖" : "⚠"} ${esc(p.text)}</div>`).join("");
+}
+
 // ---------- Defaults and state ----------
 const DISPLAY_KEYS = ["ranks.badge", "ranks.styles", "names.admin-tag", "names.full", "names.nametag", "chat.format",
-  "tab.header", "tab.ping.good", "tab.ping.ok", "tab.ping.bad", "sidebar.title", "sidebar.lines", "sidebar.course"];
+  "tab.header", "tab.ping.good", "tab.ping.ok", "tab.ping.bad", "sidebar.title", "sidebar.lines", "sidebar.course", "motd"];
+/** DisplayStyle.RANKS */
+const RANK_COUNT = 11;
 const LANGS = ["ja", "en"];
 const STORE_KEY = "catena-display-editor-v1";
 
@@ -466,10 +607,11 @@ function flatten(obj, prefix, out) {
   return out;
 }
 let DEFAULT_DISPLAY = null, DEFAULT_LANG = null;
-const state = { display: {}, lang: { ja: {}, en: {} } };
+const DEFAULT_PALETTE = ["#ffb347", "#ff5f6d"];
+const state = { display: {}, lang: { ja: {}, en: {} }, palette: [...DEFAULT_PALETTE] };
 const ui = { tab: "ranks", lang: "ja", focused: null, scene: "day", hint: 0, bar: "running" };
 const sample = { name: "Steve", rank: 7, admin: true, server: "Catena Online", address: "mc.catenaonline.net",
-  ping: 42, playtime: "12.5h", inCourse: true, course: "Lava Stairs", best: "87.5%", attempts: 241,
+  ping: 42, playtime: "12.5h", online: 3, max: 20, inCourse: true, course: "Lava Stairs", best: "87.5%", attempts: 241,
   time: "12.35", limit: 30, percent: "64.2%", message: "こんにちは！ よろしく" };
 
 function notice(text, warn) {
@@ -486,8 +628,26 @@ function restore() {
     const saved = JSON.parse(raw);
     for (const k of DISPLAY_KEYS) if (typeof saved.display?.[k] === "string") state.display[k] = saved.display[k];
     for (const l of LANGS) for (const k of Object.keys(DEFAULT_LANG[l])) if (typeof saved.lang?.[l]?.[k] === "string") state.lang[l][k] = saved.lang[l][k];
+    if (Array.isArray(saved.palette)) state.palette = cleanPalette(saved.palette);
     return true;
   } catch (e) { return false; }
+}
+function cleanPalette(list) { return [...new Set(list.filter(c => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)).map(c => c.toLowerCase()))].slice(0, 32); }
+function renderPalette() {
+  const box = document.getElementById("palette");
+  box.innerHTML = "";
+  document.getElementById("brand-palette").innerHTML = state.palette.map(c => `<option value="${c}">`).join("");
+  for (const c of state.palette) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "swatch"; b.style.background = c;
+    b.title = `${c}\nクリック：1色目にする / Shift+クリック：2色目にする / Alt+クリック：パレットから外す`;
+    b.setAttribute("aria-label", `パレットの色 ${c}`);
+    b.onclick = (e) => {
+      if (e.altKey) { state.palette = state.palette.filter(x => x !== c); save(); renderPalette(); return; }
+      document.getElementById(e.shiftKey ? "tb-color2" : "tb-color").value = c;
+    };
+    box.appendChild(b);
+  }
 }
 function d(key) { return state.display[key]; }
 function t(key) { return state.lang[ui.lang][key]; }
@@ -520,7 +680,7 @@ function render() {
   ];
   document.getElementById("pv-chat").innerHTML = chat.map(l => `<div>${l}</div>`).join("");
   // TAB
-  const players = [{ name: sample.name, rank: r, admin: sample.admin }, { name: "Notch", rank: 13, admin: false },
+  const players = [{ name: sample.name, rank: r, admin: sample.admin }, { name: "Notch", rank: 11, admin: false },
     { name: "Alex", rank: 3, admin: false }, { name: "Builder", rank: 9, admin: true }]
     .sort((a, b) => ((b.admin ? 1000 : 0) + b.rank) - ((a.admin ? 1000 : 0) + a.rank) || a.name.localeCompare(b.name));
   const pingKey = sample.ping < 100 ? "tab.ping.good" : sample.ping < 200 ? "tab.ping.ok" : "tab.ping.bad";
@@ -546,6 +706,12 @@ function render() {
     (over ? `<div class="help" style="color:#ffb547">15行を超えた分は表示されません</div>` : "");
   // Action bar
   document.getElementById("pv-actionbar").innerHTML = html(actionBar());
+  // Server list
+  document.getElementById("pv-count").textContent = `${sample.online}/${sample.max}`;
+  const motd = lines(d("motd"));
+  document.getElementById("pv-motd").innerHTML = motd.length
+    ? motd.slice(0, 2).map(l => `<div>${html(l, { server: sample.server, online: String(sample.online), max: String(sample.max) }, "#808080")}</div>`).join("")
+    : `<div>${html("Catena Online", {}, "#808080")}</div><div class="help">（説明が空なので server.properties の motd が出ます）</div>`;
   // Ranks
   document.getElementById("pv-ranks").innerHTML = rankStyles().map((_, k) =>
     `<div>${html(fullTree(k + 1, false, sample.name))}</div>`).join("");
@@ -593,6 +759,9 @@ const SECTIONS = [
     { key: "sidebar.lines", label: "行（1行に1つ、最大15行）", multi: true,
       help: "<player> 名前、<badge> ランクの札、<playtime> プレイ時間、<address> 接続先。<course_block> だけの行はコース中に下の行へ置き換わる" },
     { key: "sidebar.course", label: "コース中だけの行", multi: true, help: "<course> コース名、<best> 自己ベスト、<attempts> 挑戦回数" }] },
+  { id: "motd", title: "サーバー一覧", fields: [
+    { key: "motd", label: "説明（2行まで）", multi: true,
+      help: "<server> サーバー名、<online> 接続中の人数、<max> 最大人数。全部消すと server.properties の motd になる。言語は分けられない（相手の言語が分からないため）" }] },
   { id: "actionbar", title: "アクションバー", fields: [
     { lang: "play.bar.separator", label: "区切り" },
     { lang: "play.bar.waiting", label: "本番：開始前" },
@@ -615,11 +784,15 @@ const BAR_SCENES = [["waiting", "本番：開始前"], ["running", "本番：計
   ["p-waiting", "練習：開始前"], ["p-running", "練習：計測中"], ["p-finished", "練習：確定"], ["p-goal", "練習：ゴール"]];
 
 function buildTabs() {
+  const counts = {};
+  for (const p of allProblems()) counts[sectionOf(p.where)] = (counts[sectionOf(p.where)] || 0) + 1;
   const tabs = document.getElementById("tabs");
   tabs.innerHTML = "";
   for (const s of SECTIONS) {
     const b = document.createElement("button");
     b.type = "button"; b.role = "tab"; b.textContent = s.title;
+    const n = counts[s.id] || 0;
+    if (n) { const c = document.createElement("span"); c.className = "count"; c.textContent = "⚠" + n; b.appendChild(c); }
     b.setAttribute("aria-selected", String(ui.tab === s.id));
     b.onclick = () => { ui.tab = s.id; buildTabs(); buildPanel(); };
     tabs.appendChild(b);
@@ -629,7 +802,7 @@ function fieldValue(f) { return f.key ? state.display[f.key] : state.lang[ui.lan
 function fieldDefault(f) { return f.key ? DEFAULT_DISPLAY[f.key] : DEFAULT_LANG[ui.lang][f.lang]; }
 function setField(f, value) {
   if (f.key) state.display[f.key] = value; else state.lang[ui.lang][f.lang] = value;
-  save(); render();
+  save(); render(); buildTabs();
 }
 function buildPanel() {
   const panel = document.getElementById("panel");
@@ -660,25 +833,25 @@ function fieldEl(f) {
   if (!f.multi) input.type = "text";
   input.id = id; input.spellcheck = false;
   input.value = fieldValue(f);
+  const diag = document.createElement("div");
   const sync = () => {
     const dirty = fieldValue(f) !== fieldDefault(f);
     changed.textContent = dirty ? "変更あり" : ""; reset.hidden = !dirty;
+    diag.innerHTML = diagHtml(f.key ? checkDisplay(f.key) : checkLang(ui.lang, f.lang));
   };
   input.addEventListener("input", () => { setField(f, input.value); sync(); });
   input.addEventListener("focus", () => focusInput(input, f.label));
   reset.onclick = () => { input.value = fieldDefault(f); setField(f, input.value); sync(); };
   sync();
-  wrap.append(label, input);
+  wrap.append(label, input, diag);
   if (f.help) { const h = document.createElement("div"); h.className = "help"; h.textContent = f.help; wrap.appendChild(h); }
   return wrap;
 }
 function buildRanks(panel) {
   panel.appendChild(fieldEl({ key: "ranks.badge", label: "ランクの札", help: "<rank> 番号、<rank_padded> 1桁なら前後に空白。文字だけ（装飾は下の色で付く）" }));
   const h = document.createElement("h3");
-  h.textContent = "ランクごとの色（<text> に札や名前が入る）";
+  h.textContent = `ランクごとの色（${RANK_COUNT}ランク。<text> に札や名前が入る）`;
   panel.appendChild(h);
-  const errors = document.createElement("div");
-  errors.className = "error";
   const styles = rankStyles();
   styles.forEach((style, k) => {
     const row = document.createElement("div");
@@ -688,35 +861,31 @@ function buildRanks(panel) {
     input.type = "text"; input.value = style; input.spellcheck = false;
     input.setAttribute("aria-label", `ランク${k + 1}の色`);
     const tools = document.createElement("span"); tools.className = "tools";
-    const c1 = document.createElement("input"); c1.type = "color"; c1.setAttribute("aria-label", `ランク${k + 1}の色1`);
-    const c2 = document.createElement("input"); c2.type = "color"; c2.setAttribute("aria-label", `ランク${k + 1}の色2`);
+    const c1 = document.createElement("input"); c1.type = "color"; c1.setAttribute("aria-label", `ランク${k + 1}の色1`); c1.setAttribute("list", "brand-palette");
+    const c2 = document.createElement("input"); c2.type = "color"; c2.setAttribute("aria-label", `ランク${k + 1}の色2`); c2.setAttribute("list", "brand-palette");
     const found = (style.match(/#[0-9a-f]{6}/gi) || []);
     c1.value = found[0] || "#ffffff"; c2.value = found[found.length - 1] || c1.value;
     const solid = document.createElement("button"); solid.type = "button"; solid.textContent = "単色"; solid.title = "左の色1色にする";
     const grad = document.createElement("button"); grad.type = "button"; grad.textContent = "2色"; grad.title = "左右の色でグラデーションにする";
+    const diag = document.createElement("div");
+    diag.style.gridColumn = "2 / 4";
     const update = (value) => {
       const all = rankStyles(); all[k] = value; state.display["ranks.styles"] = all.join("\n");
-      save(); render(); validateRanks(errors);
+      save(); render(); buildTabs(); diag.innerHTML = diagHtml(checkRank(k));
     };
     input.addEventListener("input", () => update(input.value));
     input.addEventListener("focus", () => focusInput(input, `ランク${k + 1}`));
     solid.onclick = () => { input.value = `<color:${c1.value}><text></color>`; update(input.value); };
     grad.onclick = () => { input.value = `<gradient:${c1.value}:${c2.value}><text></gradient>`; update(input.value); };
     tools.append(c1, c2, solid, grad);
-    row.append(num, input, tools);
+    diag.innerHTML = diagHtml(checkRank(k));
+    row.append(num, input, tools, diag);
     panel.appendChild(row);
   });
-  panel.appendChild(errors);
   const reset = document.createElement("button");
   reset.type = "button"; reset.textContent = "ランクの色をすべて既定に戻す";
-  reset.onclick = () => { state.display["ranks.styles"] = DEFAULT_DISPLAY["ranks.styles"]; save(); render(); buildPanel(); };
+  reset.onclick = () => { state.display["ranks.styles"] = DEFAULT_DISPLAY["ranks.styles"]; save(); render(); buildTabs(); buildPanel(); };
   panel.appendChild(reset);
-  validateRanks(errors);
-}
-function validateRanks(el) {
-  const styles = rankStyles();
-  const bad = styles.map((s, k) => s.includes("<text>") ? null : k + 1).filter(Boolean);
-  el.textContent = bad.length ? `ランク ${bad.join("、")} に <text> がありません（このままだとサーバーが読み込みを拒否します）` : "";
 }
 function focusInput(input, name) {
   ui.focused = input;
@@ -739,9 +908,10 @@ function buildSamples() {
   const box = document.getElementById("samples");
   const items = [
     ["lang", "言語", "select", [["ja", "日本語"], ["en", "English"]]],
-    ["name", "プレイヤー名", "text"], ["rank", "ランク", "select", Array.from({ length: 13 }, (_, k) => [k + 1, String(k + 1)])],
+    ["name", "プレイヤー名", "text"], ["rank", "ランク", "select", Array.from({ length: 11 }, (_, k) => [k + 1, String(k + 1)])],
     ["admin", "運営", "check"], ["ping", "Ping（ms）", "number"], ["inCourse", "コース中", "check"],
     ["message", "チャットの発言", "text"], ["server", "サーバー名", "text"], ["address", "接続先", "text"],
+    ["online", "接続中の人数", "number"], ["max", "最大人数", "number"],
     ["course", "コース名", "text"], ["best", "自己ベスト", "text"], ["time", "タイム", "text"]
   ];
   for (const [key, label, type, options] of items) {
@@ -758,9 +928,9 @@ function buildSamples() {
     }
     if (type === "check") l.className = "check";
     input.addEventListener("input", () => {
-      if (key === "lang") { ui.lang = input.value; buildPanel(); }
+      if (key === "lang") { ui.lang = input.value; buildPanel(); buildTabs(); }
       else if (type === "check") sample[key] = input.checked;
-      else if (key === "rank" || key === "ping") sample[key] = Number(input.value) || 0;
+      else if (key === "rank" || key === "ping" || key === "online" || key === "max") sample[key] = Number(input.value) || 0;
       else sample[key] = input.value;
       render();
     });
@@ -799,6 +969,7 @@ function displayYaml() {
     `  title: ${q(d("sidebar.title"))}`,
     "  lines:" + L("sidebar.lines", "    "),
     "  course:" + L("sidebar.course", "    "),
+    "motd:" + L("motd", "  "),
     ""
   ].join("\n");
 }
@@ -824,6 +995,15 @@ function buildExport() {
   card.hidden = false;
   const out = document.getElementById("file-out");
   out.innerHTML = "";
+  const problems = allProblems();
+  if (problems.length) {
+    const box = document.createElement("div");
+    box.className = "notice warn";
+    const errors = problems.filter(p => p.level === "error").length;
+    box.innerHTML = `<strong>${errors ? `エラー ${errors} 件（このまま反映すると読み込みを拒否されます）、` : ""}警告 ${problems.length - errors} 件</strong>` +
+      problems.map(p => `<div class="help">${p.level === "error" ? "✖" : "⚠"} ${esc(p.where)}：${esc(p.text)}</div>`).join("");
+    out.appendChild(box);
+  }
   const files = [["display.yml", displayYaml(), "config/display.yml", true]];
   for (const l of LANGS) files.push([`${l}.yml`, langYaml(l), `config/lang/${l}.yml`, changedLangKeys(l).length > 0]);
   for (const [name, text, path, needed] of files) {
@@ -860,8 +1040,74 @@ async function importFiles(files) {
   save(); buildPanel(); render();
 }
 
+// ---------- Share links (#s=..., the changes from the defaults; the part after # never reaches a server) ----------
+const SHARE_BASE = "https://catenaonline.net/editor/";
+function b64url(bytes) {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function unb64url(text) {
+  const bin = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(bin, c => c.charCodeAt(0));
+}
+async function pipe(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
+async function shareCode() {
+  const payload = { v: 1, d: {}, l: { ja: {}, en: {} }, p: state.palette };
+  for (const k of DISPLAY_KEYS) if (state.display[k] !== DEFAULT_DISPLAY[k]) payload.d[k] = state.display[k];
+  for (const l of LANGS) for (const k of changedLangKeys(l)) payload.l[l][k] = state.lang[l][k];
+  const bytes = new TextEncoder().encode(JSON.stringify(payload));
+  return window.CompressionStream ? "z" + b64url(await pipe(bytes, new CompressionStream("deflate-raw"))) : "j" + b64url(bytes);
+}
+async function readShare(code) {
+  if (code[0] !== "z" && code[0] !== "j") throw new Error("形式が違います");
+  let payload;
+  try {
+    let bytes = unb64url(code.slice(1));
+    if (code[0] === "z") bytes = await pipe(bytes, new DecompressionStream("deflate-raw"));
+    payload = JSON.parse(new TextDecoder().decode(bytes));
+  } catch (e) { throw new Error("リンクが途中で切れているか、壊れています"); }
+  if (!payload || payload.v !== 1) throw new Error("対応していない版です");
+  return payload;
+}
+function applyShare(payload) {
+  state.display = { ...DEFAULT_DISPLAY };
+  for (const l of LANGS) state.lang[l] = { ...DEFAULT_LANG[l] };
+  for (const k of DISPLAY_KEYS) if (typeof payload.d?.[k] === "string") state.display[k] = payload.d[k];
+  for (const l of LANGS) for (const k of Object.keys(DEFAULT_LANG[l])) if (typeof payload.l?.[l]?.[k] === "string") state.lang[l][k] = payload.l[l][k];
+  if (Array.isArray(payload.p)) state.palette = cleanPalette(payload.p);
+}
+function hasDraftChanges() {
+  return DISPLAY_KEYS.some(k => state.display[k] !== DEFAULT_DISPLAY[k]) || LANGS.some(l => changedLangKeys(l).length > 0);
+}
+async function copyShareLink() {
+  const base = location.protocol === "file:" ? SHARE_BASE : location.href.split("#")[0];
+  const url = base + "#s=" + await shareCode();
+  let copied = false;
+  try { await navigator.clipboard.writeText(url); copied = true; } catch (e) { /* shown below instead */ }
+  const box = document.createElement("div");
+  box.className = "notice";
+  box.innerHTML = `${copied ? "共有リンクをコピーしました" : "共有リンク（コピーできなかったので選んでコピーしてください）"}（${url.length}文字）` +
+    (location.protocol === "file:" ? `。公開版のエディター（${esc(SHARE_BASE)}）で開くリンクです` : "") +
+    `<input type="text" readonly style="width:100%;margin-top:6px" value="${esc(url)}">`;
+  document.getElementById("notices").prepend(box);
+  box.querySelector("input").select();
+}
+async function loadShareFromHash() {
+  const m = location.hash.match(/^#s=([A-Za-z0-9_-]+)$/);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  try {
+    const payload = await readShare(m[1]);
+    if (hasDraftChanges() && !confirm("共有リンクの内容を読み込みます。このブラウザで編集中の内容は置き換わります。よろしいですか？")) return;
+    applyShare(payload);
+    save();
+    notice("共有リンクの内容を読み込みました。");
+  } catch (e) { notice(`共有リンクを読めませんでした：${e.message}`, true); }
+}
+
 // ---------- Start ----------
-function start() {
+async function start() {
   if (!window.jsyaml) {
     document.getElementById("notices").innerHTML = "";
     notice("YAML を読む部品（js-yaml）を読み込めませんでした。インターネットに接続して開き直してください。", true);
@@ -872,7 +1118,8 @@ function start() {
   state.display = { ...DEFAULT_DISPLAY };
   for (const l of LANGS) state.lang[l] = { ...DEFAULT_LANG[l] };
   if (restore()) notice("前回の編集内容を復元しました（このブラウザに保存されています）。");
-  buildSamples(); buildTabs(); buildPanel();
+  await loadShareFromHash();
+  buildSamples(); buildTabs(); buildPanel(); renderPalette();
   const bars = document.getElementById("bar-scenes");
   for (const [id, label] of BAR_SCENES) {
     const b = document.createElement("button"); b.type = "button"; b.textContent = label;
@@ -890,11 +1137,16 @@ function start() {
   document.getElementById("import-btn").onclick = () => document.getElementById("import").click();
   document.getElementById("import").onchange = (e) => { importFiles([...e.target.files]); e.target.value = ""; };
   document.getElementById("export-btn").onclick = buildExport;
+  document.getElementById("share-btn").onclick = copyShareLink;
+  document.getElementById("palette-add").onclick = () => {
+    state.palette = cleanPalette([...state.palette, document.getElementById("tb-color").value]);
+    save(); renderPalette();
+  };
   document.getElementById("reset-all").onclick = () => {
     if (!confirm("すべての項目を既定に戻しますか？（このブラウザに保存した編集内容も消えます）")) return;
     state.display = { ...DEFAULT_DISPLAY };
     for (const l of LANGS) state.lang[l] = { ...DEFAULT_LANG[l] };
-    save(); buildPanel(); render();
+    save(); buildTabs(); buildPanel(); render();
   };
   render();
 }

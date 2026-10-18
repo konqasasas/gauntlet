@@ -6,12 +6,12 @@
 # 変更後は /gauntlet reload display で、再起動せずに反映される。
 # Web エディター（web/editor/）で見た目を確かめながら編集できる。
 
-# ランク（1〜13）
+# ランク（1〜11）
 ranks:
-  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"13"）。
+  # ランク番号の札。<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
   badge: "[<rank_padded>]"
-  # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜13（13個ちょうど）。
+  # ランクごとの色。<text> に札やプレイヤー名が入る。上から順にランク1〜11（11個ちょうど）。
   styles:
     - "<color:#d9d9d9><text></color>"
     - "<color:#8bd36b><text></color>"
@@ -24,8 +24,6 @@ ranks:
     - "<gradient:#5ee7ff:#7c5cff><text></gradient>"
     - "<gradient:#ff7eb6:#8a5cff><text></gradient>"
     - "<gradient:#ff5f5f:#ffd84d:#5dffb0><text></gradient>"
-    - "<gradient:#4dc9ff:#d36bff:#ff5fa2><text></gradient>"
-    - "<gradient:#ffffff:#ffd54a:#ff7a1a:#ffd54a:#ffffff><text></gradient>"
 
 # プレイヤー名の表示
 names:
@@ -76,3 +74,10 @@ sidebar:
     - "<gold>Best:</gold><white> <best>"
     - "<gold>Attempts:</gold><white> <attempts>"
     - ""
+
+# サーバー一覧で名前の下に出る説明（2行まで。言語は分けられない）。
+# <server> サーバー名、<online> 接続中の人数、<max> 最大人数。
+# 空のリスト（motd: []）にすると server.properties の motd を使う。
+motd:
+  - "<bold><gradient:#ffb347:#ff5f6d>◆ <server> ◆</gradient></bold>"
+  - "<gray>Block-placing parkour</gray> <dark_gray>|</dark_gray> <white>Java 26.3"

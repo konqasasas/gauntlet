@@ -18,11 +18,13 @@ import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
  * renderer can use it. The web editor (web/editor/) writes the same file.
  */
 public final class DisplayStyle {
-    public static final int RANKS=13;
+    public static final int RANKS=11;
     /** A sidebar line that is replaced by the course lines during a course. */
     public static final String COURSE_BLOCK="<course_block>";
     static final List<String> KEYS=List.of("ranks.badge","ranks.styles","names.admin-tag","names.full","names.nametag","chat.format",
-            "tab.header","tab.ping.good","tab.ping.ok","tab.ping.bad","sidebar.title","sidebar.lines","sidebar.course");
+            "tab.header","tab.ping.good","tab.ping.ok","tab.ping.bad","sidebar.title","sidebar.lines","sidebar.course","motd");
+    /** The server list shows two lines of description. */
+    public static final int MOTD_LINES=2;
     private static final MiniMessage MINI=MiniMessage.miniMessage();
     private final Map<String,String> values;
     private final List<String> rankStyles;
@@ -33,6 +35,7 @@ public final class DisplayStyle {
         if(rankStyles.size()!=RANKS) throw new IllegalArgumentException("ranks.styles needs "+RANKS+" entries, found "+rankStyles.size());
         for(int i=0;i<RANKS;i++) if(!rankStyles.get(i).contains("<text>")) throw new IllegalArgumentException("ranks.styles entry "+(i+1)+" has no <text>");
         this.values=Map.copyOf(values);
+        if(lines("motd").size()>MOTD_LINES) throw new IllegalArgumentException("motd has "+lines("motd").size()+" lines; the server list shows "+MOTD_LINES);
     }
 
     /** Bundled display.yml with the override file (null: none) on top; unknown keys in the override are logged and ignored. */
@@ -58,7 +61,7 @@ public final class DisplayStyle {
     public Component rank(int rank,String text) {
         return MINI.deserialize(rankStyles.get(Math.clamp(rank,1,RANKS)-1).replace("<text>",MINI.escapeTags(text)));
     }
-    /** "[ 1 ]" for one digit, "[13]" for two, with the default badge. */
+    /** "[ 1 ]" for one digit, "[11]" for two, with the default badge. */
     public String badgeText(int rank) {
         String padded=rank<10 ? " "+rank+" " : String.valueOf(rank);
         return values.get("ranks.badge").replace("<rank_padded>",padded).replace("<rank>",String.valueOf(rank));
@@ -80,6 +83,13 @@ public final class DisplayStyle {
     /** The ping number in the color for its range. */
     public Component ping(int ms,int good,int ok) {
         return render(ms<good ? "tab.ping.good" : ms<ok ? "tab.ping.ok" : "tab.ping.bad",Placeholder.unparsed("ping",String.valueOf(ms)));
+    }
+
+    /** The server list description, or null to keep server.properties' motd (an empty motd list). */
+    public Component motd(String server,int online,int max) {
+        if(values.get("motd").isEmpty()) return null;
+        return render("motd",Placeholder.unparsed("server",server),
+                Placeholder.unparsed("online",String.valueOf(online)),Placeholder.unparsed("max",String.valueOf(max)));
     }
 
     /** What the sidebar shows; course is null outside a course. */

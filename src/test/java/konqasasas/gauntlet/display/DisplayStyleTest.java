@@ -21,7 +21,7 @@ class DisplayStyleTest {
     @Test void defaultsKeepTheFormerLook() throws IOException {
         DisplayStyle s=bundled();
         assertEquals("[ 1 ]",s.badgeText(1));
-        assertEquals("[13]",s.badgeText(13));
+        assertEquals("[11]",s.badgeText(11));
         Component name=s.rank(1,"Steve");
         assertEquals("[ 1 ] [ADMIN] Steve",plain(s.full(s.badge(1),true,name)));
         assertEquals("[ 1 ] Steve",plain(s.full(s.badge(1),false,name)));
@@ -58,6 +58,16 @@ class DisplayStyleTest {
         assertEquals(List.of("","Player:"," Steve","Rank:"," [ 1 ]","Playtime:"," 1.5h","",
                 "───────────","Course:"," Lava Stairs","Best: 87%","Attempts: 3","","mc.catenaonline.net"),inside);
     }
+    @Test void serverListDescription() throws IOException {
+        assertEquals("◆ Catena Online ◆\nBlock-placing parkour | Java 26.3",plain(bundled().motd("Catena Online",3,20)));
+        Files.writeString(dir.resolve("display.yml"),"motd:\n  - \"<online>/<max> <server>\"\n");
+        assertEquals("3/20 X",plain(bundled().motd("X",3,20)));
+        Files.writeString(dir.resolve("display.yml"),"motd: []\n");
+        assertNull(bundled().motd("X",3,20),"An empty motd keeps server.properties");
+        Files.writeString(dir.resolve("display.yml"),"motd:\n  - a\n  - b\n  - c\n");
+        IOException e=assertThrows(IOException.class,this::bundled);
+        assertTrue(e.getMessage().contains("motd"),e.getMessage());
+    }
     @Test void overrideReplacesKeysAndIgnoresUnknownOnes() throws IOException {
         Files.writeString(dir.resolve("display.yml"),"names:\n  full: \"<name> <badge>\"\nranks:\n  badge: \"R<rank>\"\nno.such: x\n");
         DisplayStyle s=bundled();
@@ -67,7 +77,7 @@ class DisplayStyleTest {
     @Test void invalidRankStylesAreRejected() throws IOException {
         Files.writeString(dir.resolve("display.yml"),"ranks:\n  styles:\n    - \"<red><text>\"\n");
         IOException e=assertThrows(IOException.class,this::bundled);
-        assertTrue(e.getMessage().contains("13"),e.getMessage());
+        assertTrue(e.getMessage().contains("needs "+DisplayStyle.RANKS),e.getMessage());
         StringBuilder noText=new StringBuilder("ranks:\n  styles:\n");
         for(int i=0;i<DisplayStyle.RANKS;i++) noText.append("    - \"<red>").append(i==4 ? "" : "<text>").append("\"\n");
         Files.writeString(dir.resolve("display.yml"),noText);
