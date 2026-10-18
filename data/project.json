@@ -1,7 +1,7 @@
 {
-  "revision": 107,
+  "revision": 131,
   "project": {
-    "schemaVersion": 4,
+    "schemaVersion": 5,
     "namespace": "dcg",
     "name": "Dialog Custom GUI",
     "description": "Dialog Custom GUI resource pack",

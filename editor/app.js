@@ -1,4 +1,4 @@
-import { renderScreen, cssColor } from '/lib/raster.mjs';
+import { renderScreen, renderElement, cssColor } from '/lib/raster.mjs';
 import { frameLayout, drawFrame } from '/lib/frame.mjs';
 import { GlyphAtlas, gameTextItems, drawGameTextItems, gameTextCodepoints } from '/lib/gametext.mjs';
 import {
@@ -18,6 +18,7 @@ const st = {
   collapsed: new Set(),// 一覧で閉じているグループ
   clip: null,          // コピーした内容（OS のクリップボードが使えないときの代わり）
   preview: {},         // 画面ごとの「今どの値で見るか」{ screenId: { 名前: 値 } }（データは変えない）
+  asset: null,         // 右の欄で開いている素材の id
   mode: 'edit',
   zoom: 0,             // 0 = 自動（ステージに収まる最大の整数倍）
   z: 3,                // 実際に使っている倍率
@@ -188,7 +189,7 @@ function renderStateBar() {
 
 
 function insideScope(s, e) { return !st.scope || (e.group && groupChain(s, e.group).some((g) => g.id === st.scope)); }
-function setSel(ids) { st.sel = [...new Set(ids)]; }
+function setSel(ids) { st.sel = [...new Set(ids)]; if (st.sel.length) st.asset = null; }
 function pruneSelection() {
   const s = screen();
   const ids = new Set(s ? s.elements.map((e) => e.id) : []);
@@ -522,6 +523,7 @@ canvas.addEventListener('mousedown', (ev) => {
     if (h) { st.drag = { kind: 'resize', handle: h.name, start: p, box, origs: new Map(els.map((e) => [e.id, { x: e.x, y: e.y, w: e.w, h: e.h }])) }; return; }
   }
   const hit = hitElement(s, p.x, p.y);
+  st.asset = null;
   if (!hit) {
     // 何もない所: 範囲選択（Shift で追加）。中に入っているグループの外なら外へ出る
     if (!ev.shiftKey) st.sel = [];
@@ -1189,7 +1191,9 @@ function renderAssets() {
     li.title = `${a.name}\n${a.width}×${a.height}px\n${id}`;
     li.draggable = true;
     li.addEventListener('dragstart', (ev) => ev.dataTransfer.setData('text/x-asset', id));
-    li.ondblclick = () => addImageElement(id, { x: 0, y: 0 });
+    li.ondblclick = () => { st.asset = null; addImageElement(id, { x: 0, y: 0 }); };
+    li.onclick = () => openAsset(id);
+    if (st.asset === id) li.classList.add('on');
     const img = document.createElement('img');
     img.src = `/assets/${encodeURIComponent(a.file)}`;
     img.alt = a.name;
@@ -1197,6 +1201,160 @@ function renderAssets() {
     li.lastChild.classList.add('del');
     ul.append(li);
   }
+}
+
+// ---- 素材（画像）の設定 -----------------------------------------------------------
+const FIT_LABEL = { stretch: '引き伸ばし', contain: '全体を収める', cover: '覆う（切り抜き）', tile: '敷き詰め', nine: '9分割（四隅を崩さず伸ばす）' };
+
+function openAsset(id) { st.sel = []; st.asset = id; renderAssets(); renderInspector(); draw(); }
+
+// 画像・ボタンの「9分割」の設定欄
+function nineFields(box, s, e) {
+  const key = e.type === 'image' ? 'asset' : 'image';
+  const a = project().assets[e[key]];
+  box.append(field('辺と真ん中', selectInput(e.nineFill || 'stretch', [['stretch', '伸ばす'], ['tile', '並べる']], (v) => setEl(s, e, 'nineFill', v)), '四隅は伸ばさず、上下の辺は横だけ、左右の辺は縦だけ、真ん中は両方向に埋めます'));
+  const own = !!e.slice;
+  box.append(field('分割位置', checkInput(own, (v) => setEl(s, e, 'slice', v ? { ...(a?.slice || { l: 0, t: 0, r: 0, b: 0 }) } : null)), own ? 'この要素だけの分割位置を使っています' : `素材の設定を使っています（左 ${a?.slice?.l ?? 0} / 上 ${a?.slice?.t ?? 0} / 右 ${a?.slice?.r ?? 0} / 下 ${a?.slice?.b ?? 0} 画素）`));
+  if (own) box.append(sliceInputs(e.slice, (sl) => setEl(s, e, 'slice', sl)));
+  if (a) box.append(btn('素材の分割位置を編集', '素材の画面で、分割線をドラッグして決めます', () => openAsset(a.id)));
+  if (a && !own && ['l', 't', 'r', 'b'].every((k) => !a.slice?.[k])) box.append(note('素材の分割位置がまだ決まっていません（このままだと引き伸ばしと同じです）。', 'warn'));
+}
+
+function sliceInputs(sl, onChange) {
+  const geo = document.createElement('div'); geo.className = 'field row4';
+  for (const [k, label] of [['l', '左'], ['t', '上'], ['r', '右'], ['b', '下']]) {
+    const l = document.createElement('label'); l.textContent = label;
+    l.append(numInput(sl?.[k] ?? 0, (v) => onChange({ ...sl, [k]: Math.max(0, v) }), { min: 0 }));
+    geo.append(l);
+  }
+  return geo;
+}
+
+function inspectAsset(box, a) {
+  const p = project();
+  const head = document.createElement('h2');
+  head.innerHTML = `<span>素材 <span class="mono muted">${esc(a.id)}</span></span>`;
+  const users = assetUsersOf(a.id);
+  const tools = document.createElement('span');
+  const replace = document.createElement('label');
+  replace.className = 'filebtn mini'; replace.textContent = '差し替え'; replace.title = '別の画像ファイルに差し替えます（使っている要素はそのまま新しい画像になります）';
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/png,image/jpeg,image/webp,image/gif'; inp.hidden = true;
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const n = await uploadAsset(f);
+    if (n && n.id !== a.id && await commit([{ op: 'replace_asset', asset: a.id, with: n.id }], `素材差し替え ${a.name}→${n.name}`)) openAsset(n.id);
+  };
+  replace.append(inp);
+  tools.append(btn('配置', '画面に置く（ダブルクリックでも可）', () => { st.asset = null; addImageElement(a.id, { x: 0, y: 0 }); }), replace);
+  const del = btn('削除', users.length ? `使用中（${users.length}か所）のため削除できません` : '削除', () => commit([{ op: 'remove_asset', asset: a.id }], `素材削除 ${a.name}`).then((ok) => { if (ok) { st.asset = null; renderAll(); } }));
+  del.disabled = users.length > 0; del.classList.add('danger');
+  tools.append(del);
+  head.append(tools);
+  box.append(head);
+  box.append(field('名前', textInput(a.name, (v) => commit([{ op: 'set_asset', asset: a.id, values: { name: v } }], `素材名 ${a.name}`))));
+  box.append(note(`${a.width}×${a.height} 画素 / ${a.file}`));
+  const ps = a.pixelScale ?? null;
+  const def = 1 / p.textureScale;
+  box.append(field('1画素の大きさ', selectInput(ps ?? '', [['', `既定（${def} GUI px＝実寸）`], ...[0.25, 0.5, 1, 2, 3, 4].filter((v) => v !== def).map((v) => [v, `${v} GUI px`])], (v) => commit([{ op: 'set_asset', asset: a.id, values: { pixelScale: v === '' ? null : Number(v) } }], `素材の画素 ${a.name}`)), '9分割の四隅をどの大きさで描くか。ドット絵を大きく見せたいときは大きくします'));
+
+  box.append(h3('9分割の位置'));
+  box.append(note('線をドラッグして、伸ばさない四隅の大きさを決めます（画像の画素）。この素材を「9分割」で置いた要素すべてに効きます。'));
+  box.append(sliceEditor(a));
+  box.append(sliceInputs(a.slice || { l: 0, t: 0, r: 0, b: 0 }, (sl) => commit([{ op: 'set_asset', asset: a.id, values: { slice: sl } }], `分割位置 ${a.name}`)));
+  box.append(h3('伸ばしたときの見え方'));
+  box.append(ninePreview(a));
+
+  box.append(h3(`使っている場所（${users.length}）`));
+  if (!users.length) box.append(note('まだ使われていません。'));
+  for (const u of users) {
+    const row = document.createElement('div'); row.className = 'userrow';
+    row.textContent = `${u.screen ? `${u.screenTitle} / ${u.id}` : u.id}`;
+    if (u.screen) { row.title = 'クリックでその要素を選ぶ'; row.onclick = () => { selectScreen(u.screen); st.asset = null; setSel([u.id]); renderAll(); }; }
+    box.append(row);
+  }
+}
+
+function assetUsersOf(id) {
+  const out = [];
+  for (const s of project().screens) for (const e of s.elements) if (e.asset === id || e.image === id) out.push({ screen: s.id, screenTitle: s.title || s.id, id: e.id });
+  for (const slot of SKIN_SLOTS) if (project().skin?.[slot] === id) out.push({ id: `標準GUIスキン ${slot}` });
+  return out;
+}
+
+// 分割線をドラッグで決める
+function sliceEditor(a) {
+  const img = st.images.get(a.id);
+  const wrap = document.createElement('div'); wrap.className = 'sliceedit';
+  const c = document.createElement('canvas');
+  const z = Math.max(1, Math.min(16, Math.floor(260 / Math.max(a.width, a.height))));
+  c.width = a.width * z; c.height = a.height * z;
+  c.style.width = `${c.width}px`; c.style.height = `${c.height}px`;
+  const sl = { ...(a.slice || { l: 0, t: 0, r: 0, b: 0 }) };
+  const g = c.getContext('2d');
+  const paint = () => {
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, c.width, c.height);
+    for (let y = 0; y < c.height; y += 8) for (let x = 0; x < c.width; x += 8) { g.fillStyle = ((x + y) / 8) % 2 ? '#d8d6cf' : '#ecebe6'; g.fillRect(x, y, 8, 8); }
+    if (img?.complete) g.drawImage(img, 0, 0, c.width, c.height);
+    g.strokeStyle = '#ff3fd0'; g.lineWidth = 1;
+    const lines = [['x', sl.l * z], ['x', c.width - sl.r * z], ['y', sl.t * z], ['y', c.height - sl.b * z]];
+    for (const [k, v] of lines) { g.beginPath(); if (k === 'x') { g.moveTo(v + 0.5, 0); g.lineTo(v + 0.5, c.height); } else { g.moveTo(0, v + 0.5); g.lineTo(c.width, v + 0.5); } g.stroke(); }
+  };
+  if (img && !img.complete) img.addEventListener('load', paint, { once: true });
+  paint();
+  let drag = null;
+  const pos = (ev) => { const r = c.getBoundingClientRect(); return { x: (ev.clientX - r.left) / z, y: (ev.clientY - r.top) / z }; };
+  // ドラッグはこのキャンバスに閉じる（ポインターを捕まえる）
+  c.addEventListener('pointerdown', (ev) => {
+    const p = pos(ev), tol = Math.max(1, 4 / z);
+    const cand = [['l', Math.abs(p.x - sl.l)], ['r', Math.abs(p.x - (a.width - sl.r))], ['t', Math.abs(p.y - sl.t)], ['b', Math.abs(p.y - (a.height - sl.b))]].filter(([, d]) => d <= tol).sort((x, y) => x[1] - y[1]);
+    if (cand.length) { drag = cand[0][0]; c.setPointerCapture(ev.pointerId); ev.preventDefault(); }
+  });
+  c.addEventListener('pointermove', (ev) => {
+    if (!drag) return;
+    const p = pos(ev);
+    const v = Math.round(drag === 'l' ? p.x : drag === 'r' ? a.width - p.x : drag === 't' ? p.y : a.height - p.y);
+    const max = drag === 'l' ? a.width - sl.r : drag === 'r' ? a.width - sl.l : drag === 't' ? a.height - sl.b : a.height - sl.t;
+    sl[drag] = clamp(v, 0, max);
+    paint();
+  });
+  c.addEventListener('pointerup', () => {
+    if (!drag) return;
+    drag = null;
+    if (['l', 't', 'r', 'b'].some((k) => sl[k] !== (a.slice?.[k] ?? 0))) commit([{ op: 'set_asset', asset: a.id, values: { slice: { ...sl } } }], `分割位置 ${a.name}`);
+  });
+  wrap.append(c);
+  return wrap;
+}
+
+// 9分割で、元の大きさ・横長・縦長に伸ばした見本
+function ninePreview(a) {
+  const img = st.images.get(a.id);
+  const p = project();
+  const ps = a.pixelScale || 1 / p.textureScale;
+  const bw = a.width * ps, bh = a.height * ps;
+  const sizes = [[bw, bh], [bw * 2.5, bh], [bw, bh * 2], [bw * 3, bh * 1.5]];
+  const k = Math.max(1, Math.min(4, Math.floor(260 / sizes.reduce((x, [w]) => x + w + 6, 0))));
+  const W = sizes.reduce((x, [w]) => x + w + 6, 0), H = Math.max(...sizes.map(([, h]) => h));
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(W * k); c.height = Math.ceil(H * k);
+  c.style.width = `${c.width}px`; c.style.height = `${c.height}px`;
+  const g = c.getContext('2d');
+  const draw1 = () => {
+    g.clearRect(0, 0, c.width, c.height);
+    g.save(); g.scale(k, k); g.imageSmoothingEnabled = false;
+    let x = 0;
+    const images = new Map(img?.complete ? [[a.id, img]] : []);
+    for (const [w, h] of sizes) {
+      renderElement(g, { type: 'image', asset: a.id, x, y: 0, w, h, fit: 'nine', smooth: false, opacity: 1, nine: { ...(a.slice || { l: 0, t: 0, r: 0, b: 0 }), ps, fill: 'stretch' } }, images, makeCanvas, k, pixelFonts);
+      x += w + 6;
+    }
+    g.restore();
+  };
+  if (img && !img.complete) img.addEventListener('load', draw1, { once: true });
+  draw1();
+  const wrap = document.createElement('div'); wrap.className = 'sliceedit'; wrap.append(c);
+  return wrap;
 }
 
 function renderDiag() {
@@ -1430,7 +1588,9 @@ function renderInspector() {
   const s = screen();
   if (!s) return;
   const e = selected();
-  if (e) inspectElement(box, s, e);
+  const a = st.asset ? project().assets[st.asset] : null;
+  if (a && !st.sel.length) inspectAsset(box, a);
+  else if (e) inspectElement(box, s, e);
   else if (st.sel.length) inspectMulti(box, s);
   else inspectScreen(box, s);
 }
@@ -1695,7 +1855,8 @@ function inspectElement(box, s, e) {
     const key = e.type === 'image' ? 'asset' : 'image';
     const opts = [['', '（なし）'], ...Object.entries(project().assets).map(([id, a]) => [id, `${a.name} (${a.width}×${a.height})`])];
     box.append(field('画像', selectInput(e[key] ?? '', opts, (v) => setEl(s, e, key, v || null))));
-    box.append(field('配置', selectInput(e.fit, FITS.map((f) => [f, { stretch: '引き伸ばし', contain: '全体を収める', cover: '覆う（切り抜き）', tile: '敷き詰め' }[f]]), (v) => setEl(s, e, 'fit', v))));
+    box.append(field('配置', selectInput(e.fit, FITS.map((f) => [f, FIT_LABEL[f]]), (v) => setEl(s, e, 'fit', v))));
+    if (e.fit === 'nine') nineFields(box, s, e);
     if (e.type === 'image') {
       box.append(field('補間', checkInput(e.smooth, (v) => setEl(s, e, 'smooth', v)), 'オフでドット絵のまま拡大します'));
       box.append(field('不透明度', numInput(e.opacity, (v) => setEl(s, e, 'opacity', clamp(v, 0, 1)), { min: 0, max: 1, step: 0.05, float: true })));

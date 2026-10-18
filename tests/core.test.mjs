@@ -7,7 +7,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { applyOps, validateProject, migrateProject, defaultProject, defaultScreen, defaultElement, clickRows, LINE, resolveScreen, groupMembers } from '../lib/model.mjs';
 import { spaceString, glyphAdvance, spaceFontJson, tileGeometry } from '../lib/compile.mjs';
-import { buildScreen, getAtlas } from '../lib/export.mjs';
+import { buildScreen, getAtlas, rasterizeScreen } from '../lib/export.mjs';
+import { createCanvas } from '@napi-rs/canvas';
 import { auditScreen } from '../lib/audit.mjs';
 import { sampleProject } from '../lib/sample.mjs';
 import { selectStates, stateMatches } from '../lib/states.mjs';
@@ -66,7 +67,7 @@ test('v1 からの移行: 文字は焼き込みのまま', () => {
   const v1 = { ...sampleProject(), schemaVersion: 1 };
   for (const s of v1.screens) for (const e of s.elements) { delete e.render; delete e.labelRender; delete e.pixel; delete e.wordSpacing; }
   const m = migrateProject(structuredClone(v1));
-  assert.equal(m.schemaVersion, 4);
+  assert.equal(m.schemaVersion, 5);
   assert.equal(m.screens[0].elements.find((e) => e.id === 'lead').render, 'baked');
   assert.deepEqual(validateProject(m), []);
 });
@@ -183,6 +184,48 @@ test('状態: グループの条件・& でつないだ条件・名前の変更�
   assert.ok(stateMatches('a=1&b!=2', { a: '1' }) && !stateMatches('a=1&b!=2', { a: '1', b: '2' }));
 });
 
+test('9分割: 四隅は伸ばさず、辺と真ん中だけ伸ばす（並べるも可）', () => {
+  // 6x6 の画像: 四隅 2x2 が赤、辺が緑、真ん中が青
+  const img = createCanvas(6, 6);
+  const g = img.getContext('2d');
+  for (let y = 0; y < 6; y++) for (let x = 0; x < 6; x++) {
+    const edgeX = x < 2 || x >= 4, edgeY = y < 2 || y >= 4;
+    g.fillStyle = edgeX && edgeY ? '#ff0000' : edgeX || edgeY ? '#00ff00' : '#0000ff';
+    g.fillRect(x, y, 1, 1);
+  }
+  let p = defaultProject();
+  p.textureScale = 1;
+  p.assets.img_a = { id: 'img_a', file: 'a.png', name: 'a', width: 6, height: 6, sha1: 'x', slice: { l: 2, t: 2, r: 2, b: 2 }, pixelScale: 1 };
+  const s = defaultScreen('n9', { width: 40, height: 18 });
+  s.elements.push(defaultElement('image', { id: 'big', x: 0, y: 0, w: 20, h: 10, asset: 'img_a', fit: 'nine' }));
+  s.elements.push(defaultElement('image', { id: 'tile', x: 22, y: 0, w: 15, h: 10, asset: 'img_a', fit: 'nine', nineFill: 'tile' }));
+  p.screens.push(s);
+  assert.deepEqual(validateProject(p), []);
+  const r = rasterizeScreen(p, resolveScreen(p, s), new Map([['img_a', img]])).raster;
+  const px = (x, y) => Array.from(r.data.slice((y * r.width + x) * 4, (y * r.width + x) * 4 + 3)).join(',');
+  const RED = '255,0,0', GREEN = '0,255,0', BLUE = '0,0,255';
+  assert.equal(px(0, 0), RED); assert.equal(px(1, 1), RED); assert.equal(px(19, 9), RED); assert.equal(px(18, 0), RED);
+  assert.equal(px(2, 0), GREEN); assert.equal(px(17, 1), GREEN); assert.equal(px(0, 5), GREEN);
+  assert.equal(px(2, 2), BLUE); assert.equal(px(17, 7), BLUE);
+  // 並べる: 真ん中は 2px の画像を並べる（伸ばさないので色は同じ・切れ目なし）
+  assert.equal(px(22, 0), RED); assert.equal(px(30, 5), BLUE); assert.equal(px(36, 9), RED);
+  // 分割位置は画像の内側でなければならない
+  assert.throws(() => applyOps(p, [{ op: 'set_asset', asset: 'img_a', values: { slice: { l: 4, t: 0, r: 4, b: 0 } } }]), /分割位置/);
+});
+
+test('素材の差し替え: 使っている要素を付け替え、分割位置を引き継ぐ', () => {
+  let p = defaultProject();
+  p.assets.img_a = { id: 'img_a', file: 'a.png', name: 'a', width: 6, height: 6, sha1: 'x', slice: { l: 2, t: 2, r: 2, b: 2 }, pixelScale: null };
+  p.assets.img_b = { id: 'img_b', file: 'b.png', name: 'b', width: 8, height: 8, sha1: 'y', slice: { l: 0, t: 0, r: 0, b: 0 }, pixelScale: null };
+  const s = defaultScreen('ra', { width: 40, height: 18 });
+  s.elements.push(defaultElement('image', { id: 'i', asset: 'img_a', fit: 'nine' }));
+  p.screens.push(s);
+  p = applyOps(p, [{ op: 'replace_asset', asset: 'img_a', with: 'img_b' }, { op: 'set_asset', asset: 'img_b', values: { name: '枠' } }]);
+  assert.equal(p.screens[0].elements[0].asset, 'img_b');
+  assert.deepEqual(p.assets.img_b.slice, { l: 2, t: 2, r: 2, b: 2 });
+  assert.equal(p.assets.img_b.name, '枠');
+});
+
 test('payload の null は出力しない', () => {
   const p = defaultProject();
   const s = defaultScreen('n', { width: 60, height: 18 });
@@ -268,7 +311,7 @@ test('v3 からの移行: グループと文字スタイルが足される', () 
   delete v3.textStyles;
   for (const s of v3.screens) { delete s.groups; for (const e of s.elements) { delete e.group; delete e.textStyle; } }
   const m = migrateProject(v3);
-  assert.equal(m.schemaVersion, 4);
+  assert.equal(m.schemaVersion, 5);
   assert.deepEqual(validateProject(m), []);
 });
 

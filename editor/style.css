@@ -138,3 +138,11 @@ dialog pre { background: #f1f0eb; padding: 6px; overflow-x: auto; font-size: 11p
 .statefield { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
 .layers li .statebadge { font-size: 10px; font-family: Consolas, monospace; color: var(--warn); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .layers li.offstate .name { opacity: .4; font-style: italic; }
+
+/* 素材・9分割 */
+.assets li.on { outline: 2px solid var(--accent); }
+.sliceedit { margin: 6px 0; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 4px; overflow-x: auto; }
+.sliceedit canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+.userrow { font-size: 12px; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
+.userrow:hover { background: #efede7; }
+label.filebtn.mini { padding: 0 6px; font-size: 12px; line-height: 20px; }
