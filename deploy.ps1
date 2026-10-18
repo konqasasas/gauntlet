@@ -99,7 +99,11 @@ if ($Menu) {
         }
         Write-Host ('In game (or the server console): /gauntlet reload menu' + $(if ($reloadDatapack) { '  and  /minecraft:reload' } else { '' }))
         $pack = Join-Path $menuDir 'resourcepack.zip'
-        if (Test-Path -LiteralPath $pack) { Write-Host "Resource pack for your client: $pack" }
+        if (Test-Path -LiteralPath $pack) {
+            # The plugin sends packs only where resource-packs.publish-dir exists; on this PC put it into your client by hand.
+            Copy-Item -LiteralPath $pack -Destination (Join-Path $runtime 'plugins\ParkourGauntlet\menu\resourcepack.zip') -Force
+            Write-Host "Resource pack for your client: $pack"
+        }
         return
     }
     $tar = Join-Path ([IO.Path]::GetTempPath()) "gauntlet-menu-$(Get-Date -Format 'yyyyMMdd-HHmmss').tar"

@@ -92,6 +92,7 @@ lobby.block.lore:
 
 # ---- TAB ----
 tab.ping: "<gray>Ping <ping>"
+resourcepack.prompt: "This resource pack shows the <gold>Catena Online</gold> menus and emotes."
 tab.hints:
   - "<yellow>Tips</yellow> <gray>You can place blocks in mid-air!"
   - "<yellow>Tips</yellow> <gray>Hold slot 1 and press Q to retry at any time"

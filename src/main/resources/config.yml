@@ -15,6 +15,23 @@ tab:
   # ヒントの切り替え間隔（秒）。文言は lang/*.yml の tab.hints
   hint-seconds: 20
 
+# リソースパック（メニューの画像・フォントと、エモート用の BetterModel のパック）
+resource-packs:
+  # 参加時に送る。publish-dir がないサーバー（手元の試験用など）では何もしない
+  enabled: true
+  # 配る URL の先頭。publish-dir の中身を Web サーバーがこの URL で出す（VPS では nginx の /packs/）
+  base-url: "https://catenaonline.net/packs/"
+  # パックを「SHA-1.zip」の名前で置くフォルダ
+  publish-dir: "/var/lib/gauntlet-packs"
+  # true にすると、受け取らなかった人は参加できない
+  required: false
+  # 送るパック（サーバーのフォルダからの相対パス）。別々のパックとして送る
+  files:
+    - "plugins/BetterModel/build.zip"
+    - "plugins/ParkourGauntlet/menu/resourcepack.zip"
+  # ファイルの変化を調べる間隔（秒）。変わったら参加中の人にも送り直す
+  check-seconds: 10
+
 # ロビー
 lobby:
   # ロビーとして扱うワールド名。空なら無効。

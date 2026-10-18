@@ -40,6 +40,11 @@ server {
     include /etc/nginx/snippets/gauntlet-*.conf;
 }
 EOF
+# Resource packs: the plugin (minecraft) writes them, nginx (www-data) serves them at /packs/.
+id minecraft &>/dev/null || { echo 'User minecraft not found. Run setup.sh first.' >&2; exit 1; }
+install -d -o minecraft -g www-data -m 2750 /var/lib/gauntlet-packs
+install -d -m 0755 /etc/nginx/snippets
+install -m 0644 "$HERE/nginx/gauntlet-packs.conf" /etc/nginx/snippets/gauntlet-packs.conf
 ln -sf "/etc/nginx/sites-available/$DOMAIN" "/etc/nginx/sites-enabled/$DOMAIN"
 rm -f /etc/nginx/sites-enabled/default
 nginx -t

@@ -34,7 +34,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/opt/gauntlet
+# The plugin publishes resource packs for nginx; "-" lets the server start before web-setup.sh made it.
+ReadWritePaths=/opt/gauntlet -/var/lib/gauntlet-packs
 
 [Install]
 WantedBy=multi-user.target

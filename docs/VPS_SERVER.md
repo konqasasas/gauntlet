@@ -251,7 +251,19 @@ sudo gauntlet-dialog-user remove <名前>
 
 サーバーには、送った雛形だけが置かれます（送った中にない画面は消えます）。
 
-**リソースパック**（メニューの見た目に必要な画像・フォント）は、まだプレイヤーへの配布の仕組みがありません。`config/menu/resourcepack.zip` を各自のクライアントに入れて使います。
+## リソースパック（メニュー・エモート）
+
+参加したプレイヤーに、プラグインが**2つのパックを別々に**送ります（1つにまとめる必要はありません）。
+
+| パック | もと | 中身 |
+|---|---|---|
+| メニュー | `plugins/ParkourGauntlet/menu/resourcepack.zip`（`gauntlet-menu` が置く） | メニューの画像・フォント |
+| エモート | `plugins/BetterModel/build.zip`（BetterModel が起動時・`/bettermodel reload` で作る） | エモート中のプレイヤーの体（と防具） |
+
+- プラグインがパックを `/var/lib/gauntlet-packs/<SHA-1>.zip` に置き、nginx が `https://catenaonline.net/packs/` で出します（`web-setup.sh` が用意）。中身が変わると名前も変わるので、古いパックが使われ続けることはありません。
+- 10秒ごとにファイルの変化を調べ、変わったら参加中の全員にも送り直します。**再起動は要りません。** すぐ送り直すときは `gauntlet-cmd gauntlet reload packs`。
+- 設定は `config.yml` の `resource-packs`。`required: true` にすると、受け取らない人は参加できなくなります（既定は `false`）。`publish-dir` がないサーバー（手元の試験用）では送りません。手元では `config/menu/resourcepack.zip` をクライアントに入れて確かめます。
+- BetterModel のパックには `plugins/BetterModel/models/` と `players/` のモデルがすべて入ります。メニューのエモートが使うのは `players/social_emotes` と `players/photo_poses` だけなので、それ以外は置かないでください（見本のモンスターなどは手元の `run/paper-26.3/BetterModel-unused/` に退避してあります）。プレイヤーの防具を描く `module.player-armor` は有効のままです（切るとパックが約0.4MB小さくなります）。
 
 ## Web サイト（`catenaonline.net`）
 

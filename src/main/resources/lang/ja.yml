@@ -94,6 +94,7 @@ lobby.block.lore:
 
 # ---- TAB ----
 tab.ping: "<gray>Ping <ping>"
+resourcepack.prompt: "<gold>Catena Online</gold> のメニューとエモートの表示に使うリソースパックです。"
 tab.hints:
   - "<yellow>Tips</yellow> <gray>ブロックは空中でも置ける！"
   - "<yellow>Tips</yellow> <gray>本番中は1番を持ってQでいつでもリトライ"
@@ -186,6 +187,8 @@ editor.lang.reload-failed: "言語ファイルを読み込めませんでした�
 editor.menu.reloaded: "メニューの雛形を読み直しました。"
 editor.menu.reload-failed: "<red>メニューの雛形を読めませんでした（ログを確認してください）。"
 editor.display.reloaded: "表示設定（display.yml）を読み直しました。"
+editor.packs.reloaded: "リソースパックを確かめて、参加中の全員に送り直します。"
+editor.packs.disabled: "<red>リソースパックは送っていません（resource-packs.publish-dir がないか、無効です）。"
 editor.display.reload-failed: "<red>表示設定を読めませんでした（前の設定のまま）：<error>"
 editor.cp.not-ground: "CPは接地中の通常の足場で設定してください。設置用ブロックの上では設定できません。"
 editor.cp.set: "CPを設定しました。位置と視点を保存しました。"

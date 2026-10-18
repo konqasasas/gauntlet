@@ -10,6 +10,7 @@ import konqasasas.gauntlet.data.*;
 import konqasasas.gauntlet.display.*;
 import konqasasas.gauntlet.i18n.*;
 import konqasasas.gauntlet.lobby.Lobby;
+import konqasasas.gauntlet.pack.ResourcePacks;
 import konqasasas.gauntlet.play.*;
 import konqasasas.gauntlet.ui.*;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
@@ -47,6 +48,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private InvisibleGear invisibleGear;
     private DialogMenu menu;
     private PlayerDisplay display;
+    private ResourcePacks packs;
     private final Map<UUID,Integer> lastUse=new HashMap<>();
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
@@ -134,6 +136,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             new SettingsCommands(this,playerData,visibility).start();
             menu=new DialogMenu(this,playerData,lobby,participants);
             menu.start();
+            packs=new ResourcePacks(this);
+            packs.start();
             getLogger().info("Parkour Gauntlet ready: /gauntlet kit, /course (Paper 26.3)");
         } catch(IOException|RuntimeException e) {
             getLogger().log(Level.SEVERE,"Cannot initialize Parkour Gauntlet; existing state was preserved",e);
@@ -141,6 +145,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         }
     }
     @Override public void onDisable() {
+        if(packs!=null) packs.stop();
         if(placeable!=null) placeable.stop();
         if(invisibleGear!=null) invisibleGear.stop();
         if(courses!=null) courses.stop();
@@ -179,6 +184,10 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             catch(IOException e) { Msg.send(sender,"editor.display.reload-failed",Msg.arg("error",String.valueOf(e.getMessage()))); getLogger().log(Level.SEVERE,"Cannot reload display.yml",e); }
             return true;
         }
+        if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("packs")) {
+            Msg.send(sender,packs!=null && packs.reload() ? "editor.packs.reloaded" : "editor.packs.disabled");
+            return true;
+        }
         if(args.length==2 && args[0].equalsIgnoreCase("reload") && args[1].equalsIgnoreCase("menu")) {
             Msg.send(sender,menu!=null && menu.reload() ? "editor.menu.reloaded" : "editor.menu.reload-failed");
             return true;
@@ -192,7 +201,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         if(args.length==1) return List.of("kit","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
-        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display");
+        if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display","packs");
         return List.of();
     }
     private boolean allowed(Player player) {

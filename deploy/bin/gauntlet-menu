@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install the menu (Dialog editor output: templates/*.json and datapack.zip) and reload it without a restart.
+# Install the menu (Dialog editor output: templates/*.json, datapack.zip, resourcepack.zip) and reload it without a restart.
 # The server ends up with exactly the uploaded templates; a screen missing from the upload is removed.
 #   sudo /usr/local/bin/gauntlet-menu /opt/gauntlet/incoming/<file>.tar   (deploy.ps1 -Menu: a tar of config/menu)
 #   sudo /usr/local/bin/gauntlet-menu --stdin < menu.tar                  (gauntlet-ci deploy-menu)
@@ -71,16 +71,21 @@ if [[ -f $work/x/datapack.zip ]]; then
     echo "Installed datapack (${level:-world}/datapacks/dialog-custom-gui.zip)"
   fi
 fi
-if [[ -f $work/x/resourcepack.zip ]]; then
-  echo "Resource pack in the upload: sha1 $(sha1sum "$work/x/resourcepack.zip" | cut -d' ' -f1) (players need it; not distributed by this script)"
+# Resource pack: the plugin publishes it at /packs/ and sends it to players (resource-packs in config.yml).
+pack_changed=0
+if [[ -f $work/x/resourcepack.zip ]] && ! cmp -s "$work/x/resourcepack.zip" "$MENU/resourcepack.zip"; then
+  install -o minecraft -g minecraft -m 0660 "$work/x/resourcepack.zip" "$MENU/resourcepack.zip"
+  pack_changed=1
+  echo "Installed resource pack (sha1 $(sha1sum "$MENU/resourcepack.zip" | cut -d' ' -f1))"
 fi
 
 if systemctl is-active --quiet gauntlet.service; then
   before=$(wc -l < "$LOG")
   printf 'gauntlet reload menu\n' > "$FIFO"
   if (( datapack_changed )); then printf 'minecraft:reload\n' > "$FIFO"; fi
+  if (( pack_changed )); then printf 'gauntlet reload packs\n' > "$FIFO"; fi
   sleep 3
-  tail -n +"$((before + 1))" "$LOG" | grep -E 'Menu templates|メニュー|Reloading|reload' || echo 'No reload message yet; check: journalctl -u gauntlet -n 20'
+  tail -n +"$((before + 1))" "$LOG" | grep -E 'Menu templates|メニュー|Reloading|reload|Resource packs|リソースパック' || echo 'No reload message yet; check: journalctl -u gauntlet -n 20'
 else
   echo 'Server is not running; the menu applies on the next start.'
 fi
