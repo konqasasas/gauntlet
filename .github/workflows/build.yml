@@ -34,6 +34,21 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  dialog-editor:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: dialog-editor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: dialog-editor/package-lock.json
+      - run: npm ci
+      - run: npm test
+
   deploy:
     # Only from the "Run workflow" button, and only one deploy at a time.
     if: github.event_name == 'workflow_dispatch' && inputs.deploy != 'none'

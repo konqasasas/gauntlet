@@ -1,6 +1,6 @@
 # メニュー（Dialog）
 
-メニューの画面は別プロジェクトのエディター（`C:\mc\dialog-custom-gui`）で作る。このプラグインは、エディターが書き出した雛形からプレイヤーごとの画面を組み立てて送り、画面のクリック（custom）を受けて処理する。エディターからの引き継ぎ資料は `C:\mc\dialog-custom-gui\docs\plugin-handoff.md`。
+メニューの画面は Dialog エディター（`dialog-editor/`、もとは別リポジトリの dialog-custom-gui）で作る。このプラグインは、エディターが書き出した雛形からプレイヤーごとの画面を組み立てて送り、画面のクリック（custom）を受けて処理する。エディターからの引き継ぎ資料は [dialog-editor/docs/plugin-handoff.md](../../dialog-editor/docs/plugin-handoff.md)。
 
 状態（2026-10-18）：接続済みは「画面の移動・閉じる・ロビーへ戻る・エモート・設定」。設定画面は選択中の項目・ON/OFF・音量・翻訳先がプレイヤーの値で表示される。ほかの画面の中身は固定の見本。
 

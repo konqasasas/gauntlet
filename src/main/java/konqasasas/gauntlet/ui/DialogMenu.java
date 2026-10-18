@@ -30,7 +30,7 @@ import org.bukkit.event.*;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
- * The menu screens made with the Dialog editor (dialog-custom-gui). Screens
+ * The menu screens made with the Dialog editor (dialog-editor/). Screens
  * are sent by this plugin from the editor's templates (plugins/ParkourGauntlet/
  * menu/&lt;screen&gt;.json), keeping only the states that match the player's
  * settings; moving between screens is the custom click dcg:open, so a screen
