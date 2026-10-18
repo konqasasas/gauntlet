@@ -67,7 +67,7 @@ test('v1 からの移行: 文字は焼き込みのまま', () => {
   const v1 = { ...sampleProject(), schemaVersion: 1 };
   for (const s of v1.screens) for (const e of s.elements) { delete e.render; delete e.labelRender; delete e.pixel; delete e.wordSpacing; }
   const m = migrateProject(structuredClone(v1));
-  assert.equal(m.schemaVersion, 5);
+  assert.equal(m.schemaVersion, 6);
   assert.equal(m.screens[0].elements.find((e) => e.id === 'lead').render, 'baked');
   assert.deepEqual(validateProject(m), []);
 });
@@ -226,6 +226,85 @@ test('素材の差し替え: 使っている要素を付け替え、分割位置
   assert.equal(p.assets.img_b.name, '枠');
 });
 
+test('部品: 選択から作っても書き出しは同じ・差し込み口・伸び縮み・切り離し', () => {
+  let p = defaultProject();
+  const s = defaultScreen('cs', { width: 160, height: 36, background: '#202020ff' });
+  s.footer = { type: 'none', columns: 1, exitAction: false, buttons: [] };
+  s.elements.push(defaultElement('rect', { id: 'bg', x: 9, y: 7, w: 60, h: 13, fill: '#3b6fe0ff', border: '#000000ff', borderWidth: 1 }));
+  s.elements.push(defaultElement('text', { id: 'lbl', x: 9, y: 9, w: 60, h: 9, text: 'ボタン', align: 'center' }));
+  s.elements.push(defaultElement('hotspot', { id: 'hs', x: 9, y: 9, w: 60, h: 9, tooltip: 'tip', action: { type: 'custom', value: 'dcg:go', payload: '{"a":1}' } }));
+  p.screens.push(s);
+  const before = buildScreen(p, p.screens[0], new Map(), vanilla);
+  p = applyOps(p, [{ op: 'create_component', screen: 'cs', elements: ['bg', 'lbl', 'hs'], component: { id: 'btn', name: 'ボタン' } }]);
+  const sc = p.screens[0];
+  assert.deepEqual(sc.elements.map((e) => e.type), ['instance']);
+  assert.equal(p.components[0].width, 60);
+  assert.equal(p.components[0].height, 20); // 上端を行にそろえる（y 7 → 0）
+  const after = buildScreen(p, sc, new Map(), vanilla);
+  assert.deepEqual(after.errors, []);
+  assert.deepEqual(after.compiled.dialog, before.compiled.dialog);
+  // 差し込み口: ラベルと動作を使用箇所ごとに。伸び縮み: 背景は横に伸び、文字は中央
+  p = applyOps(p, [
+    { op: 'set_component', component: 'btn', values: { props: [{ name: 'label', type: 'text', default: 'ボタン' }, { name: 'act', type: 'action', default: { type: 'none', value: '', payload: '' } }] } },
+    { op: 'patch_elements', screen: 'component:btn', patches: [
+      { element: 'lbl', values: { binds: { text: 'label' }, constraints: { h: 'stretch', v: 'top' } } },
+      { element: 'bg', values: { constraints: { h: 'stretch', v: 'top' } } },
+      { element: 'hs', values: { binds: { action: 'act' }, constraints: { h: 'stretch', v: 'top' } } },
+    ] },
+    { op: 'add_element', screen: 'cs', element: { type: 'instance', id: 'b2', component: 'btn', x: 0, y: 27, w: 100, h: 9, props: { label: '決定', act: { type: 'custom', value: 'dcg:ok', payload: '' } } } },
+  ]);
+  const r = resolveScreen(p, p.screens[0]);
+  const b2 = (id) => r.elements.find((e) => e.id === `b2__${id}`);
+  assert.equal(b2('lbl').text, '決定');
+  assert.equal(b2('bg').w, 100);
+  assert.equal(b2('hs').action.value, 'dcg:ok');
+  assert.equal(b2('bg').x, 0);
+  // 使われている部品は消せない
+  assert.throws(() => applyOps(p, [{ op: 'remove_component', component: 'btn' }]), /使用中/);
+  // 切り離すと、展開した要素とグループに置き換わる
+  p = applyOps(p, [{ op: 'detach_instance', screen: 'cs', element: 'b2' }]);
+  const d = p.screens[0];
+  assert.equal(d.groups.length, 1);
+  assert.equal(d.elements.filter((e) => e.group === d.groups[0].id).length, 3);
+  assert.equal(d.elements.find((e) => e.type === 'text' && e.group).text, '決定');
+});
+
+test('部品: バリアントと状態への結び付け・入れ子・検証', () => {
+  let p = defaultProject();
+  p = applyOps(p, [
+    { op: 'add_component', component: { id: 'pill', width: 40, height: 9, variants: ['normal', 'on'], elements: [
+      { type: 'rect', id: 'off_bg', w: 40, h: 9, fill: '#888888ff', state: 'variant=normal' },
+      { type: 'rect', id: 'on_bg', w: 40, h: 9, fill: '#3b6fe0ff', state: 'variant=on' },
+      { type: 'hotspot', id: 'hs', w: 40, h: 9, tooltip: 't' },
+    ] } },
+    { op: 'add_component', component: { id: 'row', width: 90, height: 9, elements: [
+      { type: 'instance', id: 'a', component: 'pill', x: 0, w: 40, h: 9 },
+      { type: 'instance', id: 'b', component: 'pill', x: 50, w: 40, h: 9, variant: 'on' },
+    ] } },
+    { op: 'add_screen', screen: { id: 'vs', width: 120, height: 27, stateDefaults: { lang: 'ja' }, elements: [
+      { type: 'instance', id: 'p1', component: 'pill', x: 0, y: 0, w: 40, h: 9, variant: 'on' },
+      { type: 'instance', id: 'p2', component: 'pill', x: 0, y: 9, w: 40, h: 9, variantBy: { key: 'lang', map: { ja: 'on' }, else: 'normal' } },
+      { type: 'instance', id: 'r', component: 'row', x: 0, y: 18, w: 90, h: 9 },
+    ] } },
+  ]);
+  const r = resolveScreen(p, p.screens[0]).elements;
+  const ids = r.map((e) => `${e.id}[${e.state || ''}]`);
+  // 決まったバリアントは、そのバリアントの要素だけ
+  assert.ok(ids.includes('p1__on_bg[]') && !ids.some((x) => x.startsWith('p1__off_bg')));
+  // 状態に結び付けると、両方の見た目を条件付きで出す
+  assert.ok(ids.includes('p2__on_bg[lang=ja]') && ids.includes('p2__off_bg[lang!=ja]'));
+  // 入れ子
+  assert.ok(ids.includes('r__a__off_bg[]') && ids.includes('r__b__on_bg[]'));
+  const b = buildScreen(p, p.screens[0], new Map(), vanilla);
+  assert.deepEqual(b.errors, []);
+  // 1つのバリアントに複数の値は割り当てられない
+  assert.throws(() => applyOps(p, [{ op: 'patch_elements', screen: 'vs', patches: [{ element: 'p2', values: { variantBy: { key: 'lang', map: { ja: 'on', en: 'on' }, else: 'normal' } } }] }]), /複数/);
+  // 状態で出し分ける使用箇所の中にクリック領域があるとエラー
+  assert.throws(() => applyOps(p, [{ op: 'patch_elements', screen: 'vs', patches: [{ element: 'p1', values: { state: 'lang=en' } }] }]), /クリック範囲/);
+  // 部品の循環
+  assert.throws(() => applyOps(p, [{ op: 'add_element', screen: 'component:pill', element: { type: 'instance', id: 'loop', component: 'row', w: 90, h: 9 } }]), /深すぎ/);
+});
+
 test('payload の null は出力しない', () => {
   const p = defaultProject();
   const s = defaultScreen('n', { width: 60, height: 18 });
@@ -311,7 +390,7 @@ test('v3 からの移行: グループと文字スタイルが足される', () 
   delete v3.textStyles;
   for (const s of v3.screens) { delete s.groups; for (const e of s.elements) { delete e.group; delete e.textStyle; } }
   const m = migrateProject(v3);
-  assert.equal(m.schemaVersion, 5);
+  assert.equal(m.schemaVersion, 6);
   assert.deepEqual(validateProject(m), []);
 });
 

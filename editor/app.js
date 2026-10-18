@@ -7,6 +7,7 @@ import {
   TEXT_STYLE_KEYS, applyTextStyle, textStyleUsers, findGroup, groupChain, groupMembers, lockedGroups, hiddenGroups,
 } from '/lib/model.mjs';
 import { elementShown, stateMatches, stateKeys, parseConditions, combineStates, formatCondition } from '/lib/states.mjs';
+import { isComponentRef, findComponent, COMPONENT_PREFIX, H_CONSTRAINTS, V_CONSTRAINTS, BIND_TARGETS, componentUsers } from '/lib/components.mjs';
 
 // ---- 状態 ----------------------------------------------------------------
 const st = {
@@ -30,7 +31,7 @@ const st = {
   compiledImg: null,
 };
 const MARGIN = 12;
-const TYPE_LABEL = { rect: '矩形', image: '画像', text: 'テキスト', button: 'ボタン', hotspot: 'クリック領域' };
+const TYPE_LABEL = { rect: '矩形', image: '画像', text: 'テキスト', button: 'ボタン', hotspot: 'クリック領域', instance: '部品' };
 const ACTION_LABEL = { none: 'なし', screen: '画面へ遷移', close: '閉じる（要プラグイン）', custom: 'カスタム（プラグイン）', command: 'コマンド実行', suggest: 'コマンド入力欄へ', url: 'URLを開く', copy: 'クリップボードへコピー', submit: '入力値を送信（dynamic/custom）' };
 
 const $ = (s) => document.querySelector(s);
@@ -107,7 +108,15 @@ const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 
 const project = () => st.snap.project;
-const screen = () => project().screens.find((s) => s.id === st.screenId) || project().screens[0];
+// 部品のマスターを編集しているときは、マスターを画面の形にして返す（要素・グループの配列は同じもの）。
+// id は 'component:<id>' なので、そのまま操作（ops）の screen に使える
+const screen = () => {
+  if (isComponentRef(st.screenId)) {
+    const c = findComponent(project(), st.screenId.slice(COMPONENT_PREFIX.length));
+    if (c) return { ...c, id: st.screenId, title: c.name, isComponent: true, background: '#00000000', footer: { type: 'none', columns: 1, buttons: [], exitAction: false }, inputs: [], afterAction: 'none' };
+  }
+  return project().screens.find((s) => s.id === st.screenId) || project().screens[0];
+};
 
 // ---- 選択 ----------------------------------------------------------------
 // 選択は要素の id の一覧。グループを選ぶと中の要素すべてが入る。
@@ -132,7 +141,11 @@ function selectedUnits() {
 }
 // ---- 状態 ----------------------------------------------------------------
 // 今どの値で見ているか（既定値に、上の切り替え欄で選んだ値を重ねたもの）
-function previewValues(s) { return { ...(s.stateDefaults || {}), ...(st.preview[s.id] || {}) }; }
+function previewValues(s) {
+  // 部品のマスターでは、最初のバリアントを既定にする
+  const base = s.isComponent ? { variant: s.variants?.[0] || 'normal', ...(s.stateDefaults || {}) } : (s.stateDefaults || {});
+  return { ...base, ...(st.preview[s.id] || {}) };
+}
 // 要素の実際の条件（グループの条件もつないだもの）
 function effectiveState(s, e) {
   const gs = e.group ? groupChain(s, e.group).reverse().map((g) => g.state).filter(Boolean) : [];
@@ -162,13 +175,15 @@ function renderStateBar() {
   const s = screen();
   if (!s) return;
   const keys = stateKeys(s);
+  for (const [k, vs] of Object.entries(stateKeys(resolveScreen(project(), s)))) for (const v of vs) (keys[k] ||= []).includes(v) || keys[k].push(v);
+  if (s.isComponent) for (const v of s.variants || []) (keys.variant ||= []).includes(v) || keys.variant.push(v);
   const names = Object.keys(keys).sort();
   if (!names.length) return;
   const values = previewValues(s);
   const lab = document.createElement('span'); lab.className = 'muted small'; lab.textContent = '状態:';
   bar.append(lab);
   for (const k of names) {
-    const def = s.stateDefaults?.[k];
+    const def = s.isComponent && k === 'variant' ? s.variants?.[0] : s.stateDefaults?.[k];
     const opts = keys[k].map((v) => [v, v === def ? `${v}（既定）` : v]);
     // 条件に出てこない値（≠ の見た目を確かめる用）
     if (!keys[k].includes(OTHER_VALUE)) opts.push([OTHER_VALUE, '（ほかの値）']);
@@ -231,7 +246,8 @@ function setStatus(text, err = false) {
 
 async function load() {
   st.snap = await api('GET', '/api/project');
-  if (!st.screenId || !project().screens.some((s) => s.id === st.screenId)) st.screenId = project().screens[0]?.id ?? null;
+  const exists = isComponentRef(st.screenId) ? !!findComponent(project(), st.screenId.slice(COMPONENT_PREFIX.length)) : project().screens.some((s) => s.id === st.screenId);
+  if (!st.screenId || !exists) st.screenId = project().screens[0]?.id ?? null;
   pruneSelection();
   syncImages();
   preloadGlyphs();
@@ -273,6 +289,7 @@ function scheduleCompileInfo() {
   compileTimer = setTimeout(async () => {
     const s = screen();
     if (!s) return;
+    if (s.isComponent) { st.compileInfo = null; $('#diag').innerHTML = '<div class="muted">部品のマスターを編集中です。書き出しの検証は、部品を置いた画面で確かめてください。</div>'; return; }
     try {
       st.compileInfo = { screenId: s.id, ...(await api('GET', `/api/compile/${s.id}?${stateParam(s).slice(1)}`)) };
       renderDiag();
@@ -298,6 +315,7 @@ function loadCompiledImage() {
 // ---- 描画 ----------------------------------------------------------------
 function renderAll() {
   renderStateBar();
+  renderComponents();
   renderTabs();
   renderScreenList();
   renderLayers();
@@ -366,7 +384,7 @@ function drawEdit(s) {
   ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = lw;
   ctx.strokeRect(-lw / 2, -lw / 2, s.width + lw, s.height + lw);
   const showClicks = $('#clickChk').checked;
-  for (const e of s.elements) {
+  for (const e of resolveScreen(project(), s).elements) {
     if (!e.visible) continue;
     if (e.type === 'hotspot') {
       ctx.fillStyle = 'rgba(80,200,255,0.12)'; ctx.fillRect(e.x, e.y, e.w, e.h);
@@ -476,8 +494,9 @@ function drawCompiled(s) {
 function clickSegments(s) {
   const out = [];
   const rows = s.height / LINE;
+  const flat = resolveScreen(project(), s).elements;
   for (let r = 0; r < rows; r++) {
-    const hs = s.elements.map((e, z) => ({ e, z })).filter(({ e }) => e.visible && (e.type === 'button' || e.type === 'hotspot') && clickRows(e.y, e.h, s.height).includes(r));
+    const hs = flat.map((e, z) => ({ e, z })).filter(({ e }) => e.visible && (e.type === 'button' || e.type === 'hotspot') && clickRows(e.y, e.h, s.height).includes(r));
     if (!hs.length) continue;
     const xs = [...new Set([0, s.width, ...hs.flatMap(({ e }) => [clamp(e.x, 0, s.width), clamp(e.x + e.w, 0, s.width)])])].sort((a, b) => a - b);
     for (let i = 0; i + 1 < xs.length; i++) {
@@ -732,6 +751,8 @@ stage.addEventListener('drop', async (ev) => {
   stage.classList.remove('drop');
   if (st.mode !== 'edit') return;
   const p = toGui(ev); p.x = Math.round(p.x - MARGIN); p.y = Math.round(p.y - MARGIN);
+  const compId = ev.dataTransfer.getData('text/x-component');
+  if (compId) return addInstance(compId, p);
   const assetId = ev.dataTransfer.getData('text/x-asset');
   if (assetId) return addImageElement(assetId, p);
   for (const f of ev.dataTransfer.files) {
@@ -955,7 +976,7 @@ function makeClip(s, els) {
   return { kind: 'dcg-elements', version: 1, screen: s.id, elements: structuredClone(els), groups: structuredClone(groups), tokens, styles };
 }
 
-async function pasteClip(clip, { dx = 0, dy = 0, transform = null, preOps = [], label = null } = {}) {
+async function pasteClip(clip, { dx = 0, dy = 0, transform = null, preOps = [], label = null, index = null } = {}) {
   const s = screen();
   const p = project();
   const usedEl = new Set(s.elements.map((e) => e.id));
@@ -976,7 +997,7 @@ async function pasteClip(clip, { dx = 0, dy = 0, transform = null, preOps = [], 
     ...preOps,
     ...Object.entries(clip.tokens || {}).map(([key, value]) => ({ op: 'set_theme_token', key, value, ifMissing: true })),
     ...Object.entries(clip.styles || {}).map(([key, style]) => ({ op: 'set_text_style', key, style, ifMissing: true })),
-    { op: 'add_elements', screen: s.id, elements, groups },
+    { op: 'add_elements', screen: s.id, elements, groups, ...(index == null ? {} : { index }) },
   ];
   if (await commit(ops, label || `貼り付け ${elements.length}個`)) { setSel(elements.map((e) => e.id)); renderPanels(); draw(); }
 }
@@ -1096,6 +1117,7 @@ function renderLayers() {
     twisty.onclick = (ev) => { ev.stopPropagation(); if (n.kind !== 'group') return; if (st.collapsed.has(n.id)) st.collapsed.delete(n.id); else st.collapsed.add(n.id); renderLayers(); };
     const type = document.createElement('span'); type.className = 'type';
     type.textContent = n.kind === 'group' ? 'グループ' : TYPE_LABEL[n.el.type];
+    if (n.kind === 'el' && n.el.type === 'instance') type.title = `部品 ${findComponent(project(), n.el.component)?.name ?? n.el.component}`;
     const name = document.createElement('span'); name.className = 'name';
     name.textContent = n.kind === 'group' ? n.group.name || n.id : n.el.name || n.id;
     name.title = `${n.id}${n.kind === 'el' && n.el.state ? `（状態 ${n.el.state}）` : ''}（ダブルクリックで名前を変更）`;
@@ -1355,6 +1377,218 @@ function ninePreview(a) {
   draw1();
   const wrap = document.createElement('div'); wrap.className = 'sliceedit'; wrap.append(c);
   return wrap;
+}
+
+// ---- 部品（コンポーネント） --------------------------------------------------------
+// 部品のマスターは画面と同じように編集する（st.screenId = 'component:<id>'）。
+const componentScreenId = (id) => `${COMPONENT_PREFIX}${id}`;
+let lastScreenId = null;
+
+function openComponent(id) {
+  if (!isComponentRef(st.screenId)) lastScreenId = st.screenId;
+  if (st.mode !== 'edit') setMode('edit');
+  selectScreen(componentScreenId(id));
+}
+function backToScreen() { selectScreen(lastScreenId && project().screens.some((s) => s.id === lastScreenId) ? lastScreenId : project().screens[0].id); }
+
+function renderComponents() {
+  const ul = $('#componentList');
+  if (!ul) return;
+  ul.innerHTML = '';
+  for (const c of project().components || []) {
+    const li = document.createElement('li');
+    li.className = st.screenId === componentScreenId(c.id) ? 'on' : '';
+    li.innerHTML = `<span class="name">${esc(c.name || c.id)}</span><span class="type">${c.width}×${c.height}${c.variants?.length > 1 ? ` / ${c.variants.length}種` : ''}</span>`;
+    li.title = 'クリックでマスターを編集。キャンバスへドラッグすると使用箇所を置けます';
+    li.draggable = true;
+    li.addEventListener('dragstart', (ev) => ev.dataTransfer.setData('text/x-component', c.id));
+    li.onclick = () => openComponent(c.id);
+    li.append(btn('置く', '今の画面の左上に使用箇所を置く', (ev) => { ev.stopPropagation(); addInstance(c.id, { x: 0, y: 0 }); }));
+    if (isComponentRef(st.screenId)) li.lastChild.disabled = true;
+    ul.append(li);
+  }
+  const banner = $('#compBanner');
+  if (banner) {
+    banner.innerHTML = '';
+    const s = screen();
+    if (s?.isComponent) {
+      const t = document.createElement('span'); t.className = 'compbanner';
+      t.textContent = `部品「${s.name || s.id}」のマスターを編集中（使っている全画面に反映されます）`;
+      banner.append(t, btn('← 画面に戻る', '', backToScreen));
+    }
+  }
+}
+
+async function addInstance(componentId, p) {
+  const s = screen();
+  if (s.isComponent && s.id === componentScreenId(componentId)) return alert('部品の中に自分自身は置けません');
+  const c = findComponent(project(), componentId);
+  const id = uniqueLocal(s, componentId);
+  const y = Math.round((p?.y ?? 0) / LINE) * LINE; // 中の文字・クリック領域が9px行に合うように
+  const ok = await commit([{ op: 'add_element', screen: s.id, element: { type: 'instance', id, name: c.name, component: componentId, x: clamp(p?.x ?? 0, 0, Math.max(0, s.width - c.width)), y: clamp(y, 0, Math.max(0, s.height - c.height)), w: c.width, h: c.height } }], `部品を置く ${c.name}`);
+  if (ok) { setSel([id]); renderAll(); }
+}
+
+// 選んだものを部品にする（その場所には使用箇所が残る）
+async function makeComponentFromSelection() {
+  const s = screen();
+  const els = selectedEls();
+  if (!els.length) return alert('部品にする要素を選んでください');
+  const name = prompt('部品の名前（例: 青いボタン）');
+  if (!name) return;
+  let id = prompt('部品の ID（英小文字・数字・_。例: button_blue）', name.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_|_$/g, '') || 'component');
+  if (!id) return;
+  const ids = new Set((project().components || []).map((c) => c.id));
+  if (ids.has(id)) return alert(`部品 ${id} は既にあります`);
+  const instId = uniqueLocal({ elements: s.elements.filter((e) => !st.sel.includes(e.id)) }, id);
+  if (await commit([{ op: 'create_component', screen: s.id, elements: els.map((e) => e.id), component: { id, name }, instanceId: instId }], `部品を作る ${name}`)) { setSel([instId]); renderAll(); }
+}
+
+// 部品のマスターの設定（何も選んでいないとき）
+function inspectComponent(box, s) {
+  const p = project();
+  const c = findComponent(p, s.id.slice(COMPONENT_PREFIX.length));
+  const head = document.createElement('h2');
+  head.innerHTML = `<span>部品 <span class="mono muted">${esc(c.id)}</span></span>`;
+  const users = componentUsers(p, c.id);
+  const del = btn('削除', users.length ? `使用中（${users.length}か所）のため削除できません` : '部品を削除', async () => { if (confirm(`部品「${c.name}」を削除しますか？`) && await commit([{ op: 'remove_component', component: c.id }], `部品削除 ${c.id}`)) backToScreen(); });
+  del.disabled = users.length > 0; del.classList.add('danger');
+  head.append(del);
+  box.append(head);
+  const set = (values, label) => commit([{ op: 'set_component', component: c.id, values }], label);
+  box.append(field('名前', textInput(c.name, (v) => set({ name: v }, `部品名 ${c.id}`))));
+  const geo = document.createElement('div'); geo.className = 'field row4';
+  for (const [k, label] of [['width', '幅'], ['height', '高さ']]) {
+    const l = document.createElement('label'); l.textContent = label;
+    l.append(numInput(c[k], (v) => set({ [k]: Math.max(1, v) }, `部品の大きさ ${c.id}`), { min: 1 }));
+    geo.append(l);
+  }
+  box.append(geo);
+  box.append(note('マスターの大きさ。使用箇所で大きさを変えると、中の要素は「伸び縮み」の指定に従って動きます。'));
+
+  box.append(h3('バリアント（見た目の種類）'));
+  box.append(note('「通常」「選択中」「危険」のような見た目の種類。中の要素の「状態」で variant＝名前 を選ぶと、そのバリアントのときだけ表示されます。最初のものが既定です。'));
+  c.variants.forEach((v, i) => {
+    const row = document.createElement('div'); row.className = 'field';
+    const t = textInput(v, (nv) => {
+      nv = nv.trim();
+      if (!nv || nv === v) return;
+      // 名前を変えたら、中の要素の条件も付け替える
+      const variants = c.variants.map((x) => (x === v ? nv : x));
+      const patches = c.elements.filter((e) => (e.state || '').split('&').includes(`variant=${v}`) || (e.state || '').split('&').includes(`variant!=${v}`))
+        .map((e) => ({ element: e.id, values: { state: e.state.split('&').map((x) => (x === `variant=${v}` ? `variant=${nv}` : x === `variant!=${v}` ? `variant!=${nv}` : x)).join('&') } }));
+      commit([{ op: 'set_component', component: c.id, values: { variants } }, ...(patches.length ? [{ op: 'patch_elements', screen: s.id, patches }] : [])], `バリアント名 ${v}→${nv}`);
+    });
+    const lab = document.createElement('span'); lab.textContent = i === 0 ? '既定' : '';
+    row.append(lab, t);
+    if (c.variants.length > 1) row.append(btn('✕', '削除（このバリアントだけの要素は残ります）', () => set({ variants: c.variants.filter((x) => x !== v) }, `バリアント削除 ${v}`)));
+    row.style.gridTemplateColumns = '40px 1fr auto';
+    box.append(row);
+  });
+  box.append(btn('＋ バリアントを追加', '', () => { const v = prompt('バリアントの名前（英数字と _ . -。例: selected）'); if (v) set({ variants: [...c.variants, v.trim()] }, `バリアント追加 ${v}`); }));
+
+  box.append(h3('差し込み口（使用箇所ごとに変える値）'));
+  box.append(note('ラベルの文字やクリックしたときの動作など、使用箇所ごとに変えたいものを決めます。中の文字・クリック領域を選んで「部品での設定」で結び付けます。'));
+  (c.props || []).forEach((pr, i) => {
+    const card = document.createElement('div'); card.className = 'card';
+    const hd = document.createElement('div'); hd.className = 'head';
+    hd.innerHTML = `<span class="mono">${esc(pr.name)}</span> <span class="muted small">${pr.type === 'text' ? '文字' : '動作'}</span>`;
+    hd.append(btn('✕', '削除', () => set({ props: c.props.filter((_, j) => j !== i) }, `差し込み口削除 ${pr.name}`)));
+    card.append(hd);
+    const setDefault = (v) => set({ props: c.props.map((x, j) => (j === i ? { ...x, default: v } : x)) }, `差し込み口の既定 ${pr.name}`);
+    if (pr.type === 'text') card.append(field('既定の値', textInput(pr.default ?? '', setDefault)));
+    else actionEditor(card, pr.default || { type: 'none', value: '', payload: '' }, ACTION_TYPES, setDefault);
+    box.append(card);
+  });
+  box.append(btn('＋ 差し込み口を追加', '', () => {
+    const name = prompt('名前（英小文字・数字・_。例: label）');
+    if (!name) return;
+    const type = confirm('文字の差し込み口にしますか？（キャンセルで「クリックしたときの動作」）') ? 'text' : 'action';
+    set({ props: [...(c.props || []), { name, type, default: type === 'text' ? '' : { type: 'none', value: '', payload: '' } }] }, `差し込み口追加 ${name}`);
+  }));
+
+  box.append(h3(`使っている場所（${users.length}）`));
+  for (const u of users) {
+    const row = document.createElement('div'); row.className = 'userrow';
+    const target = isComponentRef(u.screen) ? findComponent(p, u.screen.slice(COMPONENT_PREFIX.length))?.name : p.screens.find((x) => x.id === u.screen)?.title;
+    row.textContent = `${target || u.screen} / ${u.id}`;
+    row.onclick = () => { selectScreen(u.screen); setSel([u.id]); renderAll(); };
+    box.append(row);
+  }
+}
+
+// 部品のマスターの中の要素: 伸び縮みと差し込み口の結び付け
+function componentElementFields(box, s, e) {
+  const c = findComponent(project(), s.id.slice(COMPONENT_PREFIX.length));
+  box.append(h3('部品での設定'));
+  const k = e.constraints || { h: 'left', v: 'top' };
+  const H = { left: '左に固定', right: '右に固定', stretch: '左右に伸びる', center: '中央', scale: '比率で' };
+  const V = { top: '上に固定', bottom: '下に固定', stretch: '上下に伸びる', center: '中央', scale: '比率で' };
+  box.append(field('横の伸び縮み', selectInput(k.h, H_CONSTRAINTS.map((x) => [x, H[x]]), (v) => setEl(s, e, 'constraints', { ...k, h: v })), '使用箇所の幅を変えたときの動き方'));
+  box.append(field('縦の伸び縮み', selectInput(k.v, V_CONSTRAINTS.map((x) => [x, V[x]]), (v) => setEl(s, e, 'constraints', { ...k, v })), 'ゲーム内フォントの文字・クリック領域は9px行に合う動き方にしてください'));
+  const targets = Object.keys(BIND_TARGETS).filter((t) => t in e);
+  const T = { text: '文字', label: 'ラベル', tooltip: 'ツールチップ', action: '動作' };
+  for (const t of targets) {
+    const props = (c.props || []).filter((pr) => pr.type === BIND_TARGETS[t]);
+    const cur = e.binds?.[t] || '';
+    box.append(field(`${T[t]}の差し込み口`, selectInput(cur, [['', '（使わない）'], ...props.map((pr) => [pr.name, pr.name])], (v) => {
+      const binds = { ...(e.binds || {}) };
+      if (v) binds[t] = v; else delete binds[t];
+      setEl(s, e, 'binds', binds);
+    }), props.length ? '' : `「${T[t]}」に使える差し込み口がまだありません（何も選ばない状態の欄で追加）`));
+  }
+}
+
+// 部品の使用箇所の欄
+function inspectInstance(box, s, e) {
+  const p = project();
+  const c = findComponent(p, e.component);
+  box.append(h3('部品'));
+  box.append(field('部品', selectInput(e.component, (p.components || []).map((x) => [x.id, `${x.name}（${x.id}）`]), (v) => setEl(s, e, 'component', v))));
+  const tools = document.createElement('div'); tools.className = 'alignbar';
+  tools.append(
+    btn('マスターを編集', '部品のマスターを開きます（全部の使用箇所に反映）', () => openComponent(e.component)),
+    btn('部品から切り離す', 'この使用箇所を、ただの要素（グループ）に戻します', async () => { if (await commit([{ op: 'detach_instance', screen: s.id, element: e.id }], `切り離し ${e.id}`)) { st.sel = []; renderAll(); } }),
+  );
+  if (c && (e.w !== c.width || e.h !== c.height)) tools.append(btn('元の大きさ', `${c.width}×${c.height} に戻す`, () => commit([{ op: 'patch_element', screen: s.id, element: e.id, values: { w: c.width, h: c.height } }], `元の大きさ ${e.id}`)));
+  box.append(tools);
+  if (!c) return;
+  const variants = c.variants || ['normal'];
+  const vb = e.variantBy;
+  box.append(field('バリアントを状態で決める', checkInput(!!vb, (on) => {
+    if (!on) return setEl(s, e, 'variantBy', null);
+    const key = prompt('結び付ける状態の名前（例: ui_lang）');
+    if (!key) return renderInspector();
+    const value = prompt(`${variants[1] || variants[0]} にする ${key} の値（例: auto）`);
+    if (!value) return renderInspector();
+    const variantBy = { key, map: { [value]: variants[1] || variants[0] }, else: variants[0] };
+    commit([...defaultOps(s, `${key}=${value}`), { op: 'set', screen: s.id, element: e.id, path: 'variantBy', value: variantBy }], `バリアントを状態に ${e.id}`);
+  }), '例: 選択肢のボタンを「ui_lang が auto のときだけ選択中」にする。プレイヤーごとの値で見た目が変わります'));
+  if (!vb) {
+    box.append(field('バリアント', selectInput(e.variant || variants[0], variants.map((v) => [v, v]), (v) => setEl(s, e, 'variant', v === variants[0] ? '' : v))));
+  } else {
+    const card = document.createElement('div'); card.className = 'card';
+    const set = (next) => setEl(s, e, 'variantBy', next);
+    card.append(field('状態の名前', textInput(vb.key, (v) => v.trim() && commit([...defaultOps(s, `${v.trim()}=${Object.keys(vb.map)[0] || 'on'}`), { op: 'set', screen: s.id, element: e.id, path: 'variantBy', value: { ...vb, key: v.trim() } }], `バリアントの状態 ${e.id}`))));
+    for (const [u, v] of Object.entries(vb.map || {})) {
+      const row = document.createElement('div'); row.className = 'field';
+      const lab = document.createElement('span'); lab.className = 'mono'; lab.textContent = `＝ ${u}`;
+      const map = { ...vb.map };
+      row.append(lab, selectInput(v, variants.map((x) => [x, x]), (nv) => set({ ...vb, map: { ...map, [u]: nv } })), btn('✕', 'この値の割り当てを外す', () => { delete map[u]; set({ ...vb, map }); }));
+      card.append(row);
+    }
+    card.append(field('それ以外', selectInput(vb.else || variants[0], variants.map((x) => [x, x]), (nv) => set({ ...vb, else: nv }))));
+    card.append(btn('＋ 値を割り当てる', '', () => { const u = prompt(`${vb.key} の値`); if (u) set({ ...vb, map: { ...vb.map, [u.trim()]: variants[0] } }); }));
+    box.append(card);
+  }
+  for (const pr of c.props || []) {
+    const has = e.props && pr.name in e.props;
+    const value = has ? e.props[pr.name] : pr.default;
+    const setProp = (v) => setEl(s, e, 'props', { ...(e.props || {}), [pr.name]: v });
+    if (pr.type === 'text') box.append(field(pr.name, textInput(value ?? '', setProp, { placeholder: String(pr.default ?? '') }), has ? '' : '既定の値を使っています'));
+    else { box.append(h3(`${pr.name}（動作）`)); actionEditor(box, value || { type: 'none', value: '', payload: '' }, ACTION_TYPES, setProp); }
+  }
+  box.append(field('状態', stateField(s, e.state, (v) => commit(setStateOps(s, [{ element: e.id }], v), `状態 ${e.id}`)), 'この使用箇所全体をこの条件のときだけ表示します（中にクリック領域がある部品には付けられません）'));
 }
 
 function renderDiag() {
@@ -1619,7 +1853,7 @@ function inspectMulti(box, s) {
   const head = document.createElement('h2');
   head.innerHTML = group ? `<span>グループ <span class="mono muted">${esc(group.id)}</span></span>` : `<span>${units.length}個を選択 <span class="muted small">（要素 ${els.length}）</span></span>`;
   const tools = document.createElement('span');
-  tools.append(btn('グループ化', 'Ctrl+G', groupSelected));
+  tools.append(btn('グループ化', 'Ctrl+G', groupSelected), btn('部品にする', '選んだものを部品（コンポーネント）にします', makeComponentFromSelection));
   if (units.some((u) => u.kind === 'group')) tools.append(btn('解除', 'Ctrl+Shift+G', ungroupSelected));
   tools.append(btn('複製', 'Ctrl+D', duplicateSelected), btn('削除', 'Delete', removeSelected));
   tools.lastChild.classList.add('danger');
@@ -1787,7 +2021,10 @@ function makeVariant() {
   if (!els.length) return alert('見た目の要素（四角形・文字・画像）が選ばれていません');
   preOps.push(...defaultOps({ ...s, stateDefaults: { ...(s.stateDefaults || {}), ...Object.fromEntries(preOps.filter((o) => o.op === 'set_state_default').map((o) => [o.key, o.value])) } }, next));
   const clip = makeClip(s, els);
+  // 複製は元の見た目のすぐ上（前面）に置く
+  const top = Math.max(...s.elements.map((x, i) => (els.includes(x) ? i : -1)));
   pasteClip(clip, {
+    index: top + 1,
     preOps,
     label: `状態違いの見た目 ${next}`,
     transform: (elements, groups) => {
@@ -1823,7 +2060,7 @@ function inspectElement(box, s, e) {
   const head = document.createElement('h2');
   head.innerHTML = `<span>${TYPE_LABEL[e.type]} <span class="mono muted">${esc(e.id)}</span></span>`;
   const tools = document.createElement('span');
-  tools.append(btn('グループ化', 'Ctrl+G', groupSelected), btn('複製', 'Ctrl+D', duplicateSelected), btn('削除', 'Delete', removeSelected));
+  tools.append(btn('グループ化', 'Ctrl+G', groupSelected), btn('部品にする', '選んだものを部品（コンポーネント）にします', makeComponentFromSelection), btn('複製', 'Ctrl+D', duplicateSelected), btn('削除', 'Delete', removeSelected));
   tools.lastChild.classList.add('danger');
   head.append(tools);
   box.append(head);
@@ -1864,6 +2101,8 @@ function inspectElement(box, s, e) {
       if (a) box.append(btn('素材の実寸に合わせる', `${a.width}/${project().textureScale} GUI px`, () => commit([{ op: 'patch_element', screen: s.id, element: e.id, values: { w: Math.max(1, Math.round(a.width / project().textureScale)), h: Math.max(1, Math.round(a.height / project().textureScale)) } }], `実寸 ${e.id}`)));
     }
   }
+  if (e.type === 'instance') inspectInstance(box, s, e);
+  if (s.isComponent && e.type !== 'instance') componentElementFields(box, s, e);
   if (e.type === 'text' || e.type === 'button') inspectText(box, s, e);
   if (e.type === 'button' || e.type === 'hotspot') {
     box.append(h3('クリック'));
@@ -1979,6 +2218,7 @@ function actionEditor(box, action, types, onChange) {
 }
 
 function inspectScreen(box, s) {
+  if (s.isComponent) return inspectComponent(box, s);
   const head = document.createElement('h2'); head.innerHTML = `<span>画面 <span class="mono muted">${esc(s.id)}</span></span>`;
   box.append(head);
   box.append(field('ID', textInput(s.id, (v) => commit([{ op: 'set', screen: s.id, path: 'id', value: v }], `画面id ${v}`).then((ok) => { if (ok) selectScreen(v); })), 'データパックの Dialog ID は namespace:ID になります'));
@@ -2083,7 +2323,9 @@ $('#exportBtn').onclick = async () => {
 };
 
 // ---- モード・表示設定 -------------------------------------------------------------
+function setMode(mode) { document.querySelector(`[data-mode="${mode}"]`)?.click(); }
 document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+  if (screen()?.isComponent && b.dataset.mode !== 'edit') { setStatus('部品のマスターは「編集」で見ます。プレビュー・検証は部品を置いた画面で', true); return; }
   st.mode = b.dataset.mode;
   document.querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('on', x === b));
   st.game.screenId = st.screenId; st.game.scroll = 0; st.game.message = '';
@@ -2111,3 +2353,4 @@ loadCustomFonts();
 
 load().then(connectEvents).catch((e) => setStatus(e.message, true));
 window.addEventListener('resize', draw);
+$('#addComponent').onclick = () => makeComponentFromSelection();

@@ -146,3 +146,6 @@ dialog pre { background: #f1f0eb; padding: 6px; overflow-x: auto; font-size: 11p
 .userrow { font-size: 12px; padding: 2px 4px; border-radius: 3px; cursor: pointer; }
 .userrow:hover { background: #efede7; }
 label.filebtn.mini { padding: 0 6px; font-size: 12px; line-height: 20px; }
+
+/* 部品 */
+.compbanner { background: #fff3cd; color: #6b4e00; border: 1px solid #e6c862; border-radius: 4px; padding: 1px 8px; font-size: 12px; }
