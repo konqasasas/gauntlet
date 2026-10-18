@@ -215,11 +215,11 @@
       "stats": {
         "tiles": 16,
         "overlays": 2,
-        "components": 207,
+        "components": 209,
         "lines": 24,
         "bodyWidth": 453,
-        "texts": 18,
-        "jsonBytes": 13072
+        "texts": 19,
+        "jsonBytes": 13178
       }
     },
     {
@@ -950,13 +950,13 @@
         }
       },
       "stats": {
-        "tiles": 24,
+        "tiles": 27,
         "overlays": 16,
-        "components": 516,
+        "components": 524,
         "lines": 24,
         "bodyWidth": 453,
         "texts": 139,
-        "jsonBytes": 39891
+        "jsonBytes": 40412
       }
     },
     {
@@ -1159,11 +1159,11 @@
       "stats": {
         "tiles": 49,
         "overlays": 35,
-        "components": 300,
+        "components": 302,
         "lines": 24,
         "bodyWidth": 453,
-        "texts": 23,
-        "jsonBytes": 20161
+        "texts": 24,
+        "jsonBytes": 20263
       }
     },
     {
@@ -2226,15 +2226,15 @@
   ],
   "resourcePack": {
     "file": "resourcepack.zip",
-    "sha1": "a2990e1bbb7ce402308551da586d4fef69d1d457",
-    "bytes": 480231
+    "sha1": "053150413a32f24b841754eed7186b6fe462092d",
+    "bytes": 482622
   },
   "dataPack": {
     "file": "datapack.zip",
-    "sha1": "4ac52f207dd50f1fa52dca41eb45f686bbdac9ef",
-    "bytes": 32308
+    "sha1": "dd1a10f4a3a5afae4356707b959766ed41ba2672",
+    "bytes": 32296
   },
-  "projectRevision": 217,
+  "projectRevision": 231,
   "textFont": "dcg:text",
   "credits": [
     "5x5 Pixel by Negociator (FontStruct), CC BY-SA 3.0",
