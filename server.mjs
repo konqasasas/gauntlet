@@ -163,6 +163,7 @@ async function route(req, res) {
       zoom: Number(url.searchParams.get('zoom') || 2),
       width: Number(url.searchParams.get('vw') || 0) || undefined,
       height: Number(url.searchParams.get('vh') || 0) || undefined,
+      state: parseStateParam(url.searchParams.get('state')),
       vanillaDir: VANILLA,
     });
     return send(res, 200, png, 'image/png');
@@ -172,7 +173,7 @@ async function route(req, res) {
     if (!screen) return send(res, 404, { error: `画面 ${m[1]} がありません` });
     const images = await loadAssetImages(store, store.project);
     const vanilla = await getAtlas(VANILLA);
-    const b = buildScreen(store.project, screen, images, vanilla);
+    const b = buildScreen(store.project, screen, images, vanilla, parseStateParam(url.searchParams.get('state')));
     const full = url.searchParams.get('full') === '1';
     return send(res, 200, {
       revision: store.revision,
@@ -217,3 +218,14 @@ server.listen(PORT, HOST, () => {
   console.log(`Dialog Custom GUI エディター: http://${HOST}:${PORT}/`);
   console.log(`データ: ${DATA}`);
 });
+
+// ?state=名前:値,名前:値 （プレビュー・検証で見る状態の値）。なければ null（既定値）
+function parseStateParam(v) {
+  if (!v) return null;
+  const out = {};
+  for (const part of v.split(',')) {
+    const i = part.indexOf(':');
+    if (i > 0) out[part.slice(0, i)] = part.slice(i + 1);
+  }
+  return out;
+}

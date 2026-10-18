@@ -153,6 +153,36 @@ test('状態: 値ごとの重ね絵を目印付きで出し、選んでも行の
   assert.ok(validateProject(bad).some((e) => e.includes('state')));
 });
 
+test('状態: グループの条件・& でつないだ条件・名前の変更・表示する値', () => {
+  let p = defaultProject();
+  const s = defaultScreen('gs', { width: 120, height: 36, background: '#202020ff', stateDefaults: { tab: 'a', muted: 'off' } });
+  s.footer = { type: 'none', columns: 1, exitAction: false, buttons: [] };
+  s.elements.push(defaultElement('rect', { id: 'on_a', x: 0, y: 9, w: 20, h: 9, fill: '#00ff00ff', state: 'muted=off' }));
+  s.elements.push(defaultElement('rect', { id: 'on_b', x: 30, y: 9, w: 20, h: 9, fill: '#0000ffff' }));
+  s.elements.push(defaultElement('hotspot', { id: 'hs', x: 0, y: 9, w: 60, h: 9, tooltip: 't' }));
+  p.screens.push(s);
+  p = applyOps(p, [
+    { op: 'group_elements', screen: 'gs', elements: ['on_a'], group: { id: 'ga' } },
+    { op: 'set_group', screen: 'gs', group: 'ga', values: { state: 'tab=a' } },
+  ]);
+  // グループの条件は中の要素の条件につながる
+  assert.equal(resolveScreen(p, p.screens[0]).elements.find((e) => e.id === 'on_a').state, 'tab=a&muted=off');
+  const b = buildScreen(p, p.screens[0], new Map(), vanilla);
+  assert.deepEqual(b.errors, []);
+  assert.ok(b.compiled.dialog.body[0].contents.extra.some((c) => c.insertion === 'dcg:state:tab=a&muted=off'));
+  // 表示する値を渡すと、その値で組み立てて検証する
+  const other = buildScreen(p, p.screens[0], new Map(), vanilla, { tab: 'b', muted: 'off' });
+  assert.deepEqual(other.errors, []);
+  assert.ok(!other.shown.body[0].contents.extra.some((c) => /#00ff00/.test(JSON.stringify(c))));
+  // 状態の名前を変えると、要素・グループ・既定値の条件が付け替わる
+  p = applyOps(p, [{ op: 'rename_state_key', screen: 'gs', key: 'tab', to: 'page' }, { op: 'set_state_default', screen: 'gs', key: 'muted', value: null }]);
+  assert.equal(p.screens[0].groups[0].state, 'page=a');
+  assert.deepEqual(p.screens[0].stateDefaults, { page: 'a' });
+  // クリック領域を含むグループには状態を付けられない
+  assert.throws(() => applyOps(p, [{ op: 'patch_elements', screen: 'gs', patches: [{ element: 'hs', values: { group: 'ga' } }] }]), /クリック領域/);
+  assert.ok(stateMatches('a=1&b!=2', { a: '1' }) && !stateMatches('a=1&b!=2', { a: '1', b: '2' }));
+});
+
 test('payload の null は出力しない', () => {
   const p = defaultProject();
   const s = defaultScreen('n', { width: 60, height: 18 });

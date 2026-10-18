@@ -130,3 +130,11 @@ dialog pre { background: #f1f0eb; padding: 6px; overflow-x: auto; font-size: 11p
 .alignbar { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0; }
 .alignbar button { padding: 1px 6px; font-size: 12px; min-width: 26px; }
 .mixed { color: var(--muted); font-style: italic; }
+
+/* 状態 */
+.statebar { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.statebar .statesel select { font-size: 12px; }
+.statebar .statesel.changed { color: var(--warn); font-weight: 600; }
+.statefield { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+.layers li .statebadge { font-size: 10px; font-family: Consolas, monospace; color: var(--warn); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layers li.offstate .name { opacity: .4; font-style: italic; }

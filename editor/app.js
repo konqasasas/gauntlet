@@ -6,7 +6,7 @@ import {
   MAX_BODY_WIDTH, MIN_BODY_WIDTH, TEXT_RENDERS, clickRows, resolveScreen, isTokenRef, themeUsers,
   TEXT_STYLE_KEYS, applyTextStyle, textStyleUsers, findGroup, groupChain, groupMembers, lockedGroups, hiddenGroups,
 } from '/lib/model.mjs';
-import { elementShown } from '/lib/states.mjs';
+import { elementShown, stateMatches, stateKeys, parseConditions, combineStates, formatCondition } from '/lib/states.mjs';
 
 // ---- 状態 ----------------------------------------------------------------
 const st = {
@@ -17,6 +17,7 @@ const st = {
   guides: [],          // ドラッグ中の吸着線 [{x}|{y}]
   collapsed: new Set(),// 一覧で閉じているグループ
   clip: null,          // コピーした内容（OS のクリップボードが使えないときの代わり）
+  preview: {},         // 画面ごとの「今どの値で見るか」{ screenId: { 名前: 値 } }（データは変えない）
   mode: 'edit',
   zoom: 0,             // 0 = 自動（ステージに収まる最大の整数倍）
   z: 3,                // 実際に使っている倍率
@@ -128,12 +129,64 @@ function selectedUnits() {
   for (const e of selectedEls()) { const u = unitOf(s, e); out.set(unitKey(u), u); }
   return [...out.values()];
 }
+// ---- 状態 ----------------------------------------------------------------
+// 今どの値で見ているか（既定値に、上の切り替え欄で選んだ値を重ねたもの）
+function previewValues(s) { return { ...(s.stateDefaults || {}), ...(st.preview[s.id] || {}) }; }
+// 要素の実際の条件（グループの条件もつないだもの）
+function effectiveState(s, e) {
+  const gs = e.group ? groupChain(s, e.group).reverse().map((g) => g.state).filter(Boolean) : [];
+  return gs.length ? combineStates(...gs, e.state) : e.state;
+}
+// 解決済みの画面（resolveScreen の結果）で、今の値で見える要素か
+const shownIn = (s) => { const v = previewValues(s); return (e) => elementShown(e, v); };
+function stateParam(s) {
+  const v = st.preview[s.id];
+  if (!v || !Object.keys(v).length) return '';
+  return `&state=${encodeURIComponent(Object.entries(previewValues(s)).map(([k, x]) => `${k}:${x}`).join(','))}`;
+}
+
 // 選択できる（見えていて、ロックされていない）要素か
 function pickable(s, e) {
   if (!e.visible || e.locked) return false;
   if (e.group && (hiddenGroups(s).has(e.group) || lockedGroups(s).has(e.group))) return false;
-  return elementShown(e, s.stateDefaults);
+  return elementShown({ state: effectiveState(s, e) }, previewValues(s));
 }
+
+const OTHER_VALUE = '_other';
+// キャンバスの上の「状態」切り替え欄
+function renderStateBar() {
+  const bar = $('#stateBar');
+  if (!bar) return;
+  bar.innerHTML = '';
+  const s = screen();
+  if (!s) return;
+  const keys = stateKeys(s);
+  const names = Object.keys(keys).sort();
+  if (!names.length) return;
+  const values = previewValues(s);
+  const lab = document.createElement('span'); lab.className = 'muted small'; lab.textContent = '状態:';
+  bar.append(lab);
+  for (const k of names) {
+    const def = s.stateDefaults?.[k];
+    const opts = keys[k].map((v) => [v, v === def ? `${v}（既定）` : v]);
+    // 条件に出てこない値（≠ の見た目を確かめる用）
+    if (!keys[k].includes(OTHER_VALUE)) opts.push([OTHER_VALUE, '（ほかの値）']);
+    if (!(k in values)) opts.unshift(['', '（未設定）']);
+    const sel = selectInput(values[k] ?? '', opts, (v) => {
+      st.preview[s.id] = { ...(st.preview[s.id] || {}) };
+      if (v === def) delete st.preview[s.id][k]; else st.preview[s.id][k] = v;
+      pruneSelection(); renderAll(); scheduleCompileInfo();
+      if (st.mode === 'compiled') loadCompiledImage();
+    });
+    sel.title = `${k} の値を切り替えて見た目を確かめます（データは変わりません）`;
+    const l = document.createElement('label'); l.className = 'statesel'; l.append(`${k} `, sel);
+    if ((st.preview[s.id] || {})[k] !== undefined) l.classList.add('changed');
+    bar.append(l);
+  }
+  if (Object.keys(st.preview[s.id] || {}).length) bar.append(btn('既定に戻す', '状態の値を既定値に戻します', () => { delete st.preview[s.id]; renderAll(); scheduleCompileInfo(); if (st.mode === 'compiled') loadCompiledImage(); }));
+}
+
+
 function insideScope(s, e) { return !st.scope || (e.group && groupChain(s, e.group).some((g) => g.id === st.scope)); }
 function setSel(ids) { st.sel = [...new Set(ids)]; }
 function pruneSelection() {
@@ -220,7 +273,7 @@ function scheduleCompileInfo() {
     const s = screen();
     if (!s) return;
     try {
-      st.compileInfo = { screenId: s.id, ...(await api('GET', `/api/compile/${s.id}`)) };
+      st.compileInfo = { screenId: s.id, ...(await api('GET', `/api/compile/${s.id}?${stateParam(s).slice(1)}`)) };
       renderDiag();
       if (st.mode === 'compiled') loadCompiledImage();
     } catch (e) { $('#diag').innerHTML = `<div class="e">${esc(e.message)}</div>`; }
@@ -238,11 +291,12 @@ function loadCompiledImage() {
   const z = st.zoom || fitZoom(vp.width, vp.height);
   const img = new Image();
   img.onload = () => { st.compiledImg = img; draw(); };
-  img.src = `/api/preview/${s.id}.png?mode=compiled&clicks=${$('#clickChk').checked ? 1 : 0}&zoom=${z}&vw=${vp.width}&vh=${vp.height}&r=${st.snap.revision}`;
+  img.src = `/api/preview/${s.id}.png?mode=compiled&clicks=${$('#clickChk').checked ? 1 : 0}&zoom=${z}&vw=${vp.width}&vh=${vp.height}&r=${st.snap.revision}${stateParam(s)}`;
 }
 
 // ---- 描画 ----------------------------------------------------------------
 function renderAll() {
+  renderStateBar();
   renderTabs();
   renderScreenList();
   renderLayers();
@@ -260,7 +314,9 @@ function renderBody(s) {
   offscreen.height = s.height * k;
   const c = offscreen.getContext('2d');
   c.clearRect(0, 0, offscreen.width, offscreen.height);
+  const values = previewValues(s);
   renderScreen(c, resolveScreen(project(), s), {
+    include: (e) => elementShown(e, values),
     scale: k,
     images: new Map([...st.images].filter(([, img]) => img.complete && img.naturalWidth)),
     makeCanvas,
@@ -300,7 +356,7 @@ function drawEdit(s) {
     ctx.fillRect(x, y, 6, 6);
   }
   ctx.drawImage(renderBody(s), 0, 0, s.width, s.height);
-  drawGameTextItems(ctx, gameTextItems(resolveScreen(project(), s), atlas), atlas);
+  drawGameTextItems(ctx, gameTextItems(resolveScreen(project(), s), atlas, shownIn(s)), atlas);
   const lw = 1 / st.z;
   if ($('#gridChk').checked) {
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
@@ -393,7 +449,7 @@ function drawGame() {
   ctx.translate(0, -st.game.scroll);
   ctx.drawImage(renderBody(s), layout.image.x, layout.image.y, s.width, s.height);
   ctx.save(); ctx.translate(layout.image.x, layout.image.y);
-  drawGameTextItems(ctx, gameTextItems(resolveScreen(project(), s), atlas), atlas);
+  drawGameTextItems(ctx, gameTextItems(resolveScreen(project(), s), atlas, shownIn(s)), atlas);
   ctx.restore();
   if ($('#clickChk').checked) {
     ctx.fillStyle = 'rgba(255,200,40,0.28)';
@@ -897,7 +953,7 @@ function makeClip(s, els) {
   return { kind: 'dcg-elements', version: 1, screen: s.id, elements: structuredClone(els), groups: structuredClone(groups), tokens, styles };
 }
 
-async function pasteClip(clip, { dx = 0, dy = 0 } = {}) {
+async function pasteClip(clip, { dx = 0, dy = 0, transform = null, preOps = [], label = null } = {}) {
   const s = screen();
   const p = project();
   const usedEl = new Set(s.elements.map((e) => e.id));
@@ -913,12 +969,14 @@ async function pasteClip(clip, { dx = 0, dy = 0 } = {}) {
     for (const k of ['asset', 'image']) if (c[k] && !p.assets[c[k]]) c[k] = null; // 別のプロジェクトの素材
     return c;
   });
+  if (transform) transform(elements, groups);
   const ops = [
+    ...preOps,
     ...Object.entries(clip.tokens || {}).map(([key, value]) => ({ op: 'set_theme_token', key, value, ifMissing: true })),
     ...Object.entries(clip.styles || {}).map(([key, style]) => ({ op: 'set_text_style', key, style, ifMissing: true })),
     { op: 'add_elements', screen: s.id, elements, groups },
   ];
-  if (await commit(ops, `貼り付け ${elements.length}個`)) { setSel(elements.map((e) => e.id)); renderPanels(); draw(); }
+  if (await commit(ops, label || `貼り付け ${elements.length}個`)) { setSel(elements.map((e) => e.id)); renderPanels(); draw(); }
 }
 
 document.addEventListener('copy', (ev) => {
@@ -1024,7 +1082,9 @@ function renderLayers() {
     const on = els.length && els.every((e) => sel.has(e.id));
     const visible = n.kind === 'el' ? n.el.visible && !(n.el.group && hidden.has(n.el.group)) : !hidden.has(n.id);
     const isLocked = n.kind === 'el' ? n.el.locked || (n.el.group && locked.has(n.el.group)) : locked.has(n.id);
-    li.className = `${on ? 'on' : ''} ${visible ? '' : 'hidden'} ${n.kind === 'group' ? 'group' : ''}`;
+    const own = n.kind === 'el' ? n.el : n.group;
+    const offState = n.kind === 'el' ? !elementShown({ state: effectiveState(s, n.el) }, previewValues(s)) : !!own.state && !stateMatches(combineStates(...groupChain(s, n.id).reverse().map((g) => g.state)), previewValues(s));
+    li.className = `${on ? 'on' : ''} ${visible ? '' : 'hidden'} ${n.kind === 'group' ? 'group' : ''} ${offState ? 'offstate' : ''}`;
     li.style.paddingLeft = `${4 + n.depth * 12}px`;
     li.draggable = true;
     li.dataset.kind = n.kind; li.dataset.id = n.id;
@@ -1039,6 +1099,7 @@ function renderLayers() {
     name.title = `${n.id}${n.kind === 'el' && n.el.state ? `（状態 ${n.el.state}）` : ''}（ダブルクリックで名前を変更）`;
     name.ondblclick = (ev) => { ev.stopPropagation(); renameInline(name, n); };
     li.append(twisty, type, name);
+    if (own.state) { const b = document.createElement('span'); b.className = 'statebadge'; b.textContent = own.state; b.title = `状態: ${own.state}（この条件を満たすときだけ表示）`; li.append(b); }
     li.onclick = (ev) => {
       // 一覧から選ぶときは、その階層に入る（グループの中の要素も直接選べる）
       st.scope = n.kind === 'el' ? n.el.group || '' : n.group.parent || '';
@@ -1053,7 +1114,6 @@ function renderLayers() {
     const toggleLock = () => (n.kind === 'el'
       ? commit([{ op: 'set', screen: s.id, element: n.id, path: 'locked', value: !n.el.locked }], `ロック ${n.id}`)
       : commit([{ op: 'set_group', screen: s.id, group: n.id, values: { locked: !n.group.locked } }], `ロック ${n.id}`));
-    const own = n.kind === 'el' ? n.el : n.group;
     li.append(
       btn(own.visible ? '👁' : '–', '表示/非表示', (ev) => { ev.stopPropagation(); toggleVisible(); }),
       btn(own.locked ? '🔒' : '·', isLocked && !own.locked ? '外側のグループがロック中' : 'ロック（画面上で選べなくする）', (ev) => { ev.stopPropagation(); toggleLock(); }),
@@ -1410,6 +1470,7 @@ function inspectMulti(box, s) {
     box.append(field('名前', textInput(group.name, (v) => commit([{ op: 'set_group', screen: s.id, group: group.id, values: { name: v } }], `名前 ${group.id}`))));
     box.append(field('表示', checkInput(group.visible, (v) => commit([{ op: 'set_group', screen: s.id, group: group.id, values: { visible: v } }], `表示 ${group.id}`))));
     box.append(field('ロック', checkInput(group.locked, (v) => commit([{ op: 'set_group', screen: s.id, group: group.id, values: { locked: v } }], `ロック ${group.id}`)), '画面上でクリックしても選ばれなくなります'));
+    box.append(field('状態', stateField(s, group.state, (v) => commit(setStateOps(s, [{ group: group.id }], v), `状態 ${group.id}`)), '中の要素すべてに効きます（中の要素の条件とあわせて、すべて満たすときだけ表示）。ボタン・クリック領域を含むグループには付けられません'));
     box.append(note('ダブルクリック（または Enter）で中に入り、中の要素を個別に選べます。Esc で外へ出ます。'));
   }
   // 選択範囲の位置・大きさ（変えると中の要素をまとめて動かす・拡大縮小する）
@@ -1438,6 +1499,144 @@ function inspectMulti(box, s) {
     if (all((e) => e.type === 'text')) box.append(field('色', mixed(colorInput(common('color') ?? els[0].color, (v) => setAll('color', v)), 'color')));
   }
   box.append(field('ロック', checkInput(all((e) => e.locked), (v) => setAll('locked', v))));
+  if (!group && all((e) => e.type === 'rect' || e.type === 'text' || e.type === 'image')) box.append(field('状態', mixed(stateField(s, common('state') ?? '', (v) => commit(setStateOps(s, els.map((e) => ({ element: e.id })), v), `状態 ${els.length}個`)), 'state')));
+  box.append(variantButton());
+}
+
+// 条件に出てくる状態のうち、既定値がないものに既定値を足す操作（= の値、なければ ≠ の値）
+function defaultOps(s, ...conds) {
+  const ops = [];
+  const have = new Set(Object.keys(s.stateDefaults || {}));
+  for (const cond of conds) for (const c of parseConditions(cond) || []) {
+    if (have.has(c.key)) continue;
+    have.add(c.key);
+    ops.push({ op: 'set_state_default', screen: s.id, key: c.key, value: c.value });
+  }
+  return ops;
+}
+// 要素・グループに条件を付ける（必要なら既定値も）
+function setStateOps(s, targets, cond) {
+  const ops = targets.map((t) => (t.group
+    ? { op: 'set_group', screen: s.id, group: t.group, values: { state: cond } }
+    : { op: 'set', screen: s.id, element: t.element, path: 'state', value: cond }));
+  return [...defaultOps(s, cond), ...ops];
+}
+
+// 状態（条件）の入力欄。名前・＝/≠・値を選ぶ。& でつないだ条件は文字で直接書く
+function stateField(s, value, onChange) {
+  const wrap = document.createElement('div'); wrap.className = 'statefield';
+  const cs = parseConditions(value);
+  if (!cs || cs.length > 1) {
+    wrap.append(textInput(value || '', (v) => onChange(v.trim()), { placeholder: '名前=値&名前!=値' }));
+    return wrap;
+  }
+  const c = cs[0] || null;
+  const keys = stateKeys(s);
+  const names = [...new Set([...Object.keys(keys), ...(c ? [c.key] : [])])].sort();
+  const keySel = selectInput(c?.key ?? '', [['', '（いつも表示）'], ...names.map((k) => [k, k]), ['__new', '新しい状態…']], (k) => {
+    if (!k) return onChange('');
+    if (k === '__new') {
+      const name = prompt('状態の名前（英小文字・数字・_ .。例: ui_lang）');
+      if (!name) return renderInspector();
+      const v = prompt(`${name} の値（例: on）`);
+      if (!v) return renderInspector();
+      return onChange(`${name}=${v}`);
+    }
+    const v = c?.value ?? s.stateDefaults?.[k] ?? keys[k]?.[0] ?? 'on';
+    onChange(formatCondition({ key: k, negate: c?.negate ?? false, value: v }));
+  });
+  wrap.append(keySel);
+  if (c) {
+    const op = selectInput(c.negate ? 'ne' : 'eq', [['eq', '＝'], ['ne', '≠']], (v) => onChange(formatCondition({ ...c, negate: v === 'ne' })));
+    const listId = `stv_${c.key.replace(/[^a-z0-9_]/g, '_')}`;
+    let dl = document.getElementById(listId);
+    if (!dl) { dl = document.createElement('datalist'); dl.id = listId; document.body.append(dl); }
+    dl.innerHTML = '';
+    for (const v of keys[c.key] || []) { const o = document.createElement('option'); o.value = v; dl.append(o); }
+    const val = textInput(c.value, (v) => { if (v.trim()) onChange(formatCondition({ ...c, value: v.trim() })); }, { list: listId });
+    val.style.width = '7em';
+    wrap.append(op, val);
+  }
+  return wrap;
+}
+
+// 画面の状態の一覧（名前・既定値・使われている値）
+function stateEditor(box, s) {
+  box.append(h3('状態（プレイヤーごとの見た目）'));
+  box.append(note('要素やグループに「状態」を付けると、その条件を満たすプレイヤーにだけ表示されます。ここでは状態の名前と既定値（プレビュー・データパック・検証で使う値）を決めます。値の切り替えはキャンバスの上の欄で。'));
+  const keys = stateKeys(s);
+  const names = Object.keys(keys).sort();
+  for (const k of names) {
+    const card = document.createElement('div'); card.className = 'card';
+    const hd = document.createElement('div'); hd.className = 'head';
+    hd.innerHTML = `<span class="mono">${esc(k)}</span>`;
+    hd.append(btn('名前', '状態の名前を変える（この画面の条件をすべて付け替えます）', () => {
+      const to = prompt('新しい名前', k);
+      if (to && to !== k) {
+        if (st.preview[s.id]?.[k] !== undefined) { st.preview[s.id][to] = st.preview[s.id][k]; delete st.preview[s.id][k]; }
+        commit([{ op: 'rename_state_key', screen: s.id, key: k, to }], `状態の名前 ${k}→${to}`);
+      }
+    }));
+    card.append(hd);
+    const listId = `stv_${k.replace(/[^a-z0-9_]/g, '_')}`;
+    let dl = document.getElementById(listId);
+    if (!dl) { dl = document.createElement('datalist'); dl.id = listId; document.body.append(dl); }
+    dl.innerHTML = '';
+    for (const v of keys[k]) { const o = document.createElement('option'); o.value = v; dl.append(o); }
+    card.append(field('既定値', textInput(s.stateDefaults?.[k] ?? '', (v) => commit([{ op: 'set_state_default', screen: s.id, key: k, value: v.trim() || null }], `状態の既定値 ${k}`), { list: listId, placeholder: '（なし）' })));
+    card.append(note(`使われている値: ${keys[k].join(' / ')}`));
+    box.append(card);
+  }
+  box.append(btn('＋ 状態を追加', '状態の名前と既定値を登録します', () => {
+    const k = prompt('状態の名前（英小文字・数字・_ .。例: ui_lang）');
+    if (!k) return;
+    const v = prompt(`${k} の既定値（例: on）`);
+    if (v) commit([{ op: 'set_state_default', screen: s.id, key: k, value: v }], `状態の追加 ${k}`);
+  }));
+}
+
+// 選んでいる見た目を複製して、別の状態の見た目を作る（クリック領域・ボタンは共通のまま複製しない）
+function variantButton() {
+  return btn('別の状態の見た目を作る', '選んでいる見た目を複製し、複製に別の状態を付けます。例: 「選択中」の見た目から「選択していない」見た目を作る', makeVariant);
+}
+function makeVariant() {
+  const s = screen();
+  const units = selectedUnits();
+  if (!units.length) return;
+  const clickable = (e) => e.type === 'button' || e.type === 'hotspot';
+  const own = (u) => (u.kind === 'group' ? findGroup(s, u.id).state : s.elements.find((e) => e.id === u.id).state) || '';
+  const owns = [...new Set(units.map(own))];
+  let current = owns.length === 1 ? owns[0] : '';
+  const preOps = [];
+  if (!current) {
+    current = prompt('今選んでいる見た目は、どの状態のときのものですか？（例: ui_lang=auto）') || '';
+    if (!parseConditions(current)?.length) return;
+    // 元の見た目にも条件を付ける（クリック領域を含むグループは、中の見た目の要素に付ける）
+    const targets = [];
+    for (const u of units) {
+      if (u.kind === 'group' && !groupMembers(s, u.id).some(clickable)) targets.push({ group: u.id });
+      else for (const e of unitEls(s, u)) if (!clickable(e)) targets.push({ element: e.id });
+    }
+    preOps.push(...setStateOps(s, targets, current));
+  }
+  const cs = parseConditions(current);
+  const suggestion = cs?.length === 1 ? formatCondition({ ...cs[0], negate: !cs[0].negate }) : '';
+  const next = prompt(`作る見た目の状態（今の見た目は ${current}）`, suggestion);
+  if (!next || !parseConditions(next)?.length) return;
+  const els = selectedEls().filter((e) => !clickable(e));
+  if (!els.length) return alert('見た目の要素（四角形・文字・画像）が選ばれていません');
+  preOps.push(...defaultOps({ ...s, stateDefaults: { ...(s.stateDefaults || {}), ...Object.fromEntries(preOps.filter((o) => o.op === 'set_state_default').map((o) => [o.key, o.value])) } }, next));
+  const clip = makeClip(s, els);
+  pasteClip(clip, {
+    preOps,
+    label: `状態違いの見た目 ${next}`,
+    transform: (elements, groups) => {
+      // 一番外側の単位に新しい条件を付ける（グループならグループに、それ以外は要素に）
+      const ids = new Set(groups.map((g) => g.id));
+      for (const g of groups) g.state = ids.has(g.parent) ? '' : next;
+      for (const e of elements) if (!ids.has(e.group)) e.state = next;
+    },
+  });
 }
 
 // 選択範囲の位置・大きさを数値で変える
@@ -1481,6 +1680,10 @@ function inspectElement(box, s, e) {
   box.append(field('ロック', checkInput(e.locked, (v) => setEl(s, e, 'locked', v)), '画面上でクリックしても選ばれなくなります（一覧からは選べます）'));
   const groups = s.groups || [];
   if (groups.length) box.append(field('グループ', selectInput(e.group, [['', '（なし）'], ...groups.map((g) => [g.id, `${g.name}（${g.id}）`])], (v) => setEl(s, e, 'group', v))));
+  if (e.type === 'rect' || e.type === 'text' || e.type === 'image') {
+    box.append(field('状態', stateField(s, e.state, (v) => commit(setStateOps(s, [{ element: e.id }], v), `状態 ${e.id}`)), 'この条件を満たすプレイヤーにだけ表示します（例: ui_lang=auto）。空ならいつも表示'));
+    box.append(variantButton());
+  } else box.append(note('ボタン・クリック領域には状態を付けられません（クリック範囲は状態で変えられないため）。見た目を状態で変えるときは、四角形・文字・画像に状態を付け、クリック領域は共通にします。'));
 
   if (e.type === 'rect' || e.type === 'button') {
     box.append(h3(e.type === 'button' ? 'ボタンの見た目' : '塗り'));
@@ -1627,6 +1830,7 @@ function inspectScreen(box, s) {
   box.append(field('Escで閉じる', checkInput(s.canCloseWithEscape, (v) => setSc(s, 'canCloseWithEscape', v))));
   box.append(field('一時停止', checkInput(s.pause, (v) => setSc(s, 'pause', v)), 'シングルプレイでのみ有効'));
 
+  stateEditor(box, s);
   box.append(h3('フッター（標準ボタン）'));
   box.append(note('見た目は標準ボタン（skinで全体変更のみ可）。「なし」にすると下部のボタンが消え、本文の高さが約28px増えます。'));
   box.append(field('種類', selectInput(s.footer.type, [['notice', '1ボタン (notice)'], ['multi_action', '複数ボタン (multi_action)'], ['none', 'なし（本文の×などで閉じる）']], (v) => {
