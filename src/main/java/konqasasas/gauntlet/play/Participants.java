@@ -76,6 +76,7 @@ public final class Participants implements Listener {
     private final Scaffold scaffold;
     private final CourseItems items;
     private final CourseMobs mobs=new CourseMobs();
+    private final TriggerActions actions;
     private final NamespacedKey itemKey;
     private final Map<UUID,Session> sessions=new HashMap<>();
     private Visibility visibility;
@@ -83,7 +84,11 @@ public final class Participants implements Listener {
     public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items) {
         this.plugin=plugin; this.courses=courses; this.runs=runs; this.data=data; this.returns=returns; this.scaffold=scaffold; this.items=items;
         itemKey=new NamespacedKey(plugin,"play");
+        actions=new TriggerActions(items,mobs);
     }
+    /** Shared with the builder kit: one tracker, so neither removes the other's mobs as leftovers. */
+    CourseMobs mobs() { return mobs; }
+    TriggerActions actions() { return actions; }
     /** The visibility item is created after this class (it needs the name tags). */
     public void visibility(Visibility visibility) { this.visibility=visibility; }
     public void start() {
@@ -355,37 +360,7 @@ public final class Participants implements Listener {
         }
     }
     private void run(Player player,Session session,Course course,String key,TriggerAction action) {
-        PlayerInventory inventory=player.getInventory();
-        switch(action.type()) {
-            case GIVE -> {
-                ItemStack item=items.create(action.item());
-                if(item==null) { builderWarning(player,"editor.warn.template-deleted"); return; }
-                for(int slot=0;slot<inventory.getSize();slot++) if(action.item().equals(items.ref(inventory.getItem(slot)))) return;
-                int slot=action.placement().slot();
-                if(slot<0) for(int i=1;i<Course.COURSE_SLOTS && slot<0;i++) { ItemStack there=inventory.getItem(i); if(there==null || there.getType().isAir()) slot=i; }
-                if(slot<0) { builderWarning(player,"editor.warn.no-empty-slot"); return; }
-                Inventories.put(inventory,slot,courseItem(player,session,slot,item));
-            }
-            case REMOVE -> {
-                for(int slot=0;slot<inventory.getSize();slot++) {
-                    ItemRef ref=items.ref(inventory.getItem(slot));
-                    if(ref!=null && ref.template().equals(action.item().template()) && (action.allLevels() || ref.level()==action.item().level())) inventory.setItem(slot,null);
-                }
-            }
-            case MOB -> {
-                List<UUID> alive=session.mobs.getOrDefault(key,List.of());
-                if(mobs.anyAlive(alive)) return;
-                World world=Bukkit.getWorld(course.world()); MobSpec spec=MobSpec.parse(action.mob());
-                if(world==null || spec==null) return;
-                List<UUID> spawned=mobs.spawn(world,action.mobAt(),spec);
-                if(spawned.isEmpty()) builderWarning(player,"editor.warn.mob-failed",Msg.arg("mob",action.mob()));
-                session.mobs.put(key,spawned);
-            }
-            case SOUND -> Sounds.course(player,action.sound(),action.volume(),action.pitch());
-        }
-    }
-    private static void builderWarning(Player player,String key,TagResolver... args) {
-        if(player.hasPermission(ADMIN)) Msg.send(player,key,args);
+        actions.run(player,Bukkit.getWorld(course.world()),key,action,session.mobs,(slot,item) -> courseItem(player,session,slot,item));
     }
 
     // ---- Per client tick ----
@@ -426,7 +401,7 @@ public final class Participants implements Listener {
         }
         showStatus(player,session,course);
     }
-    private static List<BlockPos> cellsAtFeet(BoundingBox box) {
+    static List<BlockPos> cellsAtFeet(BoundingBox box) {
         List<BlockPos> cells=new ArrayList<>(4); int y=(int)Math.floor(box.getMinY());
         for(int x=(int)Math.floor(box.getMinX());x<=Math.floor(box.getMaxX()-1e-6);x++)
             for(int z=(int)Math.floor(box.getMinZ());z<=Math.floor(box.getMaxZ()-1e-6);z++) cells.add(new BlockPos(x,y,z));

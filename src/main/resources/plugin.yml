@@ -12,7 +12,7 @@ libraries:
 commands:
   gauntlet:
     description: Receive course creation tools
-    usage: /gauntlet kit|reload lang|reload menu|reload display|reload packs
+    usage: /gauntlet kit|trigger|reload lang|reload menu|reload display|reload packs
     permission: gauntlet.admin
   course:
     description: Open the course GUI

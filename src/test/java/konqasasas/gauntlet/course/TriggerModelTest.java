@@ -72,6 +72,37 @@ class TriggerModelTest {
         assertEquals(List.of(),withTrigger.edit().region(UUID.randomUUID(),Region.of(0,0,0,1,1,1)).build().triggers(),"Other world drops triggers");
         assertThrows(IllegalArgumentException.class,() -> new Trigger(a.pos(),Collections.nCopies(Trigger.MAX_ACTIONS+1,TriggerAction.sound("s",1,1))));
     }
+    @Test void triggerNamesAreLabelsOnly() throws Exception {
+        Course course=Course.create("c",author,world).withRegion(world,Region.of(0,0,0,9,9,9)).withStart(new Spot(1,1,1,0,0))
+                .toggleGoal(new BlockPos(8,0,8)).edit().trigger(new Trigger(new BlockPos(2,1,2),List.of())).build();
+        Course named=course.edit().trigger(course.trigger(new BlockPos(2,1,2)).withName("メイス区間")).build();
+        assertTrue(named.sameGameplay(course),"A name does not change the revision");
+        assertFalse(named.edit().trigger(named.trigger(new BlockPos(2,1,2)).withAction(TriggerAction.sound("s",1,1))).build().sameGameplay(course));
+        var store=new CourseStore(dir); store.create(named);
+        assertEquals("メイス区間",new CourseStore(dir).get("c").trigger(new BlockPos(2,1,2)).name());
+        assertNull(new Trigger(new BlockPos(0,0,0),List.of(),"  ").name(),"Blank means no name");
+        assertThrows(IllegalArgumentException.class,() -> new Trigger(new BlockPos(0,0,0),List.of(),"x".repeat(Trigger.MAX_NAME_LENGTH+1)));
+        Trigger t=new Trigger(new BlockPos(0,0,0),List.of(),"n");
+        assertEquals("n",t.withAction(TriggerAction.sound("s",1,1)).withoutAction(0).withActions(List.of()).name(),"Edits keep the name");
+    }
+    @Test void freeTriggersPersistPerWorldAndBrokenFileIsPreserved() throws Exception {
+        Path file=dir.resolve("triggers.json");
+        UUID other=UUID.randomUUID();
+        BlockPos plate=new BlockPos(5,64,-3);
+        var store=new FreeTriggerStore(file);
+        store.put(world,new Trigger(plate,List.of(TriggerAction.give(new ItemRef("tmace",2),TriggerAction.Placement.SLOT1)),"入口"));
+        store.put(other,new Trigger(plate,List.of()));
+        store.put(world,store.get(world,plate).withAction(TriggerAction.sound("minecraft:block.bell.use",1,1)));
+        var loaded=new FreeTriggerStore(file);
+        assertEquals(2,loaded.all().size(),"Same position in another world is another trigger");
+        assertEquals(store.get(world,plate),loaded.get(world,plate));
+        assertEquals(2,loaded.get(world,plate).actions().size());
+        loaded.remove(List.of(new FreeTriggerStore.Key(world,plate)));
+        assertNull(new FreeTriggerStore(file).get(world,plate));
+        assertNotNull(new FreeTriggerStore(file).get(other,plate));
+        Files.writeString(file,"{nope");
+        assertThrows(IOException.class,() -> new FreeTriggerStore(file)); assertEquals("{nope",Files.readString(file));
+    }
     @Test void templatesPersistAndBrokenFileIsPreserved() throws Exception {
         Path file=dir.resolve("templates.json");
         var store=new TemplateStore(file);

@@ -36,6 +36,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     final JavaPlugin plugin;
     final CourseStore store;
     final TemplateStore templates;
+    final FreeTriggerStore freeTriggers;
     final CourseItems items;
     final ChatPrompts prompts;
     final Participants participants;
@@ -48,8 +49,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private final Map<UUID,String> editing=new HashMap<>();
     private BukkitTask outlines;
 
-    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,CourseItems items,NamespacedKey toolKey,Participants participants) {
-        this.plugin=plugin; this.store=store; this.templates=templates; this.items=items; this.participants=participants;
+    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants) {
+        this.plugin=plugin; this.store=store; this.templates=templates; this.freeTriggers=freeTriggers; this.items=items; this.participants=participants;
         wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey); prompts=new ChatPrompts(plugin);
         itemMenus=new ItemMenus(this); triggerMenus=new TriggerMenus(this,itemMenus);
     }
@@ -109,6 +110,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(courses.size()>45) createLore.add(line(player,"editor.list.more",Msg.arg("count",courses.size())));
         menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.list.create",createLore),e -> askNewId(player));
         menu.button(51,Msg.icon(player,Material.CHEST,"editor.templates-button"),e -> itemMenus.openTemplates(player,() -> openList(player)));
+        menu.button(53,Msg.icon(player,Material.HEAVY_WEIGHTED_PRESSURE_PLATE,"editor.free-triggers-button",Msg.arg("count",freeTriggers.all().size())),
+                e -> triggerMenus.openFreeList(player));
         menu.open(player);
     }
     private ItemStack courseIcon(Player player,Course course) {
@@ -292,7 +295,10 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         teleport(player,course,s.x(),s.y(),s.z(),s.yaw(),s.pitch());
     }
     void teleport(Player player,Course course,double x,double y,double z,float yaw,float pitch) {
-        World world=Bukkit.getWorld(course.world());
+        teleport(player,course.world(),x,y,z,yaw,pitch);
+    }
+    void teleport(Player player,UUID worldId,double x,double y,double z,float yaw,float pitch) {
+        World world=worldId==null ? null : Bukkit.getWorld(worldId);
         if(world==null) { tell(player,"editor.world-unloaded"); return; }
         player.closeInventory();
         if(!Teleports.to(player,new Location(world,x,y,z,yaw,pitch))) tell(player,"editor.teleport-denied");
@@ -357,6 +363,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     }
     @EventHandler public void quit(PlayerQuitEvent event) {
         selections.forget(event.getPlayer().getUniqueId()); editing.remove(event.getPlayer().getUniqueId());
+        triggerMenus.forget(event.getPlayer().getUniqueId());
     }
 
     // ---- Outlines (only to builders holding the wand) ----
@@ -416,6 +423,28 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     static String worldName(Player player,Course course) {
         World world=Bukkit.getWorld(course.world());
         return world==null ? Msg.plain(player,"editor.world-not-loaded",Msg.arg("id",course.world())) : world.getName();
+    }
+    /** /gauntlet trigger: the free trigger under the player (registered if new), or the list of free triggers. */
+    public void freeTriggers(Player player) { if(admin(player)) triggerMenus.openFreeAtFeet(player); }
+    public boolean holdsWand(Player player) { return wand.is(player.getInventory().getItemInMainHand()); }
+    /**
+     * Labels above the plates this builder should see: free triggers in their world
+     * while holding the kit block or the wand, and the triggers of the shown course.
+     */
+    public List<TriggerLabels.Label> triggerLabels(Player player,boolean holdingKit) {
+        if(!player.hasPermission(ADMIN)) return List.of();
+        List<TriggerLabels.Label> labels=new ArrayList<>();
+        UUID world=player.getWorld().getUID();
+        if(holdingKit || holdsWand(player)) for(FreeTriggerStore.Entry e:freeTriggers.all())
+            if(e.world().equals(world)) labels.add(label("free",world,e.trigger()));
+        String id=shownCourse(player);
+        Course course=id==null ? null : store.get(id);
+        if(course!=null && course.world().equals(world)) for(Trigger t:course.triggers()) labels.add(label(course.id(),world,t));
+        return labels;
+    }
+    private TriggerLabels.Label label(String owner,UUID world,Trigger t) {
+        BlockPos p=t.pos();
+        return new TriggerLabels.Label(owner+"@"+world+":"+p.describe(),world,p.x()+.5,p.y()+1.1,p.z()+.5,triggerMenus.label(t));
     }
     /** The course whose outlines and placeable cells this builder sees: the last opened one, while holding the wand or marker. */
     public String shownCourse(Player player) {

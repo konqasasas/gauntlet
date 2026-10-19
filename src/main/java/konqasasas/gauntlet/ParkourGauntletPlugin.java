@@ -49,7 +49,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private DialogMenu menu;
     private PlayerDisplay display;
     private ResourcePacks packs;
-    private final Map<UUID,Integer> lastUse=new HashMap<>();
+    private CourseItems courseItems;
+    private KitRuns kit;
+    private TriggerLabels triggerLabels;
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
     private final Set<UUID> pendingLavaRetries=new HashSet<>();
@@ -93,7 +95,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
                 }
                 @Override public Object key(Block block) { return ParkourGauntletPlugin.key(block); }
             };
-            CourseItems courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
+            FreeTriggerStore freeTriggers=new FreeTriggerStore(data.resolve("triggers.json"));
+            courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
             participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems);
 
             DisplayStyle style;
@@ -113,8 +116,13 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             sidebar=new Sidebar(this,display,playerData,this::courseView);
 
             participants.start();
-            courses=new CourseEditor(this,courseStore,templateStore,courseItems,new NamespacedKey(this,"tool"),participants);
+            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants);
             courses.start();
+            kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint);
+            kit.start();
+            // The kit block in hand shows free triggers, but not to someone playing a course (they hold the same block).
+            triggerLabels=new TriggerLabels(this,p -> courses.triggerLabels(p,!participants.active(p) && tools.kind(p.getInventory().getItemInMainHand())==ToolItems.Kind.SCAFFOLD));
+            triggerLabels.start();
             // Players in a course see its cells; builders see the course they hold the wand or marker for.
             placeable=new PlaceableDisplays(this,courseStore,p -> {
                 Participants.View view=participants.view(p);
@@ -148,6 +156,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     @Override public void onDisable() {
         if(packs!=null) packs.stop();
         if(placeable!=null) placeable.stop();
+        if(triggerLabels!=null) triggerLabels.stop();
+        if(kit!=null) kit.stop();
         if(invisibleGear!=null) invisibleGear.stop();
         if(courses!=null) courses.stop();
         if(chat!=null) chat.stop();
@@ -161,7 +171,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }
         if(playerData!=null) playerData.stop();
         if(database!=null) database.close();
-        lastUse.clear(); pendingRefills.clear(); lavaExtinguish.clear();
+        pendingRefills.clear(); lavaExtinguish.clear();
         pendingLavaRetries.clear(); lavaRetryFailures.clear();
     }
     /** The course part of the sidebar, or null outside a course. */
@@ -195,13 +205,14 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         }
         if(!(sender instanceof Player player)) { Msg.send(sender,"editor.kit.console"); return true; }
         if(!allowed(player)) return true;
+        if(args.length==1 && args[0].equalsIgnoreCase("trigger")) { courses.freeTriggers(player); return true; }
         if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"editor.kit.usage"); return true; }
         if(!tools.grant(player)) tell(player,"editor.kit.full");
         else tell(player,"editor.kit.given");
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
-        if(args.length==1) return List.of("kit","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==1) return List.of("kit","trigger","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display","packs");
         return List.of();
     }
@@ -212,19 +223,57 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private void tell(Player player,String key,TagResolver... args) { Msg.send(player,key,args); }
     static BlockKey key(Block block) { return new BlockKey(block.getWorld().getUID(),block.getX(),block.getY(),block.getZ()); }
 
+    // ---- The kit: holding the kit block (or the trigger item in slot 1), F saves, Q goes back, Shift+F switches the game mode ----
+    /** Players in a course or the lobby never get here: their drops and swaps are cancelled earlier. */
+    private boolean kitControl(Player player,ItemStack item) {
+        if(tools.kind(item)==ToolItems.Kind.SCAFFOLD) return true;
+        return player.getInventory().getHeldItemSlot()==0 && tools.kind(item)==null && courseItems.ref(item)!=null
+                && player.hasPermission("gauntlet.admin") && !participants.active(player) && !lobby.managed(player);
+    }
+    /** Builder trying a section: has the kit block (or a trigger item in slot 1), outside a course and the lobby. */
+    private boolean kitPlayer(Player player) {
+        if(!player.hasPermission("gauntlet.admin") || participants.active(player) || lobby.managed(player)) return false;
+        PlayerInventory inv=player.getInventory();
+        if(courseItems.ref(inv.getItem(0))!=null) return true;
+        for(int slot=0;slot<inv.getSize();slot++) if(tools.kind(inv.getItem(slot))==ToolItems.Kind.SCAFFOLD) return true;
+        return false;
+    }
+    private Location savePoint(Player player) {
+        Checkpoint cp=state.checkpoint(player.getUniqueId()); if(cp==null) return null;
+        World world=Bukkit.getWorld(cp.world());
+        return world==null ? null : new Location(world,cp.x(),cp.y(),cp.z(),cp.yaw(),cp.pitch());
+    }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void drop(PlayerDropItemEvent event) {
-        ToolItems.Kind kind=tools.kind(event.getItemDrop().getItemStack()); if(kind==null) return;
+        Player player=event.getPlayer(); ItemStack item=event.getItemDrop().getItemStack();
+        ToolItems.Kind kind=tools.kind(item);
+        if(kind==null && !kitControl(player,item)) return;
         event.setCancelled(true);
-        Player player=event.getPlayer(); if(!allowed(player)) return;
-        if(kind==ToolItems.Kind.CHECKPOINT) saveCheckpoint(player);
-        else if(kind==ToolItems.Kind.SCAFFOLD) refillSoon(player);
+        if(kind!=null && kind.legacy) { tell(player,"editor.kit.legacy"); return; }
+        if(!allowed(player)) return;
+        // After this event returns, Paper puts the cancelled drop back into the inventory;
+        // go back a tick later so the restored hotbar is not topped up by that item.
+        Bukkit.getScheduler().runTask(this,() -> { if(player.isOnline()) { retry(player); tools.refill(player); player.updateInventory(); } });
+    }
+    @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
+    public void swapHands(PlayerSwapHandItemsEvent event) {
+        Player player=event.getPlayer();
+        if(!kitControl(player,player.getInventory().getItemInMainHand())) return;
+        event.setCancelled(true);
+        if(!allowed(player)) return;
+        if(player.isSneaking()) switchMode(player); else saveCheckpoint(player);
+    }
+    private void switchMode(Player player) {
+        GameMode mode=player.getGameMode()==GameMode.CREATIVE ? GameMode.ADVENTURE : GameMode.CREATIVE;
+        player.setGameMode(mode); tell(player,"editor.mode.changed",Msg.arg("mode",mode.name()));
+        Sounds.system(player,Sound.BLOCK_NOTE_BLOCK_PLING,1f,1f);
     }
     private void saveCheckpoint(Player player) {
         Location location=player.getLocation();
         if(!player.isOnGround() || !hasPermanentSupport(location,player.getBoundingBox())) { tell(player,"editor.cp.not-ground"); return; }
         try {
             state.checkpoint(player.getUniqueId(),new Checkpoint(location.getWorld().getUID(),location.getX(),location.getY(),location.getZ(),location.getYaw(),location.getPitch()));
+            kit.saved(player);
             tell(player,"editor.cp.set");
             Sounds.system(player,Sound.ENTITY_EXPERIENCE_ORB_PICKUP,1f,1f);
             getLogger().info("CP_SET player="+player.getUniqueId()+" world="+location.getWorld().getName()+" position="+location.getX()+","+location.getY()+","+location.getZ()+" yaw="+location.getYaw()+" pitch="+location.getPitch());
@@ -235,28 +284,6 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         return !support.isEmpty() && support.stream().noneMatch(block -> state.contains(key(block)));
     }
 
-    // Air clicks on these non-usable vanilla items are predictively cancelled;
-    // receive them anyway so the custom right-click action also works in air.
-    @EventHandler(priority=EventPriority.HIGHEST)
-    public void interact(PlayerInteractEvent event) {
-        if(event.getAction()!=Action.RIGHT_CLICK_AIR && event.getAction()!=Action.RIGHT_CLICK_BLOCK) return;
-        Player player=event.getPlayer();
-        ToolItems.Kind main=tools.kind(player.getInventory().getItemInMainHand());
-        if(event.getHand()==EquipmentSlot.OFF_HAND && (main==ToolItems.Kind.CHECKPOINT || main==ToolItems.Kind.MODE)) {
-            event.setCancelled(true); return;
-        }
-        ToolItems.Kind kind=tools.kind(event.getItem());
-        if(kind!=ToolItems.Kind.CHECKPOINT && kind!=ToolItems.Kind.MODE) return;
-        event.setCancelled(true); if(!allowed(player)) return;
-        int tick=Bukkit.getCurrentTick();
-        if(Objects.equals(lastUse.put(player.getUniqueId(),tick),tick)) return;
-        if(kind==ToolItems.Kind.CHECKPOINT) retry(player);
-        else {
-            GameMode mode=player.getGameMode()==GameMode.CREATIVE ? GameMode.ADVENTURE : GameMode.CREATIVE;
-            player.setGameMode(mode); tell(player,"editor.mode.changed",Msg.arg("mode",mode.name()));
-            Sounds.system(player,Sound.BLOCK_NOTE_BLOCK_PLING,1f,1f);
-        }
-    }
     private boolean retry(Player player) {
         Checkpoint cp=state.checkpoint(player.getUniqueId());
         if(cp==null) { tell(player,"editor.cp.none"); return false; }
@@ -270,6 +297,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         stopMotion(player);
         try {
             cleanup(state.blocks(player.getUniqueId()));
+            kit.returned(player);
             tools.refill(player); player.updateInventory();
         } catch(IOException|RuntimeException e) { failure(player,"editor.cp.cleanup-failed",e); }
         return true;
@@ -379,7 +407,6 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         lavaExtinguish.forget(event.getPlayer().getUniqueId());
         pendingLavaRetries.remove(event.getPlayer().getUniqueId());
         lavaRetryFailures.remove(event.getPlayer().getUniqueId());
-        lastUse.remove(event.getPlayer().getUniqueId());
         try { cleanup(state.blocks(event.getPlayer().getUniqueId())); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Logout cleanup incomplete; journal retained",e); }
     }

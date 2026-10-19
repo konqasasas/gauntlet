@@ -11,13 +11,18 @@ import org.bukkit.inventory.*;
 import org.bukkit.persistence.PersistentDataType;
 
 final class ToolItems {
-    /** Names and descriptions: message keys editor.tool.<kind>.name/.lore (builder language). */
+    /**
+     * Names and descriptions: message keys editor.tool.<kind>.name/.lore (builder language).
+     * The kit is the scaffold block alone (F save, Q back, Shift+F game mode). The
+     * checkpoint shard and mode slime ball of the old kit are only recognized, so
+     * /gauntlet kit can take them back.
+     */
     enum Kind {
-        CHECKPOINT(Material.AMETHYST_SHARD,1),
-        SCAFFOLD(Material.POLISHED_ANDESITE,64),
-        MODE(Material.SLIME_BALL,1);
-        final Material material; final int count;
-        Kind(Material material,int count) { this.material=material; this.count=count; }
+        CHECKPOINT(Material.AMETHYST_SHARD,1,true),
+        SCAFFOLD(Material.POLISHED_ANDESITE,64,false),
+        MODE(Material.SLIME_BALL,1,true);
+        final Material material; final int count; final boolean legacy;
+        Kind(Material material,int count,boolean legacy) { this.material=material; this.count=count; this.legacy=legacy; }
         String key() { return "editor.tool."+name().toLowerCase(Locale.ROOT); }
     }
     private final NamespacedKey key;
@@ -40,21 +45,23 @@ final class ToolItems {
                 ItemAdventurePredicate.itemAdventurePredicate().addPredicate(BlockPredicate.predicate().build()).build());
         return item;
     }
+    /** Gives (or refreshes) the kit block, removing duplicates and the old kit's items. A new block goes to slot 1 when it is free. */
     boolean grant(Player player) {
         PlayerInventory inv=player.getInventory();
-        Map<Kind,Integer> first=new EnumMap<>(Kind.class); List<Integer> duplicates=new ArrayList<>();
+        int first=-1; List<Integer> obsolete=new ArrayList<>();
         for(int slot=0;slot<inv.getSize();slot++) {
             Kind kind=kind(inv.getItem(slot));
-            if(kind!=null && first.putIfAbsent(kind,slot)!=null) duplicates.add(slot);
+            if(kind==null) continue;
+            if(kind.legacy || first>=0) obsolete.add(slot); else first=slot;
         }
-        int empty=0;
-        for(int slot=0;slot<36;slot++) if(inv.getItem(slot)==null || inv.getItem(slot).getType().isAir() || duplicates.contains(slot)) empty++;
-        if(empty<Kind.values().length-first.size()) return false;
-        duplicates.forEach(slot -> inv.setItem(slot,null));
-        for(Kind kind:Kind.values()) {
-            if(first.containsKey(kind)) inv.setItem(first.get(kind),create(kind));
-            else inv.addItem(create(kind));
+        if(first<0) {
+            ItemStack in1=inv.getItem(0);
+            if(in1==null || in1.getType().isAir() || obsolete.contains(0)) first=0;
+            else for(int slot=0;slot<36 && first<0;slot++) if(inv.getItem(slot)==null || inv.getItem(slot).getType().isAir() || obsolete.contains(slot)) first=slot;
+            if(first<0) return false;
         }
+        obsolete.forEach(slot -> inv.setItem(slot,null));
+        inv.setItem(first,create(Kind.SCAFFOLD));
         player.updateInventory(); return true;
     }
     void refill(Player player) {

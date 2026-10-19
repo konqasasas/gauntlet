@@ -93,9 +93,11 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
     public boolean sameGameplay(Course other) {
         return Objects.equals(world,other.world) && Objects.equals(region,other.region) && Objects.equals(start,other.start)
                 && goals.equals(other.goals) && timeLimitSeconds==other.timeLimitSeconds && loadout.equals(other.loadout)
-                && triggers.equals(other.triggers) && failLava.equals(other.failLava) && failOutside.equals(other.failOutside)
+                && unnamed(triggers).equals(unnamed(other.triggers)) && failLava.equals(other.failLava) && failOutside.equals(other.failOutside)
                 && route.equals(other.route) && placeable.equals(other.placeable);
     }
+    /** Trigger names are labels for builders only. */
+    private static List<Trigger> unnamed(List<Trigger> triggers) { return triggers.stream().map(t -> t.withName(null)).toList(); }
     public boolean contains(Spot spot) { return region!=null && region.contains(spot.x(),spot.y(),spot.z()); }
     private boolean contains(BlockPos pos) { return region!=null && region.contains(pos.x(),pos.y(),pos.z()); }
     public boolean isGoal(int x,int y,int z) { return goals.contains(new BlockPos(x,y,z)); }
