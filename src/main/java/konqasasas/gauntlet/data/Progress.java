@@ -6,15 +6,16 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * How far each player got in the eras, and where to put them back after they
- * logged out mid-era. reached: the courses whose start they stepped on (first
- * time kept); resume: the course they were playing when they logged out. Both are
- * read once at startup and written in the background.
+ * How far each player got: their rank (0 for newcomers, raised by beating an era's
+ * boss), the courses of the eras they reached (stepping on the start; first time
+ * kept), and where to put them back after logging out mid-era (resume). Read once
+ * at startup and written in the background.
  */
 public final class Progress {
     private final Database db;
     private final Map<UUID,Set<String>> reached=new ConcurrentHashMap<>();
     private final Map<UUID,String> resume=new ConcurrentHashMap<>();
+    private final Map<UUID,Integer> ranks=new ConcurrentHashMap<>();
 
     public Progress(Database db) { this.db=db; }
     public void load() throws IOException {
@@ -24,8 +25,26 @@ public final class Progress {
                     { while(r.next()) reached.computeIfAbsent(UUID.fromString(r.getString(1)),k -> ConcurrentHashMap.newKeySet()).add(r.getString(2)); }
                 try(ResultSet r=s.executeQuery("SELECT player,course FROM resume"))
                     { while(r.next()) resume.put(UUID.fromString(r.getString(1)),r.getString(2)); }
+                try(ResultSet r=s.executeQuery("SELECT player,rank FROM ranks"))
+                    { while(r.next()) ranks.put(UUID.fromString(r.getString(1)),r.getInt(2)); }
             }
             return null;
+        });
+    }
+    public int rank(UUID player) { return ranks.getOrDefault(player,0); }
+    /** Raises the rank to at least this (never lowers it); true when it went up. */
+    public boolean raise(UUID player,int rank) {
+        if(rank<=rank(player)) return false;
+        setRank(player,rank); return true;
+    }
+    /** Sets the rank as is (builders' testing command). */
+    public void setRank(UUID player,int rank) {
+        ranks.put(player,rank);
+        long now=System.currentTimeMillis();
+        db.write("rank "+player,c -> {
+            try(PreparedStatement s=c.prepareStatement("INSERT OR REPLACE INTO ranks(player,rank,updated_at) VALUES(?,?,?)")) {
+                s.setString(1,player.toString()); s.setInt(2,rank); s.setLong(3,now); return s.executeUpdate();
+            }
         });
     }
     public boolean reached(UUID player,String course) { return reached.getOrDefault(player,Set.of()).contains(course); }

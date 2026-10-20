@@ -52,6 +52,24 @@ class EraModelTest {
         assertEquals(List.of(),laned.withRegion(UUID.randomUUID(),Region.of(0,0,0,1,1,1)).lanes(),"Another world drops the lanes");
         assertEquals(laned.lanes(),laned.withRegion(world,Region.of(0,0,0,1,1,1)).lanes());
     }
+    @Test void bossAndRanks() throws Exception {
+        Era era=Era.create("e1",world,null).withCourses(List.of("a","boss"));
+        assertEquals(0,era.bossRank()); assertEquals(0,era.requiredRank()); assertNull(era.boss());
+        Era withBoss=era.withBoss("boss",1).withRequiredRank(0);
+        assertEquals(1,withBoss.rankFor("boss")); assertEquals(0,withBoss.rankFor("a"));
+        assertEquals(0,withBoss.withCourses(List.of("a")).rankFor("boss"),"A boss taken out of the era gives nothing");
+        assertEquals(Era.MAX_RANK,withBoss.withBoss("boss",99).bossRank());
+        assertEquals(0,withBoss.withRequiredRank(-3).requiredRank());
+        assertThrows(IllegalArgumentException.class,() -> new Era("e","e",world,null,null,null,null,12,null));
+        EraStore eras=new EraStore(dir.resolve("eras.json"));
+        eras.save(withBoss.withRequiredRank(2));
+        Era loaded=new EraStore(dir.resolve("eras.json")).get("e1");
+        assertEquals("boss",loaded.boss()); assertEquals(1,loaded.bossRank()); assertEquals(2,loaded.requiredRank());
+        // A file from before bosses and ranks existed.
+        Files.writeString(dir.resolve("eras.json"),"{\"format\":1,\"eras\":[{\"id\":\"e1\",\"name\":\"e1\",\"world\":\""+world+"\",\"courses\":[\"a\",\"boss\"],\"lanes\":[]}]}");
+        Era before=new EraStore(dir.resolve("eras.json")).get("e1");
+        assertEquals(0,before.bossRank()); assertEquals(0,before.requiredRank());
+    }
     @Test void regionContainsAnotherRegion() {
         Region big=Region.of(0,0,0,19,9,9);
         assertTrue(big.contains(Region.of(10,0,0,19,9,9)));

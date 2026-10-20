@@ -101,6 +101,28 @@ final class EraMenus {
         menu.button(13,Msg.icon(player,Material.RAIL,"editor.edit.lanes",Msg.arg("count",era.space().laneCount()),Msg.arg("waiting",editor.lanes.waitingFor(era.space()))),
                 e -> editor.openLanes(player,era.space().key(),() -> openEra(player,id)));
         menu.button(14,Msg.icon(player,Material.NETHER_STAR,"editor.era.start-screen"),e -> openStart(player,id));
+        Course boss=era.boss()==null ? null : editor.store.get(era.boss());
+        menu.button(19,Msg.icon(player,Material.WITHER_SKELETON_SKULL,"editor.era.boss",
+                Msg.arg("course",boss==null ? Msg.text(player,"editor.none") : Component.text(boss.name())),Msg.arg("rank",era.bossRank())),e -> {
+            if(e.isLeftClick() && !e.isShiftClick()) {
+                editor.prompts.ask(player,"editor.prompt.era-boss",text -> {
+                    Era now=eras().get(id); if(now==null) return;
+                    String courseId=text.strip().toLowerCase(Locale.ROOT);
+                    if(courseId.equals("-")) { if(save(player,id,x -> x.withBoss(null,x.bossRank()))) openEra(player,id); return; }
+                    if(!now.courses().contains(courseId)) { editor.tell(player,"editor.era.boss-not-in-era",Msg.arg("id",courseId)); return; }
+                    // A boss without a rank yet gets the era's own number (era I's boss gives rank 1).
+                    int rank=now.bossRank()>0 ? now.bossRank() : Math.min(Era.MAX_RANK,now.requiredRank()+1);
+                    if(save(player,id,x -> x.withBoss(courseId,rank))) openEra(player,id);
+                });
+                return;
+            }
+            int delta=e.isShiftClick() ? -1 : 1;
+            if(save(player,id,x -> x.withBoss(x.boss(),x.bossRank()+delta))) openEra(player,id);
+        });
+        menu.button(20,Msg.icon(player,Material.IRON_BARS,"editor.era.required-rank",Msg.arg("rank",era.requiredRank())),e -> {
+            int delta=e.isRightClick() ? -1 : 1;
+            if(save(player,id,x -> x.withRequiredRank(x.requiredRank()+delta))) openEra(player,id);
+        });
         menu.button(27,Msg.icon(player,Material.ARROW,"editor.back"),e -> openList(player));
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.era.delete"),e -> {
             if(!e.isShiftClick()) { editor.tell(player,"editor.era.delete-shift"); return; }

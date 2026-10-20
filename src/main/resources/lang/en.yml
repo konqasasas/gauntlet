@@ -33,6 +33,8 @@ play.era.not-reached: "You have not reached \"<course>\" yet. Go on from the cou
 play.era.not-found: "Era <id> was not found."
 play.era.moved: "On to \"<course>\"."
 play.era.resume: "Picking up where you left off."
+play.era.rank-needed: "Era \"<era>\" needs rank <rank> or higher."
+play.rank.up: "Your rank is now <rank>."
 play.era.title: "Where to start: <name>"
 play.era.course.name: "<index>. <name>"
 play.era.course.lore:

@@ -49,6 +49,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private DialogMenu menu;
     private PlayerDisplay display;
     private ResourcePacks packs;
+    private Progress progress;
     private CourseItems courseItems;
     private KitRuns kit;
     private WaterFlows water;
@@ -68,7 +69,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             database=Database.open(data.resolve("gauntlet.db"),getLogger());
             LegacyImport.run(database,data,getLogger());
             runs=new RunLog(database); runs.load();
-            Progress progress=new Progress(database); progress.load();
+            progress=new Progress(database); progress.load();
             playerData=new PlayerData(this,database);
             Msg.init(messages,playerData::uiLanguage);
             Sounds.init(playerData);
@@ -116,7 +117,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
                 getLogger().log(Level.SEVERE,"Ignoring display.yml, using the bundled display settings",e);
                 style=DisplayStyle.load(getClassLoader(),null,getLogger());
             }
-            display=new PlayerDisplay(new Ranks(),style);
+            display=new PlayerDisplay(new Ranks(progress::rank),style);
+            participants.rankUps(new RankUps(rank -> display.style().badge(rank)));
             nameTags=new NameTags(this,display,playerData,participants::active);
             Teleports.beforeTeleport(nameTags::detach);
             visibility=new Visibility(this,playerData,nameTags);
@@ -245,15 +247,31 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(!(sender instanceof Player player)) { Msg.send(sender,"editor.kit.console"); return true; }
         if(!allowed(player)) return true;
         if(args.length==1 && args[0].equalsIgnoreCase("trigger")) { courses.freeTriggers(player); return true; }
+        if(args.length>=1 && args[0].equalsIgnoreCase("rank")) { rankCommand(player,args); return true; }
         if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"editor.kit.usage"); return true; }
         if(!tools.grant(player)) tell(player,"editor.kit.full");
         else tell(player,"editor.kit.given");
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
-        if(args.length==1) return List.of("kit","trigger","reload").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==1) return List.of("kit","trigger","reload","rank").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display","packs");
+        if(args.length==2 && args[0].equalsIgnoreCase("rank"))
+            return Bukkit.getOnlinePlayers().stream().map(Player::getName).filter(n -> n.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         return List.of();
+    }
+    /** /gauntlet rank [player] [0-11]: shows or sets a rank (for testing; setting may also lower it). */
+    private void rankCommand(Player sender,String[] args) {
+        if(args.length>3) { tell(sender,"editor.rank.usage"); return; }
+        OfflinePlayer target=args.length==1 ? sender : Bukkit.getOfflinePlayerIfCached(args[1]);
+        if(target==null) { tell(sender,"editor.rank.unknown",Msg.arg("player",args[1])); return; }
+        String name=target.getName()==null ? target.getUniqueId().toString() : target.getName();
+        if(args.length<3) { tell(sender,"editor.rank.show",Msg.arg("player",name),Msg.arg("rank",progress.rank(target.getUniqueId()))); return; }
+        int rank;
+        try { rank=Integer.parseInt(args[2]); } catch(NumberFormatException e) { rank=-1; }
+        if(rank<0 || rank>Ranks.MAX) { tell(sender,"editor.rank.usage"); return; }
+        progress.setRank(target.getUniqueId(),rank);
+        tell(sender,"editor.rank.set",Msg.arg("player",name),Msg.arg("rank",rank));
     }
     private boolean allowed(Player player) {
         if(player.hasPermission("gauntlet.admin")) return true;

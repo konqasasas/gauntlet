@@ -23,11 +23,15 @@ class DataStoreTest {
             p.reach(a,"1-1"); p.reach(a,"1-2"); p.reach(a,"1-1");
             p.resume(a,"1-2"); p.resume(b,"1-1"); p.clearResume(b);
             assertTrue(p.reached(a,"1-2")); assertFalse(p.reached(b,"1-1"));
+            assertEquals(0,p.rank(a),"Newcomers are rank 0");
+            assertTrue(p.raise(a,2)); assertFalse(p.raise(a,1),"Never lowered by a boss"); assertFalse(p.raise(a,2));
+            p.setRank(b,5); p.setRank(b,3);
         }
         try(Database db=Database.open(dir.resolve("g.db"),LOG)) {
             Progress p=new Progress(db); p.load();
             assertTrue(p.reached(a,"1-1")); assertTrue(p.reached(a,"1-2")); assertFalse(p.reached(a,"1-3"));
             assertEquals("1-2",p.resume(a)); assertNull(p.resume(b));
+            assertEquals(2,p.rank(a)); assertEquals(3,p.rank(b),"The command may lower it");
             long rows=db.call(c -> { try(var s=c.createStatement(); var r=s.executeQuery("SELECT COUNT(*) FROM reached")) { r.next(); return r.getLong(1); } });
             assertEquals(2,rows,"Reaching again keeps one row");
         }

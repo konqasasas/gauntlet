@@ -1,12 +1,16 @@
 package konqasasas.gauntlet.display;
 
+import java.util.UUID;
+import java.util.function.ToIntFunction;
 import org.bukkit.entity.Player;
 
 /**
- * Rank numbers. PLACEHOLDER until the rank design and progression exist:
- * everyone is rank 1. The 11 rank colors are in display.yml (DisplayStyle).
+ * Rank numbers: 0 for newcomers (no ring), 1-11 (Anulus) from beating era bosses.
+ * Rank colors are in display.yml (DisplayStyle); rank 0 has a look of its own there.
  */
 public final class Ranks {
-    /** PLACEHOLDER: rank progression does not exist yet. */
-    public int rank(Player player) { return 1; }
+    public static final int MAX=DisplayStyle.RANKS;
+    private final ToIntFunction<UUID> stored;
+    public Ranks(ToIntFunction<UUID> stored) { this.stored=stored; }
+    public int rank(Player player) { return Math.clamp(stored.applyAsInt(player.getUniqueId()),0,MAX); }
 }

@@ -35,6 +35,8 @@ play.era.not-reached: "「<course>」にはまだ到達していません。前�
 play.era.not-found: "時代 <id> が見つかりません。"
 play.era.moved: "「<course>」へ。"
 play.era.resume: "前回の続きから始めます。"
+play.era.rank-needed: "時代「<era>」に入るにはランク<rank>以上が必要です。"
+play.rank.up: "ランクが <rank> に上がりました。"
 play.era.title: "どこから始めるか：<name>"
 play.era.course.name: "<index>. <name>"
 play.era.course.lore:
@@ -198,7 +200,11 @@ course.usage-admin: "/course play [ID] で本番、/course practice [ID] で練�
 # ==== 運営向け（日本語のみ） ====
 editor.admin-only: "コースの編集は運営のみ使用できます。"
 editor.kit.console: "ゲーム内で /gauntlet kit を実行してください。"
-editor.kit.usage: "/gauntlet kit で設置用ブロックを受け取れます。/gauntlet trigger でコース外のトリガーを登録・一覧します。"
+editor.kit.usage: "/gauntlet kit で設置用ブロックを受け取れます。/gauntlet trigger でコース外のトリガーを登録・一覧します。/gauntlet rank [プレイヤー] [0〜11] でランクを確認・設定します。"
+editor.rank.usage: "/gauntlet rank [プレイヤー] [0〜11]（数を付けると設定。下げることもできる）"
+editor.rank.unknown: "プレイヤー <player> が見つかりません（このサーバーに来たことのある名前で指定してください）。"
+editor.rank.show: "<player> のランク：<rank>"
+editor.rank.set: "<player> のランクを <rank> にしました。"
 editor.kit.full: "インベントリに空きを作ってください。"
 editor.kit.given: "設置用ブロックを渡しました。持ってFでセーブ、Qでセーブ地点へ、Shift＋Fでゲームモード切替。"
 editor.kit.legacy: "以前の制作アイテムです。/gauntlet kit を実行すると設置用ブロックだけになります。"
@@ -378,6 +384,18 @@ editor.era.courses.name: "コース（順番）"
 editor.era.courses.lore:
   - "<color:#cdbf9c>登録数：<count>"
   - "<color:#cdbf9c>1番目は誰でも始められる。ほかは到達した人だけ"
+editor.era.boss.name: "ボス"
+editor.era.boss.lore:
+  - "<color:#cdbf9c>コース：<course>　撃破で上がるランク：<rank>"
+  - "<color:#cdbf9c>このコースを本番でクリアするとランクが上がる（下がらない）"
+  - "<color:#cdbf9c>左クリック：ボスのコースをIDで入力（- でなし）"
+  - "<color:#cdbf9c>右クリック：上がるランク＋1　Shift＋クリック：−1"
+editor.era.required-rank.name: "入るのに必要なランク"
+editor.era.required-rank.lore:
+  - "<color:#cdbf9c>今：<rank>（0なら誰でも）"
+  - "<color:#cdbf9c>左クリック：＋1　右クリック：−1"
+editor.prompt.era-boss: "ボスにするコースのIDを入力してください（時代に入っているコース。- でなしにする）"
+editor.era.boss-not-in-era: "コース <id> はこの時代に入っていません。"
 editor.era.start-screen.name: "「どこから始めるか」の画面"
 editor.era.start-screen.lore:
   - "<color:#cdbf9c>プレイヤーが /course era（時代のID）で開く画面を見る"

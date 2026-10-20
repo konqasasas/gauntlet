@@ -21,7 +21,7 @@ public final class DisplayStyle {
     public static final int RANKS=11;
     /** A sidebar line that is replaced by the course lines during a course. */
     public static final String COURSE_BLOCK="<course_block>";
-    static final List<String> KEYS=List.of("ranks.badge","ranks.styles","names.admin-tag","names.full","names.nametag","chat.format",
+    static final List<String> KEYS=List.of("ranks.badge","ranks.styles","ranks.zero-badge","ranks.zero-style","names.admin-tag","names.full","names.nametag","chat.format",
             "tab.header","tab.ping.good","tab.ping.ok","tab.ping.bad","sidebar.title","sidebar.lines","sidebar.course","motd");
     /** The server list shows two lines of description. */
     public static final int MOTD_LINES=2;
@@ -34,6 +34,7 @@ public final class DisplayStyle {
         rankStyles=List.of(values.get("ranks.styles").split("\n",-1));
         if(rankStyles.size()!=RANKS) throw new IllegalArgumentException("ranks.styles needs "+RANKS+" entries, found "+rankStyles.size());
         for(int i=0;i<RANKS;i++) if(!rankStyles.get(i).contains("<text>")) throw new IllegalArgumentException("ranks.styles entry "+(i+1)+" has no <text>");
+        if(!values.get("ranks.zero-style").contains("<text>")) throw new IllegalArgumentException("ranks.zero-style has no <text>");
         this.values=Map.copyOf(values);
         if(lines("motd").size()>MOTD_LINES) throw new IllegalArgumentException("motd has "+lines("motd").size()+" lines; the server list shows "+MOTD_LINES);
     }
@@ -57,12 +58,14 @@ public final class DisplayStyle {
         catch(IllegalArgumentException e) { throw new IOException("Invalid display file "+override+": "+e.getMessage(),e); }
     }
 
-    /** Text in the rank's color or gradient (text is shown as is, never as tags). */
+    /** Text in the rank's color or gradient (text is shown as is, never as tags). Rank 0 uses ranks.zero-style. */
     public Component rank(int rank,String text) {
-        return MINI.deserialize(rankStyles.get(Math.clamp(rank,1,RANKS)-1).replace("<text>",MINI.escapeTags(text)));
+        String style=rank<=0 ? values.get("ranks.zero-style") : rankStyles.get(Math.min(rank,RANKS)-1);
+        return MINI.deserialize(style.replace("<text>",MINI.escapeTags(text)));
     }
-    /** "VII" with the default badge; "[<rank_padded>]" gives "[ 7 ]" and "[11]". */
+    /** "VII" with the default badge; "[<rank_padded>]" gives "[ 7 ]" and "[11]". Rank 0 shows ranks.zero-badge. */
     public String badgeText(int rank) {
+        if(rank<=0) return values.get("ranks.zero-badge");
         String padded=rank<10 ? " "+rank+" " : String.valueOf(rank);
         return values.get("ranks.badge").replace("<rank_roman>",roman(rank)).replace("<rank_padded>",padded).replace("<rank>",String.valueOf(rank));
     }

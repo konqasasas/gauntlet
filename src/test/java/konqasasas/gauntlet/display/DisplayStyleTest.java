@@ -32,6 +32,15 @@ class DisplayStyleTest {
         assertEquals("◆ Catena Online ◆",plain(s.sidebarTitle("Catena Online")));
         assertEquals(TextColor.fromHexString("#dfe6ea"),colors(name).getFirst());
     }
+    @Test void rankZeroHasALookOfItsOwn() throws IOException {
+        DisplayStyle s=bundled();
+        assertEquals("—",s.badgeText(0),"No ring yet: a line instead of a number");
+        assertEquals("— Steve",plain(s.full(s.badge(0),false,s.rank(0,"Steve"))));
+        assertEquals(TextColor.fromHexString("#a3a09a"),colors(s.rank(0,"Steve")).getFirst());
+        assertEquals(List.of(TextColor.fromHexString("#dfe6ea")),colors(s.rank(1,"x")),"Ranks 1-11 keep their colors");
+        Files.writeString(dir.resolve("display.yml"),"ranks:\n  zero-style: \"<gray>\"\n");
+        assertThrows(IOException.class,this::bundled,"zero-style needs <text>");
+    }
     @Test void gradientRanksColorEachLetter() throws IOException {
         List<TextColor> colors=colors(bundled().rank(11,"Gradient"));
         assertEquals(8,colors.size());

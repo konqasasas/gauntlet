@@ -100,6 +100,7 @@ public final class Participants implements Listener {
     private Visibility visibility;
     /** Where someone resuming after a logout waits when every lane is taken (null: where they are). */
     private Supplier<Location> waitingSpot=() -> null;
+    private RankUps rankUps;
 
     public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items,WaterFlows water,
                         Lanes lanes,Spaces spaces,Progress progress) {
@@ -116,6 +117,7 @@ public final class Participants implements Listener {
     /** The visibility item is created after this class (it needs the name tags). */
     public void visibility(Visibility visibility) { this.visibility=visibility; }
     public void waitingSpot(Supplier<Location> spot) { waitingSpot=spot; }
+    public void rankUps(RankUps rankUps) { this.rankUps=rankUps; }
     public void start() {
         plugin.getServer().getPluginManager().registerEvents(this,plugin);
         plugin.getServer().getPluginManager().registerEvents(mobs,plugin);
@@ -169,6 +171,9 @@ public final class Participants implements Listener {
         if(spaceProblem!=null) { Msg.send(player,"play.enter.incomplete",Msg.arg("id",id),Msg.arg("problems",Msg.plain(player,spaceProblem))); return; }
         UUID uuid=player.getUniqueId();
         Era era=spaces.era(course);
+        if(era!=null && !player.hasPermission(ADMIN) && progress.rank(uuid)<era.requiredRank()) {
+            Msg.send(player,"play.era.rank-needed",Msg.arg("era",era.name()),Msg.arg("rank",era.requiredRank())); return;
+        }
         if(!mayStart(player,course)) {
             Msg.send(player,"play.era.not-reached",Msg.arg("course",course.name())); return;
         }
@@ -198,10 +203,12 @@ public final class Participants implements Listener {
         Msg.send(player,practice ? "play.enter.practice" : "play.enter.official",Msg.arg("course",course.name()));
         if(space.laneCount()>1) Msg.send(player,"play.lane.entered",Msg.arg("lane",lane+1),Msg.arg("count",space.laneCount()));
     }
-    /** In an era, the first course is open to all and the others once reached (builders: all). */
+    /** In an era (with the rank it needs), the first course is open to all and the others once reached (builders: all). */
     public boolean mayStart(Player player,Course course) {
         Era era=spaces.era(course);
-        return era==null || player.hasPermission(ADMIN) || era.first(course.id()) || progress.reached(player.getUniqueId(),course.id());
+        if(era==null || player.hasPermission(ADMIN)) return true;
+        if(progress.rank(player.getUniqueId())<era.requiredRank()) return false;
+        return era.first(course.id()) || progress.reached(player.getUniqueId(),course.id());
     }
     /** A waiting player whose turn came. */
     private void admitted(Player player,String course,boolean practice) {
@@ -423,9 +430,17 @@ public final class Participants implements Listener {
                     : ticks<best ? Msg.text(player,"play.goal.new-best",Msg.arg("diff",time(player,best-ticks)))
                     : Msg.text(player,"play.goal.best",Msg.arg("best",time(player,best)),Msg.arg("diff",time(player,ticks-best)));
             Msg.send(player,"play.goal.chat",Msg.arg("course",course.name()),Msg.arg("time",time),Msg.arg("ticks",ticks),Msg.arg("comparison",comparison));
+            rankUp(player,course);
         }
         Sounds.system(player,Sound.UI_TOAST_CHALLENGE_COMPLETE,1f,1f);
         systemItems(player,session);
+    }
+    /** An official clear of an era's boss raises the rank (never lowers it). */
+    private void rankUp(Player player,Course course) {
+        Era era=spaces.era(course);
+        int rank=era==null ? 0 : era.rankFor(course.id());
+        int before=progress.rank(player.getUniqueId());
+        if(rank>0 && progress.raise(player.getUniqueId(),rank) && rankUps!=null) rankUps.rankedUp(player,before,rank);
     }
     /** End of a practice segment at a trigger. */
     private void segment(Player player,Session session) {

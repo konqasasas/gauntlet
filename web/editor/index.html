@@ -213,7 +213,7 @@
 # 変更後は /gauntlet reload display で、再起動せずに反映される。
 # Web エディター（web/editor/）で見た目を確かめながら編集できる。
 
-# ランク（1〜11）
+# ランク（0〜11）
 ranks:
   # ランク番号の札。<rank_roman> はローマ数字（"VII"）、<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
@@ -234,6 +234,10 @@ ranks:
     - "<gradient:#c98bf0:#e97ac8><text></gradient>"
     - "<gradient:#9f8ff5:#c98bf0><text></gradient>"
     - "<gradient:#9f8ff5:#e8c97f><text></gradient>"
+  # ランク0（来たばかりで、まだ輪〔Anulus〕のない人）。札の文字と色。<text> に札やプレイヤー名が入る。
+  # 輪がないことが分かるよう、札は番号ではなく線にし、色は目立たない無彩色にする
+  zero-badge: "—"
+  zero-style: "<color:#a3a09a><text></color>"
 
 # プレイヤー名の表示
 names:
@@ -489,6 +493,8 @@ function escapeTags(s) { return s.replace(/\\/g, "\\\\").replace(/</g, "\\<"); }
 const SIDEBAR_NAMES = ["player", "badge", "playtime", "address", "course", "best", "attempts"];
 const RULES = {
   "ranks.badge": { allowed: ["rank_roman", "rank", "rank_padded"], plain: true },
+  "ranks.zero-badge": { allowed: [], plain: true },
+  "ranks.zero-style": { allowed: ["text"], required: ["text"] },
   "names.admin-tag": { allowed: [] },
   "names.full": { allowed: ["badge", "admin", "name"], required: ["name"] },
   "names.nametag": { allowed: ["badge", "name"], required: ["name"] },
@@ -587,7 +593,7 @@ function diagHtml(problems) {
 }
 
 // ---------- Defaults and state ----------
-const DISPLAY_KEYS = ["ranks.badge", "ranks.styles", "names.admin-tag", "names.full", "names.nametag", "chat.format",
+const DISPLAY_KEYS = ["ranks.badge", "ranks.styles", "ranks.zero-badge", "ranks.zero-style", "names.admin-tag", "names.full", "names.nametag", "chat.format",
   "tab.header", "tab.ping.good", "tab.ping.ok", "tab.ping.bad", "sidebar.title", "sidebar.lines", "sidebar.course", "motd"];
 /** DisplayStyle.RANKS */
 const RANK_COUNT = 11;
@@ -891,6 +897,8 @@ function buildRanks(panel) {
     row.append(num, input, tools, diag);
     panel.appendChild(row);
   });
+  panel.appendChild(fieldEl({ key: "ranks.zero-badge", label: "ランク0の札", help: "来たばかりで輪のない人の札（文字だけ）" }));
+  panel.appendChild(fieldEl({ key: "ranks.zero-style", label: "ランク0の色", help: "<text> に札や名前が入る" }));
   const reset = document.createElement("button");
   reset.type = "button"; reset.textContent = "ランクの色をすべて既定に戻す";
   reset.onclick = () => { state.display["ranks.styles"] = DEFAULT_DISPLAY["ranks.styles"]; save(); render(); buildTabs(); buildPanel(); };
@@ -962,6 +970,8 @@ function displayYaml() {
     "ranks:",
     `  badge: ${q(d("ranks.badge"))}`,
     "  styles:" + L("ranks.styles", "    "),
+    `  zero-badge: ${q(d("ranks.zero-badge"))}`,
+    `  zero-style: ${q(d("ranks.zero-style"))}`,
     "names:",
     `  admin-tag: ${q(d("names.admin-tag"))}`,
     `  full: ${q(d("names.full"))}`,

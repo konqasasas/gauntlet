@@ -6,7 +6,7 @@
 # 変更後は /gauntlet reload display で、再起動せずに反映される。
 # Web エディター（web/editor/）で見た目を確かめながら編集できる。
 
-# ランク（1〜11）
+# ランク（0〜11）
 ranks:
   # ランク番号の札。<rank_roman> はローマ数字（"VII"）、<rank> は番号、<rank_padded> は1桁なら前後に空白（" 1 "）、2桁ならそのまま（"11"）。
   # 装飾タグは使えない（文字だけ）。色は下の styles で付く。
@@ -27,6 +27,10 @@ ranks:
     - "<gradient:#c98bf0:#e97ac8><text></gradient>"
     - "<gradient:#9f8ff5:#c98bf0><text></gradient>"
     - "<gradient:#9f8ff5:#e8c97f><text></gradient>"
+  # ランク0（来たばかりで、まだ輪〔Anulus〕のない人）。札の文字と色。<text> に札やプレイヤー名が入る。
+  # 輪がないことが分かるよう、札は番号ではなく線にし、色は目立たない無彩色にする
+  zero-badge: "—"
+  zero-style: "<color:#a3a09a><text></color>"
 
 # プレイヤー名の表示
 names:
