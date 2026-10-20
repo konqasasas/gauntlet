@@ -51,6 +51,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private ResourcePacks packs;
     private CourseItems courseItems;
     private KitRuns kit;
+    private WaterFlows water;
     private TriggerLabels triggerLabels;
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
@@ -97,7 +98,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             };
             FreeTriggerStore freeTriggers=new FreeTriggerStore(data.resolve("triggers.json"));
             courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
-            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems);
+            water=new WaterFlows(this,data.resolve("water.json"));
+            water.start();
+            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems,water);
 
             DisplayStyle style;
             try { style=DisplayStyle.load(getClassLoader(),data.resolve("display.yml"),getLogger()); }
@@ -167,6 +170,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(nameTags!=null) nameTags.stop();
         if(visibility!=null) visibility.stop();
         if(participants!=null) participants.stop();
+        if(water!=null) water.stop();
         if(state!=null) try { cleanup(state.allBlocks()); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }
         if(playerData!=null) playerData.stop();
@@ -376,8 +380,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         Player player=event.getPlayer();
         if(!participants.active(player) && !lobby.managed(player) && !allowed(player)) { event.setCancelled(true); return; }
         try {
-            state.add(new PlacedBlock(player.getUniqueId(),key(event.getBlockPlaced()),
-                    event.getBlockReplacedState().getBlockData().getAsString(),event.getBlockPlaced().getBlockData().getAsString()));
+            // Trigger water was air before it came: the cleanup must not bring that water back for good.
+            String before=water.tracked(event.getBlockPlaced()) ? "minecraft:air" : event.getBlockReplacedState().getBlockData().getAsString();
+            state.add(new PlacedBlock(player.getUniqueId(),key(event.getBlockPlaced()),before,event.getBlockPlaced().getBlockData().getAsString()));
             tools.refill(player); refillSoon(player);
         } catch(IOException|RuntimeException e) { event.setCancelled(true); failure(player,"editor.scaffold.record-failed",e); }
     }

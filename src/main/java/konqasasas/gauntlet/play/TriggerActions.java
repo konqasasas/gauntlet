@@ -14,7 +14,8 @@ import org.bukkit.inventory.*;
 final class TriggerActions {
     private final CourseItems items;
     private final CourseMobs mobs;
-    TriggerActions(CourseItems items,CourseMobs mobs) { this.items=items; this.mobs=mobs; }
+    private final WaterFlows water;
+    TriggerActions(CourseItems items,CourseMobs mobs,WaterFlows water) { this.items=items; this.mobs=mobs; this.water=water; }
 
     /**
      * key identifies the action (plate and index) in spawned, which holds the mobs
@@ -48,6 +49,7 @@ final class TriggerActions {
                 spawned.put(key,ids);
             }
             case SOUND -> Sounds.course(player,action.sound(),action.volume(),action.pitch());
+            case WATER -> { if(world!=null) water.start(player,world,key,action.waterCells(),action.waterTicks()); }
         }
     }
     private static void builderWarning(Player player,String key,TagResolver... args) {

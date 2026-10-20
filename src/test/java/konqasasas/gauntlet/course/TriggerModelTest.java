@@ -72,6 +72,28 @@ class TriggerModelTest {
         assertEquals(List.of(),withTrigger.edit().region(UUID.randomUUID(),Region.of(0,0,0,1,1,1)).build().triggers(),"Other world drops triggers");
         assertThrows(IllegalArgumentException.class,() -> new Trigger(a.pos(),Collections.nCopies(Trigger.MAX_ACTIONS+1,TriggerAction.sound("s",1,1))));
     }
+    @Test void waterActionsValidateTogglePersistAndChangeTheRevision() throws Exception {
+        BlockPos a=new BlockPos(3,2,3),b=new BlockPos(4,2,3);
+        TriggerAction water=TriggerAction.water(List.of(a,a,b),40);
+        assertEquals(List.of(a,b),water.waterCells(),"Duplicates collapse");
+        assertEquals(List.of(b),water.toggleWaterCell(a).waterCells());
+        assertEquals(List.of(a,b,new BlockPos(0,0,0)),water.toggleWaterCell(new BlockPos(0,0,0)).waterCells());
+        assertEquals(List.of(),water.clearWaterCells().waterCells());
+        assertEquals(1,water.withWaterTicks(-5).waterTicks()); assertEquals(TriggerAction.MAX_WATER_TICKS,water.withWaterTicks(99999).waterTicks());
+        assertEquals(40,water.toggleWaterCell(a).waterTicks(),"Editing cells keeps the time");
+        assertThrows(IllegalArgumentException.class,() -> TriggerAction.water(List.of(),0));
+        List<BlockPos> tooMany=new ArrayList<>();
+        for(int i=0;i<=TriggerAction.MAX_WATER_CELLS;i++) tooMany.add(new BlockPos(i,0,0));
+        assertThrows(IllegalArgumentException.class,() -> TriggerAction.water(tooMany,20));
+        assertNull(TriggerAction.sound("s",1,1).waterCells(),"Other actions keep no water fields");
+
+        Course course=Course.create("w",author,world).withRegion(world,Region.of(0,0,0,9,9,9)).withStart(new Spot(1,1,1,0,0))
+                .toggleGoal(new BlockPos(8,0,8)).edit().trigger(new Trigger(new BlockPos(2,1,2),List.of(water))).build();
+        var store=new CourseStore(dir); store.create(course);
+        assertEquals(water,new CourseStore(dir).get("w").trigger(new BlockPos(2,1,2)).actions().getFirst());
+        Course longer=course.edit().trigger(course.trigger(new BlockPos(2,1,2)).withAction(0,water.withWaterTicks(60))).build();
+        assertFalse(longer.sameGameplay(course),"Water time is part of the course");
+    }
     @Test void triggerNamesAreLabelsOnly() throws Exception {
         Course course=Course.create("c",author,world).withRegion(world,Region.of(0,0,0,9,9,9)).withStart(new Spot(1,1,1,0,0))
                 .toggleGoal(new BlockPos(8,0,8)).edit().trigger(new Trigger(new BlockPos(2,1,2),List.of())).build();

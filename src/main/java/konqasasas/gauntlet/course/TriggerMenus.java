@@ -52,10 +52,15 @@ final class TriggerMenus {
     }
     private final CourseEditor editor;
     private final ItemMenus items;
+    /** The water action a builder opened last: the water marker registers cells into it. */
+    private record WaterTarget(Host host,BlockPos pos,int index) {}
+    /** Cells of a builder's water action, for the particle outlines. */
+    record WaterView(UUID world,List<BlockPos> cells) {}
     /** Copied actions per builder, for pasting onto another plate. */
     private final Map<UUID,List<TriggerAction>> clipboard=new HashMap<>();
+    private final Map<UUID,WaterTarget> waterTargets=new HashMap<>();
     TriggerMenus(CourseEditor editor,ItemMenus items) { this.editor=editor; this.items=items; }
-    void forget(UUID player) { clipboard.remove(player); }
+    void forget(UUID player) { clipboard.remove(player); waterTargets.remove(player); }
 
     private Host course(String id) {
         return new Host() {
@@ -261,8 +266,52 @@ final class TriggerMenus {
                 e -> items.pick(player,Msg.plain(player,"editor.action.remove-pick"),ItemMenus.PickMode.REMOVE,(ref,all) -> addAction(player,host,pos,TriggerAction.remove(ref,all)),back));
         menu.button(14,Msg.icon(player,Material.ZOMBIE_HEAD,"editor.action.mob"),e -> askMob(player,host,pos,-1));
         menu.button(16,Msg.icon(player,Material.NOTE_BLOCK,"editor.action.sound"),e -> pickSound(player,host,pos,-1));
+        menu.button(22,Msg.icon(player,Material.WATER_BUCKET,"editor.action.water"),e -> {
+            Trigger before=host.get(pos); if(before==null) return;
+            int index=before.actions().size();
+            if(host.change(player,pos,t -> {
+                if(t.actions().size()>=Trigger.MAX_ACTIONS) throw new IllegalStateException("Trigger full");
+                return t.withAction(TriggerAction.water(List.of(),TriggerAction.DEFAULT_WATER_TICKS));
+            })) { openAction(player,host,pos,index); editor.giveWaterMarker(player); }
+        });
         menu.button(18,Msg.icon(player,Material.ARROW,"editor.back"),e -> openTrigger(player,host,pos));
         menu.open(player);
+    }
+
+    // ---- Water cells (registered with the water marker) ----
+    void toggleWaterCell(Player player,Block block) {
+        WaterTarget target=waterTargets.get(player.getUniqueId());
+        TriggerAction action=target==null ? null : waterAction(target);
+        if(action==null) { waterTargets.remove(player.getUniqueId()); editor.tell(player,"editor.water.no-target"); return; }
+        if(!block.getWorld().getUID().equals(target.host().world())) { editor.tell(player,"editor.water.other-world"); return; }
+        BlockPos cell=new BlockPos(block.getX(),block.getY(),block.getZ());
+        boolean removing=action.waterCells().contains(cell);
+        if(!removing && action.waterCells().size()>=TriggerAction.MAX_WATER_CELLS) { editor.tell(player,"editor.water.full",Msg.arg("max",TriggerAction.MAX_WATER_CELLS)); return; }
+        if(target.host().change(player,target.pos(),t -> t.withAction(target.index(),t.actions().get(target.index()).toggleWaterCell(cell))))
+            Msg.actionBar(player,removing ? "editor.water.removed" : "editor.water.added",Msg.arg("pos",cell.describe()),
+                    Msg.arg("count",action.waterCells().size()+(removing ? -1 : 1)));
+    }
+    WaterView waterCells(Player player) {
+        WaterTarget target=waterTargets.get(player.getUniqueId());
+        TriggerAction action=target==null ? null : waterAction(target);
+        return action==null || target.host().world()==null ? null : new WaterView(target.host().world(),action.waterCells());
+    }
+    /** The target's action while it is still a water action at that place in the list. */
+    private static TriggerAction waterAction(WaterTarget target) {
+        if(!target.host().exists()) return null;
+        Trigger trigger=target.host().get(target.pos());
+        if(trigger==null || target.index()>=trigger.actions().size()) return null;
+        TriggerAction action=trigger.actions().get(target.index());
+        return action.type()==TriggerAction.Type.WATER ? action : null;
+    }
+    private void askWaterSeconds(Player player,Host host,BlockPos pos,int index) {
+        editor.prompts.ask(player,"editor.prompt.water-seconds",text -> {
+            double seconds;
+            try { seconds=Double.parseDouble(text.strip().replace("秒","").replace("s","")); } catch(NumberFormatException e) { seconds=-1; }
+            int ticks=(int)Math.round(seconds*20);
+            if(ticks<1 || ticks>TriggerAction.MAX_WATER_TICKS) { editor.tell(player,"editor.water.seconds-invalid",Msg.arg("max",TriggerAction.MAX_WATER_TICKS/20)); return; }
+            replaceAction(player,host,pos,index,host.get(pos).actions().get(index).withWaterTicks(ticks));
+        },Msg.arg("max",TriggerAction.MAX_WATER_TICKS/20));
     }
     private void pickPlacement(Player player,Host host,BlockPos pos,ItemRef ref,Runnable back) {
         Menu menu=new Menu(3,Msg.plain(player,"editor.placement.title",Msg.arg("item",editor.items.name(player,ref))));
@@ -342,6 +391,22 @@ final class TriggerMenus {
                 menu.button(12,Msg.icon(player,Material.ENDER_PEARL,"editor.action.mob-go"),
                         e -> editor.teleport(player,host.world(),action.mobAt().x(),action.mobAt().y(),action.mobAt().z(),action.mobAt().yaw(),action.mobAt().pitch()));
             }
+            case WATER -> {
+                waterTargets.put(player.getUniqueId(),new WaterTarget(host,pos,index));
+                menu.button(10,Msg.icon(player,Material.CLOCK,"editor.action.water-time",Msg.arg("time",seconds(action.waterTicks()))),e -> {
+                    if(e.isShiftClick()) { askWaterSeconds(player,host,pos,index); return; }
+                    replaceAction(player,host,pos,index,action.withWaterTicks(action.waterTicks()+(e.isRightClick() ? -10 : 10)));
+                });
+                menu.button(11,Msg.icon(player,Material.BLUE_WOOL,"editor.action.water-cells",Msg.arg("count",action.waterCells().size())),e -> {
+                    if(e.isShiftClick() && e.isRightClick()) { replaceAction(player,host,pos,index,action.clearWaterCells()); editor.tell(player,"editor.water.cleared"); return; }
+                    editor.giveWaterMarker(player);
+                });
+                if(!action.waterCells().isEmpty()) {
+                    BlockPos first=action.waterCells().getFirst();
+                    menu.button(12,Msg.icon(player,Material.ENDER_PEARL,"editor.action.water-go"),
+                            e -> editor.teleport(player,host.world(),first.x()+.5,first.y(),first.z()+.5,player.getYaw(),player.getPitch()));
+                }
+            }
             case GIVE -> menu.button(10,Msg.icon(player,Material.ITEM_FRAME,"editor.action.placement",Msg.arg("place",Msg.text(player,action.placement().key()))),
                     e -> pickPlacement(player,host,pos,action.item(),() -> openAction(player,host,pos,index)));
             case REMOVE -> {}
@@ -370,8 +435,10 @@ final class TriggerMenus {
             case MOB -> Msg.plain(viewer,"editor.describe.mob",Msg.arg("mob",a.mob().split(" ",2)[0]));
             case SOUND -> Msg.plain(viewer,"editor.describe.sound",Msg.arg("sound",a.sound()),
                     Msg.arg("volume",String.format(Locale.ROOT,"%.1f",a.volume())),Msg.arg("pitch",String.format(Locale.ROOT,"%.2f",a.pitch())));
+            case WATER -> Msg.plain(viewer,"editor.describe.water",Msg.arg("count",a.waterCells().size()),Msg.arg("time",seconds(a.waterTicks())));
         };
     }
+    private static String seconds(int ticks) { return konqasasas.gauntlet.play.RunClock.seconds(ticks)+"s"; }
     /** The floating label above a plate: the name (if any), then up to three actions. */
     List<String> label(Trigger t) {
         CommandSender viewer=Bukkit.getConsoleSender();
@@ -395,6 +462,7 @@ final class TriggerMenus {
                 yield Material.ZOMBIE_HEAD;
             }
             case SOUND -> Material.NOTE_BLOCK;
+            case WATER -> Material.WATER_BUCKET;
         };
         lore.addAll(extra);
         if(a.item()!=null && !editor.items.exists(a.item())) lore.add(Msg.text(player,"editor.warn.template-deleted-short"));

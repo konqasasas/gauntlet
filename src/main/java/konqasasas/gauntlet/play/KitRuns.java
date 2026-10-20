@@ -22,7 +22,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  *
  * On a return, hotbar slots 1-3 go back to how they were at the save (only
  * slots that hold the kit block or a trigger item, then or now), triggers fired
- * since the save may fire again, and the mobs spawned in this attempt go.
+ * since the save may fire again, the mobs spawned in this attempt go, and
+ * trigger water goes back to how it was at the save (with the time it had left).
  * Only builders in Adventure with a save and the kit take part.
  */
 public final class KitRuns implements Listener {
@@ -33,6 +34,8 @@ public final class KitRuns implements Listener {
         /** Mobs out per action key; attempt = keys whose mobs were spawned in this attempt. */
         final Map<String,List<UUID>> mobs=new HashMap<>();
         final Set<String> attempt=new HashSet<>();
+        /** Trigger water at the save, put back on a return. */
+        List<WaterFlows.Saved> savedWater=List.of();
         final RunClock clock=new RunClock();
     }
     private final JavaPlugin plugin;
@@ -40,6 +43,7 @@ public final class KitRuns implements Listener {
     private final CourseItems items;
     private final CourseMobs mobs;
     private final TriggerActions actions;
+    private final WaterFlows water;
     /** Builder with the kit, not in a course or the lobby (game mode is checked here). */
     private final Predicate<Player> eligible;
     private final Function<Player,Location> savePoint;
@@ -48,7 +52,7 @@ public final class KitRuns implements Listener {
     public KitRuns(JavaPlugin plugin,Participants participants,FreeTriggerStore triggers,CourseItems items,
                    Predicate<Player> eligible,Function<Player,Location> savePoint) {
         this.plugin=plugin; this.triggers=triggers; this.items=items; this.eligible=eligible; this.savePoint=savePoint;
-        mobs=participants.mobs(); actions=participants.actions();
+        mobs=participants.mobs(); actions=participants.actions(); water=participants.water();
     }
     public void start() { plugin.getServer().getPluginManager().registerEvents(this,plugin); }
     public void stop() {
@@ -72,6 +76,7 @@ public final class KitRuns implements Listener {
             run.savedSlots[slot]=item==null || item.getType().isAir() ? null : item.clone();
         }
         run.savedFired=new HashSet<>(run.fired);
+        run.savedWater=water.snapshot(player);
         run.attempt.clear();
         run.clock.reset();
     }
@@ -88,6 +93,7 @@ public final class KitRuns implements Listener {
             }
         }
         run.fired=new HashSet<>(run.savedFired);
+        water.restore(player,run.savedWater);
         run.clock.reset();
     }
 

@@ -51,7 +51,7 @@ public final class Participants implements Listener {
     private static final int MODE_SLOT=4,FLIGHT_SLOT=5;
     private enum SystemItem { MODE,FLIGHT }
     private record Save(Location at,ItemStack[] contents,List<PotionEffect> effects,Set<BlockPos> fired,Set<Object> scaffold,
-                        Map<String,List<CourseMobs.Saved>> mobs,double along) {}
+                        Map<String,List<CourseMobs.Saved>> mobs,List<WaterFlows.Saved> water,double along) {}
     private static final class Session {
         final String course; boolean practice; int rev;
         final RunClock clock=new RunClock();
@@ -76,19 +76,21 @@ public final class Participants implements Listener {
     private final Scaffold scaffold;
     private final CourseItems items;
     private final CourseMobs mobs=new CourseMobs();
+    private final WaterFlows water;
     private final TriggerActions actions;
     private final NamespacedKey itemKey;
     private final Map<UUID,Session> sessions=new HashMap<>();
     private Visibility visibility;
 
-    public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items) {
-        this.plugin=plugin; this.courses=courses; this.runs=runs; this.data=data; this.returns=returns; this.scaffold=scaffold; this.items=items;
+    public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items,WaterFlows water) {
+        this.plugin=plugin; this.courses=courses; this.runs=runs; this.data=data; this.returns=returns; this.scaffold=scaffold; this.items=items; this.water=water;
         itemKey=new NamespacedKey(plugin,"play");
-        actions=new TriggerActions(items,mobs);
+        actions=new TriggerActions(items,mobs,water);
     }
     /** Shared with the builder kit: one tracker, so neither removes the other's mobs as leftovers. */
     CourseMobs mobs() { return mobs; }
     TriggerActions actions() { return actions; }
+    WaterFlows water() { return water; }
     /** The visibility item is created after this class (it needs the name tags). */
     public void visibility(Visibility visibility) { this.visibility=visibility; }
     public void start() {
@@ -124,7 +126,7 @@ public final class Participants implements Listener {
         if(Bukkit.getWorld(course.world())==null) { Msg.send(player,"play.enter.world-unloaded"); return; }
         UUID uuid=player.getUniqueId();
         Session previous=sessions.remove(uuid);
-        if(previous!=null) { record(player,previous,RunRecord.Result.RETIRE,null); mobs.remove(allMobs(previous)); scaffold.clear(player); }
+        if(previous!=null) { record(player,previous,RunRecord.Result.RETIRE,null); mobs.remove(allMobs(previous)); scaffold.clear(player); water.clear(player); }
         // Keep an older entry: it holds the inventory from before any participant run.
         else if(returns.get(uuid)==null) {
             try { returns.put(uuid,capture(player)); }
@@ -145,7 +147,7 @@ public final class Participants implements Listener {
     private void end(Player player) {
         Session session=sessions.remove(player.getUniqueId());
         if(session!=null) { record(player,session,RunRecord.Result.QUIT,null); mobs.remove(allMobs(session)); }
-        scaffold.clear(player); stopMotion(player);
+        scaffold.clear(player); water.clear(player); stopMotion(player);
         for(PotionEffect effect:player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
         player.sendActionBar(Component.empty());
         restore(player);
@@ -185,7 +187,7 @@ public final class Participants implements Listener {
     /** The start state: no scaffold, no mobs, fresh loadout, clock waiting. Flight permission stays in practice. */
     private void reset(Player player,Session session,Course course) {
         stopMotion(player); player.setFireTicks(0);
-        scaffold.clear(player);
+        scaffold.clear(player); water.clear(player);
         mobs.remove(allMobs(session)); session.mobs.clear(); session.fired.clear();
         session.rev=course.rev(); session.route=new RouteProgress(course.route());
         if(player.getGameMode()!=GameMode.ADVENTURE) player.setGameMode(GameMode.ADVENTURE);
@@ -251,7 +253,7 @@ public final class Participants implements Listener {
         session.mobs.forEach((key,ids) -> savedMobs.put(key,mobs.snapshot(ids)));
         // The previous save is kept so that a mistaken F can be undone.
         session.previousSave=session.save;
-        session.save=new Save(at.clone(),contents,List.copyOf(player.getActivePotionEffects()),Set.copyOf(session.fired),scaffold.placed(player),savedMobs,session.along);
+        session.save=new Save(at.clone(),contents,List.copyOf(player.getActivePotionEffects()),Set.copyOf(session.fired),scaffold.placed(player),savedMobs,water.snapshot(player),session.along);
         Sounds.system(player,Sound.ENTITY_EXPERIENCE_ORB_PICKUP,1f,1f);
         Msg.send(player,"play.save.done");
     }
@@ -277,6 +279,8 @@ public final class Participants implements Listener {
         session.fired.clear(); session.fired.addAll(save.fired());
         mobs.remove(allMobs(session)); session.mobs.clear();
         save.mobs().forEach((key,saved) -> session.mobs.put(key,mobs.respawn(saved)));
+        // Trigger water as it was at the save, with the time it had left.
+        water.restore(player,save.water());
         player.getInventory().setHeldItemSlot(0);
         restartClock(session,save.along());
         systemItems(player,session);

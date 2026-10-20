@@ -32,7 +32,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private static final Particle.DustOptions SELECTION=new Particle.DustOptions(Color.YELLOW,1f),
             COURSE=new Particle.DustOptions(Color.AQUA,1f),START=new Particle.DustOptions(Color.LIME,1.5f),
             GOAL=new Particle.DustOptions(Color.WHITE,.8f),TRIGGER=new Particle.DustOptions(Color.ORANGE,.8f),
-            ROUTE=new Particle.DustOptions(Color.FUCHSIA,.7f),ROUTE_POINT=new Particle.DustOptions(Color.FUCHSIA,1.6f);
+            ROUTE=new Particle.DustOptions(Color.FUCHSIA,.7f),ROUTE_POINT=new Particle.DustOptions(Color.FUCHSIA,1.6f),
+            WATER=new Particle.DustOptions(Color.fromRGB(0x3f76e4),.8f);
     final JavaPlugin plugin;
     final CourseStore store;
     final TemplateStore templates;
@@ -41,7 +42,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     final ChatPrompts prompts;
     final Participants participants;
     private final CourseWand wand;
-    private final PlaceMarker marker;
+    private final PlaceMarker marker,waterMarker;
     private final Selections selections=new Selections();
     private final ItemMenus itemMenus;
     private final TriggerMenus triggerMenus;
@@ -51,7 +52,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
 
     public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants) {
         this.plugin=plugin; this.store=store; this.templates=templates; this.freeTriggers=freeTriggers; this.items=items; this.participants=participants;
-        wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey); prompts=new ChatPrompts(plugin);
+        wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey,"PLACE_MARKER",Material.LIME_WOOL,"editor.marker.item");
+        waterMarker=new PlaceMarker(toolKey,"WATER_MARKER",Material.BLUE_WOOL,"editor.water-marker.item"); prompts=new ChatPrompts(plugin);
         itemMenus=new ItemMenus(this); triggerMenus=new TriggerMenus(this,itemMenus);
     }
     public void start() {
@@ -356,6 +358,20 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             Msg.actionBar(player,removing ? "editor.placeable.removed" : "editor.placeable.added",Msg.arg("pos",cell.describe()),
                     Msg.arg("count",course.placeable().size()+(removing ? -1 : 1)));
     }
+    /** The water marker is never placed either: the cell joins (or leaves) the water action opened last. */
+    @EventHandler(priority=EventPriority.HIGHEST)
+    public void waterMarkerPlace(org.bukkit.event.block.BlockPlaceEvent event) {
+        if(!waterMarker.is(event.getItemInHand())) return;
+        event.setCancelled(true);
+        Player player=event.getPlayer();
+        if(admin(player)) triggerMenus.toggleWaterCell(player,event.getBlockPlaced());
+    }
+    void giveWaterMarker(Player player) {
+        if(!admin(player)) return;
+        for(ItemStack item:player.getInventory().getContents()) if(waterMarker.is(item)) { tell(player,"editor.water-marker.already"); return; }
+        if(!player.getInventory().addItem(waterMarker.create(player)).isEmpty()) tell(player,"editor.kit.full");
+        else tell(player,"editor.water-marker.given");
+    }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void wandBreak(BlockBreakEvent event) {
         // Creative instant-breaking must not destroy the clicked corner block.
@@ -369,6 +385,13 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     // ---- Outlines (only to builders holding the wand) ----
     private void showOutlines() {
         for(Player player:Bukkit.getOnlinePlayers()) {
+            if(waterMarker.is(player.getInventory().getItemInMainHand())) {
+                // The cells of the water action the marker registers into.
+                TriggerMenus.WaterView view=triggerMenus.waterCells(player);
+                if(view!=null && view.world().equals(player.getWorld().getUID()))
+                    for(BlockPos c:view.cells()) box(player,c.x()+.1,c.y()+.1,c.z()+.1,c.x()+.9,c.y()+.9,c.z()+.9,WATER);
+                continue;
+            }
             if(!wand.is(player.getInventory().getItemInMainHand())) continue;
             UUID world=player.getWorld().getUID(),id=player.getUniqueId();
             for(int i=0;i<2;i++) {
