@@ -28,6 +28,7 @@ public final class PlaceableDisplays implements Listener {
     private static final float SIZE=.25f;
     private final JavaPlugin plugin;
     private final CourseStore courses;
+    private final Spaces spaces;
     /** The course and lane whose cells this player should see, or null. */
     private final Function<Player,Shown> shownCourse;
     /** course#lane -> cell -> display */
@@ -36,8 +37,8 @@ public final class PlaceableDisplays implements Listener {
     private final Map<UUID,String> viewing=new HashMap<>();
     private BukkitTask task;
 
-    public PlaceableDisplays(JavaPlugin plugin,CourseStore courses,Function<Player,Shown> shownCourse) {
-        this.plugin=plugin; this.courses=courses; this.shownCourse=shownCourse;
+    public PlaceableDisplays(JavaPlugin plugin,CourseStore courses,Spaces spaces,Function<Player,Shown> shownCourse) {
+        this.plugin=plugin; this.courses=courses; this.spaces=spaces; this.shownCourse=shownCourse;
     }
     public void start() {
         plugin.getServer().getPluginManager().registerEvents(this,plugin);
@@ -56,8 +57,8 @@ public final class PlaceableDisplays implements Listener {
         for(Player player:Bukkit.getOnlinePlayers()) {
             Shown shown=shownCourse.apply(player);
             Course course=shown==null ? null : courses.get(shown.course());
-            if(course==null || course.placeable().isEmpty() || shown.lane()>=course.laneCount()) continue;
-            wanted.putIfAbsent(shown.key(),course.inLane(shown.lane()));
+            if(course==null || course.placeable().isEmpty() || shown.lane()>=spaces.of(course).laneCount()) continue;
+            wanted.putIfAbsent(shown.key(),spaces.inLane(course,shown.lane()));
             keys.put(player.getUniqueId(),shown.key());
         }
         // Lanes nobody needs: remove their cubes.

@@ -28,13 +28,13 @@ class LaneBookTest {
         assertFalse(book.inUse("x",0));
         assertEquals(new LaneBook.Seat("y",0),book.seat(a));
     }
-    @Test void waitingIsFirstComeFirstPerCourse() {
+    @Test void waitingIsFirstComeFirstPerSpace() {
         LaneBook book=new LaneBook();
-        assertEquals(1,book.enqueue(a,"x",false));
-        assertEquals(1,book.enqueue(b,"y",true),"Another course has its own line");
-        assertEquals(2,book.enqueue(c,"x",false));
+        assertEquals(1,book.enqueue(a,"x","x1",false));
+        assertEquals(1,book.enqueue(b,"y","y1",true),"Another space has its own line");
+        assertEquals(2,book.enqueue(c,"x","x2",false));
         assertEquals(2,book.waitingFor("x"));
-        assertEquals(new LaneBook.Waiting("y",true),book.waiting(b));
+        assertEquals(new LaneBook.Waiting("y","y1",true),book.waiting(b));
         assertNotNull(book.dequeue(a));
         assertEquals(1,book.position(c));
         assertEquals(0,book.position(a));

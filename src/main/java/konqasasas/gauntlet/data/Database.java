@@ -14,7 +14,7 @@ import java.util.logging.Logger;
  */
 public final class Database implements AutoCloseable {
     public interface Task<T> { T run(Connection connection) throws SQLException; }
-    private static final int SCHEMA=1;
+    private static final int SCHEMA=2;
     private final ExecutorService worker=Executors.newSingleThreadExecutor(r -> { Thread t=new Thread(r,"Gauntlet-DB"); t.setDaemon(true); return t; });
     private final Logger logger;
     private Connection connection;
@@ -61,6 +61,12 @@ public final class Database implements AutoCloseable {
                     s.execute("CREATE INDEX runs_course ON runs(course,rev,result,ticks)");
                     s.execute("CREATE INDEX runs_player ON runs(player)");
                     s.execute("INSERT INTO schema_version(version) VALUES(1)");
+                }
+                if(version<2) {
+                    // Courses of an era reached so far (stepping on the start), and where to resume after logging out.
+                    s.execute("CREATE TABLE reached(player TEXT NOT NULL,course TEXT NOT NULL,first_at INTEGER NOT NULL,PRIMARY KEY(player,course))");
+                    s.execute("CREATE TABLE resume(player TEXT PRIMARY KEY,course TEXT NOT NULL,at INTEGER NOT NULL)");
+                    s.execute("INSERT INTO schema_version(version) VALUES(2)");
                 }
                 c.commit();
             } catch(SQLException e) { c.rollback(); throw e; }

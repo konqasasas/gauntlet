@@ -16,6 +16,22 @@ class DataStoreTest {
     private static RunRecord run(String course,int rev,UUID player,RunRecord.Result result,long ticks,Double progress) {
         return new RunRecord(UUID.randomUUID(),course,rev,player,result,result==RunRecord.Result.FAIL ? "LAVA" : null,ticks,ticks*50,progress,1L,2L,0,0,0,null,"test");
     }
+    @Test void reachedCoursesAndResumeSurviveRestart() throws Exception {
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID();
+        try(Database db=Database.open(dir.resolve("g.db"),LOG)) {
+            Progress p=new Progress(db); p.load();
+            p.reach(a,"1-1"); p.reach(a,"1-2"); p.reach(a,"1-1");
+            p.resume(a,"1-2"); p.resume(b,"1-1"); p.clearResume(b);
+            assertTrue(p.reached(a,"1-2")); assertFalse(p.reached(b,"1-1"));
+        }
+        try(Database db=Database.open(dir.resolve("g.db"),LOG)) {
+            Progress p=new Progress(db); p.load();
+            assertTrue(p.reached(a,"1-1")); assertTrue(p.reached(a,"1-2")); assertFalse(p.reached(a,"1-3"));
+            assertEquals("1-2",p.resume(a)); assertNull(p.resume(b));
+            long rows=db.call(c -> { try(var s=c.createStatement(); var r=s.executeQuery("SELECT COUNT(*) FROM reached")) { r.next(); return r.getLong(1); } });
+            assertEquals(2,rows,"Reaching again keeps one row");
+        }
+    }
     @Test void runTotalsAreKeptPerRevisionAndSurviveRestart() throws Exception {
         UUID a=UUID.randomUUID(),b=UUID.randomUUID();
         try(Database db=Database.open(dir.resolve("g.db"),LOG)) {

@@ -68,6 +68,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             database=Database.open(data.resolve("gauntlet.db"),getLogger());
             LegacyImport.run(database,data,getLogger());
             runs=new RunLog(database); runs.load();
+            Progress progress=new Progress(database); progress.load();
             playerData=new PlayerData(this,database);
             Msg.init(messages,playerData::uiLanguage);
             Sounds.init(playerData);
@@ -80,6 +81,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             Objects.requireNonNull(getCommand("gauntlet")).setExecutor(this);
             getCommand("gauntlet").setTabCompleter(this);
             courseStore=new CourseStore(data.resolve("courses"));
+            Spaces spaces=new Spaces(courseStore,new EraStore(data.resolve("eras.json")));
             TemplateStore templateStore=new TemplateStore(data.resolve("templates.json"));
             Scaffold scaffold=new Scaffold() {
                 @Override public ItemStack create() { return tools.create(ToolItems.Kind.SCAFFOLD); }
@@ -103,8 +105,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
             water=new WaterFlows(this,data.resolve("water.json"));
             water.start();
-            lanes=new Lanes(this,courseStore,scaffold,water,data.resolve("lanes.json"));
-            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems,water,lanes);
+            lanes=new Lanes(this,courseStore,spaces,scaffold,water,data.resolve("lanes.json"));
+            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems,water,
+                    lanes,spaces,progress);
 
             DisplayStyle style;
             try { style=DisplayStyle.load(getClassLoader(),data.resolve("display.yml"),getLogger()); }
@@ -120,15 +123,16 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             participants.visibility(visibility);
             // In a course, other players are seen only as ghosts in your own lane.
             visibility.hideWhile(participants::active);
-            ghosts=new Ghosts(this,courseStore,participants,visibility::shown);
+            ghosts=new Ghosts(this,spaces,participants,visibility::shown);
             lobby=new Lobby(this,scaffold,visibility,participants::active);
+            participants.waitingSpot(this::waitingSpot);
             tabList=new TabList(this,display);
             sidebar=new Sidebar(this,display,playerData,this::courseView);
 
             participants.start();
             lanes.start();
             ghosts.start();
-            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes);
+            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes,spaces);
             courses.start();
             kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint);
             kit.start();
@@ -136,7 +140,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             triggerLabels=new TriggerLabels(this,p -> courses.triggerLabels(p,!participants.active(p) && tools.kind(p.getInventory().getItemInMainHand())==ToolItems.Kind.SCAFFOLD));
             triggerLabels.start();
             // Players in a course see its cells; builders see the course they hold the wand or marker for.
-            placeable=new PlaceableDisplays(this,courseStore,p -> {
+            placeable=new PlaceableDisplays(this,courseStore,spaces,p -> {
                 Participants.View view=participants.view(p);
                 if(view!=null) return new PlaceableDisplays.Shown(view.course(),view.lane());
                 String shown=courses.shownCourse(p);
@@ -190,6 +194,24 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(database!=null) database.close();
         pendingRefills.clear(); lavaExtinguish.clear();
         pendingLavaRetries.clear(); lavaRetryFailures.clear();
+    }
+    /**
+     * Where someone coming back mid-era waits when every lane is taken: eras.waiting-spot
+     * ("world x y z [yaw pitch]"), else the lobby's spawn, else null (where they are).
+     */
+    private Location waitingSpot() {
+        String spot=getConfig().getString("eras.waiting-spot","").strip();
+        if(spot.isEmpty()) return lobby==null ? null : lobby.spawn();
+        String[] p=spot.split("\\s+");
+        try {
+            World world=Bukkit.getWorld(p[0]);
+            if(world==null || (p.length!=4 && p.length!=6)) throw new IllegalArgumentException(spot);
+            return new Location(world,Double.parseDouble(p[1]),Double.parseDouble(p[2]),Double.parseDouble(p[3]),
+                    p.length==6 ? Float.parseFloat(p[4]) : 0,p.length==6 ? Float.parseFloat(p[5]) : 0);
+        } catch(RuntimeException e) {
+            getLogger().warning("eras.waiting-spot is not \"world x y z [yaw pitch]\" with a loaded world: "+spot);
+            return lobby==null ? null : lobby.spawn();
+        }
     }
     /** The course part of the sidebar, or null outside a course. */
     private Sidebar.CourseView courseView(Player player) {

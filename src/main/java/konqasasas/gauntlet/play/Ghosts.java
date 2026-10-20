@@ -18,7 +18,7 @@ import org.bukkit.scoreboard.Team;
 import org.bukkit.util.BoundingBox;
 
 /**
- * Ghosts: players in the same course but another lane, shown in your own lane as
+ * Ghosts: players in the same era (or course outside the eras) but another lane, shown in your own lane as
  * mannequins (an ordinary entity with the player's skin; cheaper than a skin built
  * from display entities when many players crowd one place).
  *
@@ -45,7 +45,7 @@ public final class Ghosts implements Listener {
     }
     private static final Set<Pose> POSES=Mannequin.validPoses();
     private final JavaPlugin plugin;
-    private final CourseStore courses;
+    private final Spaces spaces;
     private final Participants participants;
     /** False when the viewer turned other players off (hotbar slot 8): no ghosts either. */
     private final Predicate<Player> wantsPlayers;
@@ -53,8 +53,8 @@ public final class Ghosts implements Listener {
     private Settings settings;
     private BukkitTask task;
 
-    public Ghosts(JavaPlugin plugin,CourseStore courses,Participants participants,Predicate<Player> wantsPlayers) {
-        this.plugin=plugin; this.courses=courses; this.participants=participants; this.wantsPlayers=wantsPlayers;
+    public Ghosts(JavaPlugin plugin,Spaces spaces,Participants participants,Predicate<Player> wantsPlayers) {
+        this.plugin=plugin; this.spaces=spaces; this.participants=participants; this.wantsPlayers=wantsPlayers;
         settings=Settings.load(plugin);
     }
     public void start() {
@@ -74,18 +74,18 @@ public final class Ghosts implements Listener {
         double near2=settings.near()*settings.near();
         for(var entry:views.entrySet()) {
             Player viewer=Bukkit.getPlayer(entry.getKey()); Participants.View view=entry.getValue();
-            Course course=courses.get(view.course());
-            if(viewer==null || course==null || view.lane()>=course.laneCount() || !wantsPlayers.test(viewer)) continue;
+            Space space=spaces.get(view.space());
+            if(viewer==null || space==null || view.lane()>=space.laneCount() || !wantsPlayers.test(viewer)) continue;
             Location here=viewer.getLocation();
             record Candidate(UUID source,Location at,double distance2) {}
             List<Candidate> candidates=new ArrayList<>();
             for(var other:views.entrySet()) {
                 Participants.View theirs=other.getValue();
-                if(!theirs.course().equals(view.course()) || theirs.lane()==view.lane() || theirs.lane()>=course.laneCount()) continue;
+                if(!theirs.space().equals(view.space()) || theirs.lane()==view.lane() || theirs.lane()>=space.laneCount()) continue;
                 Player source=Bukkit.getPlayer(other.getKey());
                 if(source==null || source.isDead() || source.getGameMode()==GameMode.SPECTATOR || source.getWorld()!=viewer.getWorld()) continue;
                 // Where they are in their lane, moved into the viewer's lane.
-                BlockPos d=course.laneOffset(view.lane()).minus(course.laneOffset(theirs.lane()));
+                BlockPos d=space.laneOffset(view.lane()).minus(space.laneOffset(theirs.lane()));
                 Location at=source.getLocation().add(d.x(),d.y(),d.z());
                 double distance2=at.distanceSquared(here);
                 if(distance2<=near2) candidates.add(new Candidate(other.getKey(),at,distance2));

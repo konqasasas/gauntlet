@@ -16,6 +16,10 @@ public record Region(int minX,int minY,int minZ,int maxX,int maxY,int maxZ) {
         return bx>=minX && bx<=maxX && by>=minY && by<=maxY && bz>=minZ && bz<=maxZ;
     }
     public Region moved(BlockPos d) { return new Region(minX+d.x(),minY+d.y(),minZ+d.z(),maxX+d.x(),maxY+d.y(),maxZ+d.z()); }
+    /** True when the other box lies wholly inside this one (false for null). */
+    public boolean contains(Region o) {
+        return o!=null && minX<=o.minX && minY<=o.minY && minZ<=o.minZ && o.maxX<=maxX && o.maxY<=maxY && o.maxZ<=maxZ;
+    }
     public boolean overlaps(Region o) {
         return minX<=o.maxX && o.minX<=maxX && minY<=o.maxY && o.minY<=maxY && minZ<=o.maxZ && o.minZ<=maxZ;
     }

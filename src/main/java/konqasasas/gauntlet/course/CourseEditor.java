@@ -33,7 +33,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             COURSE=new Particle.DustOptions(Color.AQUA,1f),START=new Particle.DustOptions(Color.LIME,1.5f),
             GOAL=new Particle.DustOptions(Color.WHITE,.8f),TRIGGER=new Particle.DustOptions(Color.ORANGE,.8f),
             ROUTE=new Particle.DustOptions(Color.FUCHSIA,.7f),ROUTE_POINT=new Particle.DustOptions(Color.FUCHSIA,1.6f),
-            WATER=new Particle.DustOptions(Color.fromRGB(0x3f76e4),.8f),LANE=new Particle.DustOptions(Color.SILVER,1f);
+            WATER=new Particle.DustOptions(Color.fromRGB(0x3f76e4),.8f),LANE=new Particle.DustOptions(Color.SILVER,1f),
+            ERA=new Particle.DustOptions(Color.fromRGB(0xb8924a),1.2f);
     /** Lanes whose outline is drawn: those within this many blocks of the builder. */
     private static final double LANE_OUTLINE_DISTANCE=96;
     final JavaPlugin plugin;
@@ -44,20 +45,23 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     final ChatPrompts prompts;
     final Participants participants;
     final Lanes lanes;
+    final Spaces spaces;
     private final CourseWand wand;
     private final PlaceMarker marker,waterMarker;
     private final Selections selections=new Selections();
     private final ItemMenus itemMenus;
     private final TriggerMenus triggerMenus;
+    private final EraMenus eraMenus;
     /** The course each builder last opened, shown while holding the wand. */
     private final Map<UUID,String> editing=new HashMap<>();
     private BukkitTask outlines;
 
-    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants,Lanes lanes) {
+    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants,Lanes lanes,Spaces spaces) {
         this.plugin=plugin; this.store=store; this.templates=templates; this.freeTriggers=freeTriggers; this.items=items; this.participants=participants; this.lanes=lanes;
+        this.spaces=spaces;
         wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey,"PLACE_MARKER",Material.LIME_WOOL,"editor.marker.item");
         waterMarker=new PlaceMarker(toolKey,"WATER_MARKER",Material.BLUE_WOOL,"editor.water-marker.item"); prompts=new ChatPrompts(plugin);
-        itemMenus=new ItemMenus(this); triggerMenus=new TriggerMenus(this,itemMenus);
+        itemMenus=new ItemMenus(this); triggerMenus=new TriggerMenus(this,itemMenus); eraMenus=new EraMenus(this);
     }
     public void start() {
         var pm=plugin.getServer().getPluginManager();
@@ -83,11 +87,24 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         else if(args.length==2 && args[0].equalsIgnoreCase("practice")) participants.enter(player,args[1].toLowerCase(Locale.ROOT),true);
         else if(args.length==1 && args[0].equalsIgnoreCase("leave")) participants.leave(player);
         else if(args.length==1 && args[0].equalsIgnoreCase("undosave")) participants.undoSave(player);
+        // Choosing where to start in an era: a course reached before (the first one for everyone).
+        else if(args.length==2 && args[0].equalsIgnoreCase("era")) eraMenus.openStart(player,args[1].toLowerCase(Locale.ROOT));
+        else if(args.length==3 && args[0].equalsIgnoreCase("era")) {
+            Era era=spaces.eras().get(args[1].toLowerCase(Locale.ROOT)); String course=args[2].toLowerCase(Locale.ROOT);
+            if(era==null || !era.courses().contains(course)) Msg.send(player,"play.era.not-found",Msg.arg("id",args[1]));
+            else participants.enter(player,course,false);
+        }
         else Msg.send(player,player.hasPermission(ADMIN) ? "course.usage-admin" : "course.usage");
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
-        if(args.length==1) return List.of("play","practice","leave","undosave").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==1) return List.of("play","practice","leave","undosave","era").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==2 && args[0].equalsIgnoreCase("era"))
+            return spaces.eras().all().stream().map(Era::id).filter(id -> id.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==3 && args[0].equalsIgnoreCase("era")) {
+            Era era=spaces.eras().get(args[1].toLowerCase(Locale.ROOT));
+            return era==null ? List.of() : era.courses().stream().filter(id -> id.startsWith(args[2].toLowerCase(Locale.ROOT))).toList();
+        }
         if(args.length==2 && (args[0].equalsIgnoreCase("play") || args[0].equalsIgnoreCase("practice"))) {
             boolean admin=sender.hasPermission(ADMIN);
             return store.all().stream().filter(c -> admin || c.status()==CourseStatus.DONE).map(Course::id)
@@ -114,6 +131,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         List<Component> createLore=new ArrayList<>();
         if(courses.size()>45) createLore.add(line(player,"editor.list.more",Msg.arg("count",courses.size())));
         menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.list.create",createLore),e -> askNewId(player));
+        menu.button(47,Msg.icon(player,Material.CLOCK,"editor.eras-button",Msg.arg("count",spaces.eras().all().size())),e -> eraMenus.openList(player));
         menu.button(51,Msg.icon(player,Material.CHEST,"editor.templates-button"),e -> itemMenus.openTemplates(player,() -> openList(player)));
         menu.button(53,Msg.icon(player,Material.HEAVY_WEIGHTED_PRESSURE_PLATE,"editor.free-triggers-button",Msg.arg("count",freeTriggers.all().size())),
                 e -> triggerMenus.openFreeList(player));
@@ -165,6 +183,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
                 line(player,"editor.list.course.author",Msg.arg("author",authorName(course))),
                 line(player,"editor.edit.world",Msg.arg("world",worldName(player,course))),
                 line(player,"editor.edit.rev",Msg.arg("rev",course.rev()))));
+        Era inEra=spaces.era(course);
+        if(inEra!=null) info.add(line(player,"editor.edit.era",Msg.arg("era",inEra.name()),Msg.arg("index",inEra.courses().indexOf(course.id())+1)));
         if(course.problems().isEmpty()) info.add(line(player,"editor.edit.playable"));
         warnings(player,course).forEach(p -> info.add(line(player,"editor.warning",Msg.arg("text",p))));
         ItemStack book=new ItemStack(Material.BOOK);
@@ -205,8 +225,11 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(28,Msg.icon(player,Material.LEAD,"editor.edit.route",Msg.arg("count",course.route().size()),
                 Msg.arg("length",String.format(Locale.ROOT,"%.1f",new RouteProgress(course.route()).total()))),e -> editRoute(player,id,e));
         menu.button(29,Msg.icon(player,Material.LIME_WOOL,"editor.edit.placeable",Msg.arg("count",course.placeable().size())),e -> placeableButton(player,id,e));
-        menu.button(30,Msg.icon(player,Material.RAIL,"editor.edit.lanes",Msg.arg("count",course.laneCount()),Msg.arg("waiting",lanes.waitingFor(id))),
-                e -> openLanes(player,id));
+        Space space=spaces.of(course);
+        Era era=spaces.era(course);
+        menu.button(30,Msg.icon(player,Material.RAIL,era==null ? "editor.edit.lanes" : "editor.edit.lanes-era",Msg.arg("count",space.laneCount()),
+                Msg.arg("waiting",lanes.waitingFor(space)),Msg.arg("era",era==null ? "" : era.name())),
+                e -> { if(era!=null && e.isRightClick()) eraMenus.openEra(player,era.id()); else openLanes(player,space.key(),() -> openEdit(player,id)); });
         menu.button(31,Msg.icon(player,Material.NETHER_STAR,course.problems().isEmpty() ? "editor.edit.play" : "editor.edit.play-blocked"),
                 e -> { if(admin(player)) participants.enter(player,id,e.isRightClick()); });
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.edit.delete"),e -> openDelete(player,id));
@@ -242,14 +265,17 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         tell(player,"editor.region.done",Msg.arg("region",selected.region().describe()));
         Course after=store.get(id);
         if(after!=null && !after.lanes().isEmpty() && before!=null && before.world().equals(after.world())) tell(player,"editor.lanes.region-changed");
+        Region eraBox=after==null || spaces.era(after)==null ? null : spaces.of(after).region();
+        if(eraBox!=null && !eraBox.contains(after.region())) tell(player,"editor.era.course-outside");
     }
     /**
      * Only lane 1 is edited: true (and told) when the position is in lane 2 or later.
      * Lane 1's copies follow it by sync.
      */
     boolean inCopy(Player player,Course course,double x,double y,double z) {
-        if(course.lanes().isEmpty() || !player.getWorld().getUID().equals(course.world())) return false;
-        int lane=course.laneAt((int)Math.floor(x),(int)Math.floor(y),(int)Math.floor(z));
+        Space space=spaces.of(course);
+        if(space.lanes().isEmpty() || !player.getWorld().getUID().equals(course.world())) return false;
+        int lane=space.laneAt((int)Math.floor(x),(int)Math.floor(y),(int)Math.floor(z));
         if(lane<=0) return false;
         tell(player,"editor.lanes.edit-lane1",Msg.arg("lane",lane+1)); return true;
     }
@@ -320,6 +346,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     void teleport(Player player,Course course,double x,double y,double z,float yaw,float pitch) {
         teleport(player,course.world(),x,y,z,yaw,pitch);
     }
+    Selections.Selected selection(Player player) { return selections.selected(player.getUniqueId()); }
     void teleport(Player player,UUID worldId,double x,double y,double z,float yaw,float pitch) {
         World world=worldId==null ? null : Bukkit.getWorld(worldId);
         if(world==null) { tell(player,"editor.world-unloaded"); return; }
@@ -344,68 +371,90 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.open(player);
     }
 
-    // ---- Lanes ----
-    /** Lane list (state, who plays it), adding lanes, sync from lane 1, removing the last lane. */
-    void openLanes(Player player,String id) {
-        Course course=store.get(id);
-        if(course==null) { tell(player,"editor.deleted",Msg.arg("id",id)); openList(player); return; }
-        Menu menu=new Menu(6,Msg.plain(player,"editor.lanes.title",Msg.arg("name",course.name())));
-        for(int lane=0;lane<Math.min(course.laneCount(),45);lane++) {
+    // ---- Lanes (of an era, or of a course outside the eras) ----
+    /** Lane list (state, who plays it), adding lanes, sync from lane 1, removing the last lane. back: where "back" goes. */
+    void openLanes(Player player,String key,Runnable back) {
+        Space space=spaces.get(key);
+        if(space==null) { tell(player,"editor.lanes.gone"); back.run(); return; }
+        Menu menu=new Menu(6,Msg.plain(player,"editor.lanes.title",Msg.arg("name",space.name())));
+        for(int lane=0;lane<Math.min(space.laneCount(),45);lane++) {
             int index=lane;
-            menu.button(lane,laneIcon(player,course,lane),e -> {
-                Course now=store.get(id); if(now==null || index>=now.laneCount() || now.start()==null) return;
-                Spot s=now.inLane(index).start();
-                teleport(player,now,s.x(),s.y(),s.z(),s.yaw(),s.pitch());
+            menu.button(lane,laneIcon(player,space,lane),e -> {
+                Space now=spaces.get(key); if(now==null || index>=now.laneCount()) return;
+                Spot s=laneStart(now);
+                if(s==null) { tell(player,"editor.start.unset"); return; }
+                BlockPos d=now.laneOffset(index);
+                teleport(player,now.world(),s.x()+d.x(),s.y()+d.y(),s.z()+d.z(),s.yaw(),s.pitch());
             });
         }
-        menu.button(45,Msg.icon(player,Material.ARROW,"editor.back"),e -> openEdit(player,id));
+        Runnable again=() -> openLanes(player,key,back);
+        menu.button(45,Msg.icon(player,Material.ARROW,"editor.back"),e -> back.run());
         menu.label(46,Msg.icon(player,Material.BOOK,"editor.lanes.help"));
-        menu.button(47,Msg.icon(player,Material.LIME_DYE,"editor.lanes.add",Msg.arg("max",Course.MAX_LANES)),e -> askLanes(player,id));
+        menu.button(47,Msg.icon(player,Material.LIME_DYE,"editor.lanes.add",Msg.arg("max",Course.MAX_LANES)),e -> askLanes(player,key,again));
         menu.button(49,Msg.icon(player,Material.ECHO_SHARD,"editor.lanes.sync"),e -> {
             if(!admin(player)) return;
-            Course now=store.get(id); if(now==null) return;
+            Space now=spaces.get(key); if(now==null) return;
             if(now.lanes().isEmpty()) { tell(player,"editor.lanes.none"); return; }
             if(now.region()==null) { tell(player,"editor.start.no-region"); return; }
             List<Integer> all=new ArrayList<>(); for(int lane=1;lane<now.laneCount();lane++) all.add(lane);
             lanes.sync(now,all,player);
             tell(player,"editor.lanes.sync-started",Msg.arg("count",all.size()));
-            openLanes(player,id);
+            again.run();
         });
         menu.button(51,Msg.icon(player,Material.BARRIER,"editor.lanes.remove"),e -> {
             if(!e.isShiftClick()) { tell(player,"editor.lanes.remove-shift"); return; }
-            Course now=store.get(id); if(now==null) return;
+            Space now=spaces.get(key); if(now==null) return;
             if(now.lanes().isEmpty()) { tell(player,"editor.lanes.none"); return; }
             int last=now.laneCount()-1;
-            if(lanes.state(id,last)==Lanes.State.IN_USE) { tell(player,"editor.lanes.remove-in-use",Msg.arg("lane",last+1)); return; }
+            if(lanes.state(now,last)==Lanes.State.IN_USE) { tell(player,"editor.lanes.remove-in-use",Msg.arg("lane",last+1)); return; }
             List<BlockPos> rest=new ArrayList<>(now.lanes()); rest.removeLast();
-            if(!save(player,id,c -> c.edit().lanes(rest).build())) return;
-            lanes.trim(store.get(id));
+            if(!saveLanes(player,now,rest)) return;
+            lanes.trim(spaces.get(key));
             tell(player,"editor.lanes.removed",Msg.arg("lane",last+1));
-            openLanes(player,id);
+            again.run();
         });
-        menu.button(53,Msg.icon(player,Material.CLOCK,"editor.lanes.refresh",Msg.arg("waiting",lanes.waitingFor(id))),e -> openLanes(player,id));
+        menu.button(53,Msg.icon(player,Material.CLOCK,"editor.lanes.refresh",Msg.arg("waiting",lanes.waitingFor(space))),e -> again.run());
         menu.open(player);
     }
-    private ItemStack laneIcon(Player player,Course course,int lane) {
-        Lanes.State state=lanes.state(course.id(),lane);
+    /** Where a lane's button takes builders: the course's start, or the era's first course's start. */
+    private Spot laneStart(Space space) {
+        if(!space.isEra()) { Course c=store.get(space.key().substring(Space.COURSE.length())); return c==null ? null : c.start(); }
+        Era era=spaces.eras().get(space.key().substring(Space.ERA.length()));
+        if(era==null) return null;
+        for(String id:era.courses()) { Course c=store.get(id); if(c!=null && c.start()!=null) return c.start(); }
+        return null;
+    }
+    private ItemStack laneIcon(Player player,Space space,int lane) {
+        Lanes.State state=lanes.state(space,lane);
         Material material=switch(state) { case FREE -> Material.LIME_CONCRETE; case IN_USE -> Material.ORANGE_CONCRETE; case PENDING -> Material.YELLOW_CONCRETE; case COPYING -> Material.LIGHT_BLUE_CONCRETE; };
-        UUID occupant=lanes.occupant(course.id(),lane);
+        UUID occupant=lanes.occupant(space,lane);
         String who=occupant==null ? "" : Optional.ofNullable(Bukkit.getOfflinePlayer(occupant).getName()).orElse(occupant.toString());
         List<Component> lore=new ArrayList<>();
-        lore.add(line(player,"editor.lanes.state."+state.name(),Msg.arg("player",who),Msg.arg("percent",lanes.percent(course.id(),lane))));
-        lore.add(line(player,"editor.lanes.offset",Msg.arg("offset",course.laneOffset(lane).describe())));
-        Region region=course.laneRegion(lane);
+        lore.add(line(player,"editor.lanes.state."+state.name(),Msg.arg("player",who),Msg.arg("percent",lanes.percent(space,lane))));
+        lore.add(line(player,"editor.lanes.offset",Msg.arg("offset",space.laneOffset(lane).describe())));
+        Region region=space.laneRegion(lane);
         if(region!=null) lore.add(line(player,"editor.lanes.region",Msg.arg("region",region.describe())));
         lore.add(line(player,lane==0 ? "editor.lanes.lane1" : "editor.lanes.click"));
         ItemStack icon=new ItemStack(material);
         icon.editMeta(meta -> { meta.displayName(Msg.text(player,"editor.lanes.entry",Msg.arg("lane",lane+1))); meta.lore(lore); });
         return icon;
     }
+    /** Saves the lanes of an era or of a course; false (already told) on failure. */
+    private boolean saveLanes(Player player,Space space,List<BlockPos> next) {
+        if(!admin(player)) return false;
+        if(space.isEra()) {
+            Era era=spaces.eras().get(space.key().substring(Space.ERA.length()));
+            if(era==null) { tell(player,"editor.lanes.gone"); return false; }
+            try { spaces.eras().save(era.withLanes(next)); return true; }
+            catch(IOException|RuntimeException e) { failure(player,"editor.era.save-failed",e,Msg.arg("id",era.id())); return false; }
+        }
+        return save(player,space.key().substring(Space.COURSE.length()),c -> c.edit().lanes(next).build());
+    }
     /** "4 x 200": four lanes, each 200 further along x than the one before. "4 0 0 -150": the step given directly. */
-    private void askLanes(Player player,String id) {
+    private void askLanes(Player player,String key,Runnable again) {
         prompts.ask(player,"editor.prompt.lanes",text -> {
-            Course course=store.get(id); if(course==null || !admin(player)) return;
-            if(course.region()==null) { tell(player,"editor.start.no-region"); return; }
+            Space space=spaces.get(key); if(space==null || !admin(player)) return;
+            if(space.region()==null) { tell(player,"editor.start.no-region"); return; }
             String[] parts=text.strip().toLowerCase(Locale.ROOT).split("\\s+");
             int count; BlockPos step;
             try {
@@ -416,32 +465,31 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
                 } else if(parts.length==4) step=new BlockPos(Integer.parseInt(parts[1]),Integer.parseInt(parts[2]),Integer.parseInt(parts[3]));
                 else { tell(player,"editor.lanes.input-invalid"); return; }
             } catch(NumberFormatException e) { tell(player,"editor.lanes.input-invalid"); return; }
-            if(count<1 || course.laneCount()+count>Course.MAX_LANES) { tell(player,"editor.lanes.too-many",Msg.arg("max",Course.MAX_LANES)); return; }
+            if(count<1 || space.laneCount()+count>Course.MAX_LANES) { tell(player,"editor.lanes.too-many",Msg.arg("max",Course.MAX_LANES)); return; }
             if(step.equals(BlockPos.ZERO)) { tell(player,"editor.lanes.input-invalid"); return; }
-            List<BlockPos> next=new ArrayList<>(course.lanes());
-            BlockPos last=course.laneOffset(course.laneCount()-1);
+            List<BlockPos> next=new ArrayList<>(space.lanes());
+            BlockPos last=space.laneOffset(space.laneCount()-1);
             for(int i=1;i<=count;i++) next.add(new BlockPos(last.x()+step.x()*i,last.y()+step.y()*i,last.z()+step.z()*i));
-            Course planned;
-            try { planned=course.edit().lanes(next).build(); }
-            catch(IllegalArgumentException e) { tell(player,"editor.lanes.input-invalid"); return; }
+            if(new HashSet<>(next).size()!=next.size() || next.contains(BlockPos.ZERO)) { tell(player,"editor.lanes.overlap"); return; }
+            Space planned=new Space(space.key(),space.name(),space.world(),space.region(),next);
             String problem=laneProblem(planned);
             if(problem!=null) { tell(player,problem); return; }
-            if(!save(player,id,c -> c.edit().lanes(next).build())) return;
-            List<Integer> added=new ArrayList<>(); for(int lane=course.laneCount();lane<planned.laneCount();lane++) added.add(lane);
+            if(!saveLanes(player,space,next)) return;
+            List<Integer> added=new ArrayList<>(); for(int lane=space.laneCount();lane<planned.laneCount();lane++) added.add(lane);
             lanes.sync(planned,added,player);
             tell(player,"editor.lanes.added",Msg.arg("count",count),Msg.arg("total",planned.laneCount()));
-            openLanes(player,id);
+            again.run();
         },Msg.arg("max",Course.MAX_LANES-1));
     }
-    /** Why these lanes cannot be placed (message key), or null: overlapping, outside the world's height, or on another course. */
-    private String laneProblem(Course course) {
-        if(course.lanesOverlap()) return "editor.lanes.overlap";
-        World world=Bukkit.getWorld(course.world());
-        for(int lane=1;lane<course.laneCount();lane++) {
-            Region r=course.laneRegion(lane);
+    /** Why these lanes cannot be placed (message key), or null: overlapping, outside the world's height, or on another era or course. */
+    String laneProblem(Space space) {
+        if(space.lanesOverlap()) return "editor.lanes.overlap";
+        World world=Bukkit.getWorld(space.world());
+        for(int lane=1;lane<space.laneCount();lane++) {
+            Region r=space.laneRegion(lane);
             if(world!=null && (r.minY()<world.getMinHeight() || r.maxY()>=world.getMaxHeight())) return "editor.lanes.height";
-            for(Course other:store.all()) {
-                if(other.id().equals(course.id()) || other.region()==null || !other.world().equals(course.world())) continue;
+            for(Space other:spaces.all()) {
+                if(other.key().equals(space.key()) || other.region()==null || !other.world().equals(space.world())) continue;
                 for(int o=0;o<other.laneCount();o++) if(other.laneRegion(o).overlaps(r)) return "editor.lanes.other-course";
             }
         }
@@ -529,9 +577,12 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             Course course=editing.containsKey(id) ? store.get(editing.get(id)) : null;
             if(course==null || !course.world().equals(world)) continue;
             if(course.region()!=null) box(player,course.region(),COURSE);
+            Space space=spaces.of(course);
+            if(space.isEra() && space.region()!=null) box(player,space.region(),ERA);
             Location here=player.getLocation();
-            for(int lane=1;lane<course.laneCount();lane++) {
-                Region r=course.laneRegion(lane);
+            for(int lane=1;lane<space.laneCount();lane++) {
+                Region r=space.laneRegion(lane);
+                if(r==null) break;
                 double dx=Math.max(0,Math.max(r.minX()-here.getX(),here.getX()-r.maxX()-1)),dz=Math.max(0,Math.max(r.minZ()-here.getZ(),here.getZ()-r.maxZ()-1));
                 if(dx*dx+dz*dz<=LANE_OUTLINE_DISTANCE*LANE_OUTLINE_DISTANCE) box(player,r,LANE);
             }
@@ -595,8 +646,9 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         String id=shownCourse(player);
         Course course=id==null ? null : store.get(id);
         // Every lane shows the labels at its own plates.
-        if(course!=null && course.world().equals(world)) for(int lane=0;lane<course.laneCount();lane++)
-            for(Trigger t:course.triggers()) labels.add(label(course.id(),world,t.moved(course.laneOffset(lane))));
+        Space space=course==null ? null : spaces.of(course);
+        if(course!=null && course.world().equals(world)) for(int lane=0;lane<space.laneCount();lane++)
+            for(Trigger t:course.triggers()) labels.add(label(course.id(),world,t.moved(space.laneOffset(lane))));
         return labels;
     }
     private TriggerLabels.Label label(String owner,UUID world,Trigger t) {

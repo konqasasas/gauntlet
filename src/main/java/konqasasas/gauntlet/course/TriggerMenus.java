@@ -262,11 +262,12 @@ final class TriggerMenus {
         menu.open(player);
     }
     /** True when a mob spot or water cell of the action lies in lane 2 or later of the course (only lane 1 is edited). */
-    private static boolean outsideLane1(Course course,TriggerAction a) {
-        if(course.lanes().isEmpty()) return false;
+    private boolean outsideLane1(Course course,TriggerAction a) {
+        Space space=editor.spaces.of(course);
+        if(space.lanes().isEmpty()) return false;
         return switch(a.type()) {
-            case MOB -> course.laneAt((int)Math.floor(a.mobAt().x()),(int)Math.floor(a.mobAt().y()),(int)Math.floor(a.mobAt().z()))>0;
-            case WATER -> a.waterCells().stream().anyMatch(c -> course.laneAt(c.x(),c.y(),c.z())>0);
+            case MOB -> space.laneAt((int)Math.floor(a.mobAt().x()),(int)Math.floor(a.mobAt().y()),(int)Math.floor(a.mobAt().z()))>0;
+            case WATER -> a.waterCells().stream().anyMatch(c -> space.laneAt(c.x(),c.y(),c.z())>0);
             default -> false;
         };
     }
