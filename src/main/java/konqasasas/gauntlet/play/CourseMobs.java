@@ -20,6 +20,8 @@ final class CourseMobs implements Listener {
     /** A saved mob for practice save states. */
     record Saved(EntitySnapshot snapshot,Location at) {}
     private final Set<UUID> tracked=new HashSet<>();
+    /** Runs /summon with the console's permissions but without "Summoned new ..." in the console (or to operators). */
+    private static final org.bukkit.command.CommandSender SILENT=Bukkit.createCommandSender(feedback -> {});
 
     /** Spawns via /summon so builders can paste their existing SNBT. Empty when it failed. */
     List<UUID> spawn(World world,Spot at,MobSpec spec) {
@@ -29,7 +31,7 @@ final class CourseMobs implements Listener {
         // fired for vehicles such as minecarts, so watch every entity added to the world.
         List<Entity> captured=new ArrayList<>();
         capturing=captured;
-        try { Bukkit.dispatchCommand(Bukkit.getConsoleSender(),command); }
+        try { Bukkit.dispatchCommand(SILENT,command); }
         finally { capturing=null; }
         List<UUID> spawned=new ArrayList<>();
         Set<Entity> roots=new LinkedHashSet<>();

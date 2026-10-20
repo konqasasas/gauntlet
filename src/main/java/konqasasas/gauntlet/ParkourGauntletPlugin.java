@@ -310,7 +310,13 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(!allowed(player)) return;
         // After this event returns, Paper puts the cancelled drop back into the inventory;
         // go back a tick later so the restored hotbar is not topped up by that item.
-        Bukkit.getScheduler().runTask(this,() -> { if(player.isOnline()) { retry(player); tools.refill(player); player.updateInventory(); } });
+        boolean sneaking=player.isSneaking();
+        Bukkit.getScheduler().runTask(this,() -> {
+            if(!player.isOnline()) return;
+            // Shift+Q: also every trigger fires again, those stepped on before the save too.
+            if(retry(player) && sneaking) { kit.rearm(player); tell(player,"editor.kit.rearmed"); }
+            tools.refill(player); player.updateInventory();
+        });
     }
     @EventHandler(priority=EventPriority.HIGHEST,ignoreCancelled=true)
     public void swapHands(PlayerSwapHandItemsEvent event) {

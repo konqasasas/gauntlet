@@ -492,7 +492,7 @@ public final class Participants implements Listener {
                 session.along=session.route.locate(at.getX(),at.getY(),at.getZ(),session.along);
                 session.furthest=Math.max(session.furthest,session.along);
             }
-            for(BlockPos pos:cellsAtFeet(player.getBoundingBox())) {
+            for(BlockPos pos:platesPressed(at.getWorld(),player.getBoundingBox())) {
                 Trigger trigger=course.trigger(pos);
                 if(trigger!=null && !session.fired.contains(pos)) fire(player,session,course,trigger);
             }
@@ -550,12 +550,21 @@ public final class Participants implements Listener {
         Location at=player.getLocation();
         if(teleport(player,new Location(world,g.x()+.5,g.y()+1,g.z()+.5,at.getYaw(),at.getPitch()))) { stopMotion(player); player.setFireTicks(0); }
     }
-    static List<BlockPos> cellsAtFeet(BoundingBox box) {
-        List<BlockPos> cells=new ArrayList<>(4); int y=(int)Math.floor(box.getMinY());
+    /**
+     * The pressure plates this box presses, as vanilla decides: the plate's touch box
+     * (1/16 in from each side, 1/4 block high), not the whole block it stands in.
+     */
+    static List<BlockPos> platesPressed(World world,BoundingBox box) {
+        List<BlockPos> plates=new ArrayList<>(4); int y=(int)Math.floor(box.getMinY());
+        if(box.getMinY()>=y+PLATE_HEIGHT) return plates;
         for(int x=(int)Math.floor(box.getMinX());x<=Math.floor(box.getMaxX()-1e-6);x++)
-            for(int z=(int)Math.floor(box.getMinZ());z<=Math.floor(box.getMaxZ()-1e-6);z++) cells.add(new BlockPos(x,y,z));
-        return cells;
+            for(int z=(int)Math.floor(box.getMinZ());z<=Math.floor(box.getMaxZ()-1e-6);z++) {
+                if(box.getMinX()>=x+1-PLATE_INSET || box.getMaxX()<=x+PLATE_INSET || box.getMinZ()>=z+1-PLATE_INSET || box.getMaxZ()<=z+PLATE_INSET) continue;
+                if(Tag.PRESSURE_PLATES.isTagged(world.getBlockAt(x,y,z).getType())) plates.add(new BlockPos(x,y,z));
+            }
+        return plates;
     }
+    private static final double PLATE_INSET=1/16.0,PLATE_HEIGHT=.25;
     @EventHandler public void serverTick(ServerTickEndEvent event) {
         int now=Bukkit.getCurrentTick();
         for(var entry:List.copyOf(sessions.entrySet())) {

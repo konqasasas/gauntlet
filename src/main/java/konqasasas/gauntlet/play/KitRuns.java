@@ -24,6 +24,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  * slots that hold the kit block or a trigger item, then or now), triggers fired
  * since the save may fire again, the mobs spawned in this attempt go, and
  * trigger water goes back to how it was at the save (with the time it had left).
+ * Shift+Q also re-arms every trigger, including those fired before the save.
  * Only builders in Adventure with a save and the kit take part.
  */
 public final class KitRuns implements Listener {
@@ -97,6 +98,12 @@ public final class KitRuns implements Listener {
         run.clock.reset();
     }
 
+    /** Shift+Q: every trigger may fire again, even those fired before the save. */
+    public void rearm(Player player) {
+        Run run=run(player);
+        run.fired.clear(); run.savedFired.clear();
+    }
+
     @EventHandler public void clientTick(ClientTickEndEvent event) {
         Player player=event.getPlayer();
         if(!active(player)) return;
@@ -106,7 +113,7 @@ public final class KitRuns implements Listener {
                 && (save.getWorld()!=at.getWorld() || at.toVector().distanceSquared(save.toVector())>MOVE_EPSILON_SQUARED);
         run.clock.tick(moved);
         World world=at.getWorld();
-        for(BlockPos cell:Participants.cellsAtFeet(player.getBoundingBox())) {
+        for(BlockPos cell:Participants.platesPressed(world,player.getBoundingBox())) {
             FreeTriggerStore.Key key=new FreeTriggerStore.Key(world.getUID(),cell);
             if(run.fired.contains(key)) continue;
             Trigger trigger=triggers.get(world.getUID(),cell);

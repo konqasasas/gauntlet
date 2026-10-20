@@ -205,6 +205,7 @@ editor.rank.usage: "/gauntlet rank [プレイヤー] [0〜11]（数を付ける�
 editor.rank.unknown: "プレイヤー <player> が見つかりません（このサーバーに来たことのある名前で指定してください）。"
 editor.rank.show: "<player> のランク：<rank>"
 editor.rank.set: "<player> のランクを <rank> にしました。"
+editor.kit.rearmed: "トリガーをすべて踏み直せるようにしました（セーブより前に踏んだものも）。"
 editor.kit.full: "インベントリに空きを作ってください。"
 editor.kit.given: "設置用ブロックを渡しました。持ってFでセーブ、Qでセーブ地点へ、Shift＋Fでゲームモード切替。"
 editor.kit.legacy: "以前の制作アイテムです。/gauntlet kit を実行すると設置用ブロックだけになります。"
