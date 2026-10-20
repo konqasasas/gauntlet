@@ -33,6 +33,7 @@ final class StateStore {
     }
     Checkpoint checkpoint(UUID owner) { return checkpoints.get(owner); }
     boolean contains(BlockKey key) { return blocks.containsKey(key); }
+    PlacedBlock block(BlockKey key) { return blocks.get(key); }
     List<PlacedBlock> allBlocks() { return List.copyOf(blocks.values()); }
     List<PlacedBlock> blocks(UUID owner) { return blocks.values().stream().filter(b -> b.owner().equals(owner)).toList(); }
     void checkpoint(UUID owner,Checkpoint checkpoint) throws IOException {

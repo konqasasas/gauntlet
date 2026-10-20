@@ -15,5 +15,10 @@ public record Region(int minX,int minY,int minZ,int maxX,int maxY,int maxZ) {
         int bx=(int)Math.floor(x),by=(int)Math.floor(y),bz=(int)Math.floor(z);
         return bx>=minX && bx<=maxX && by>=minY && by<=maxY && bz>=minZ && bz<=maxZ;
     }
+    public Region moved(BlockPos d) { return new Region(minX+d.x(),minY+d.y(),minZ+d.z(),maxX+d.x(),maxY+d.y(),maxZ+d.z()); }
+    public boolean overlaps(Region o) {
+        return minX<=o.maxX && o.minX<=maxX && minY<=o.maxY && o.minY<=maxY && minZ<=o.maxZ && o.minZ<=maxZ;
+    }
+    public long volume() { return (long)sizeX()*sizeY()*sizeZ(); }
     public String describe() { return sizeX()+"×"+sizeY()+"×"+sizeZ()+" ("+minX+", "+minY+", "+minZ+" ~ "+maxX+", "+maxY+", "+maxZ+")"; }
 }

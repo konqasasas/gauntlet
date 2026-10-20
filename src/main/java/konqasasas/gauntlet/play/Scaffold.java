@@ -19,4 +19,6 @@ public interface Scaffold {
     void remove(Player player,Set<Object> blocks);
     /** The opaque key of a block position, as used by placed(). */
     Object key(Block block);
+    /** What was there before, when the block is someone's scaffold (null otherwise). */
+    String before(Block block);
 }

@@ -25,7 +25,8 @@ public final class Sidebar implements Listener {
     public record CourseView(String name,String best,int attempts) {}
     private static final long UPDATE_TICKS=10;
     private static final int MAX_LINES=15;
-    private static final String HIDE_TEAM="gauntlet_names";
+    /** On every board: no name tags and no pushing (players, and the ghosts shown to that board's player). */
+    public static final String HIDE_TEAM="gauntlet_names";
     private final JavaPlugin plugin;
     private final PlayerDisplay display;
     private final PlayerData data;

@@ -82,7 +82,7 @@ runs(id PK, course, rev, player, result, reason, ticks, wall_ms, progress,
 - `result`：`CLEAR` / `FAIL` / `RETIRE` / `QUIT`（途中のログアウト・退出）/ `INVALID`（計測不能）。
 - `reason`：`LAVA` / `OUT` / `TIMEOUT` / `DEATH`（FAILのとき）。
 - `progress`：その挑戦での到達率の最高値（0〜1）。ルート線のないコースでは null。→ [scoreboard.md](scoreboard.md)
-- `lane`：レーン方式の導入後に使う。
+- `lane`：遊んだレーンの番号（1から）。レーン導入前の記録は null。
 - 練習は記録しない（現行どおり）。
 
 ### 個人設定

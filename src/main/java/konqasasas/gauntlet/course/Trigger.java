@@ -27,4 +27,6 @@ public record Trigger(BlockPos pos,List<TriggerAction> actions,String name) {
     }
     public Trigger withActions(List<TriggerAction> value) { return new Trigger(pos,value,name); }
     public Trigger withName(String value) { return new Trigger(pos,actions,value); }
+    /** The plate and every positioned action moved by d. */
+    public Trigger moved(BlockPos d) { return new Trigger(pos.plus(d),actions.stream().map(a -> a.moved(d)).toList(),name); }
 }

@@ -33,7 +33,9 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             COURSE=new Particle.DustOptions(Color.AQUA,1f),START=new Particle.DustOptions(Color.LIME,1.5f),
             GOAL=new Particle.DustOptions(Color.WHITE,.8f),TRIGGER=new Particle.DustOptions(Color.ORANGE,.8f),
             ROUTE=new Particle.DustOptions(Color.FUCHSIA,.7f),ROUTE_POINT=new Particle.DustOptions(Color.FUCHSIA,1.6f),
-            WATER=new Particle.DustOptions(Color.fromRGB(0x3f76e4),.8f);
+            WATER=new Particle.DustOptions(Color.fromRGB(0x3f76e4),.8f),LANE=new Particle.DustOptions(Color.SILVER,1f);
+    /** Lanes whose outline is drawn: those within this many blocks of the builder. */
+    private static final double LANE_OUTLINE_DISTANCE=96;
     final JavaPlugin plugin;
     final CourseStore store;
     final TemplateStore templates;
@@ -41,6 +43,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     final CourseItems items;
     final ChatPrompts prompts;
     final Participants participants;
+    final Lanes lanes;
     private final CourseWand wand;
     private final PlaceMarker marker,waterMarker;
     private final Selections selections=new Selections();
@@ -50,8 +53,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private final Map<UUID,String> editing=new HashMap<>();
     private BukkitTask outlines;
 
-    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants) {
-        this.plugin=plugin; this.store=store; this.templates=templates; this.freeTriggers=freeTriggers; this.items=items; this.participants=participants;
+    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants,Lanes lanes) {
+        this.plugin=plugin; this.store=store; this.templates=templates; this.freeTriggers=freeTriggers; this.items=items; this.participants=participants; this.lanes=lanes;
         wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey,"PLACE_MARKER",Material.LIME_WOOL,"editor.marker.item");
         waterMarker=new PlaceMarker(toolKey,"WATER_MARKER",Material.BLUE_WOOL,"editor.water-marker.item"); prompts=new ChatPrompts(plugin);
         itemMenus=new ItemMenus(this); triggerMenus=new TriggerMenus(this,itemMenus);
@@ -202,6 +205,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(28,Msg.icon(player,Material.LEAD,"editor.edit.route",Msg.arg("count",course.route().size()),
                 Msg.arg("length",String.format(Locale.ROOT,"%.1f",new RouteProgress(course.route()).total()))),e -> editRoute(player,id,e));
         menu.button(29,Msg.icon(player,Material.LIME_WOOL,"editor.edit.placeable",Msg.arg("count",course.placeable().size())),e -> placeableButton(player,id,e));
+        menu.button(30,Msg.icon(player,Material.RAIL,"editor.edit.lanes",Msg.arg("count",course.laneCount()),Msg.arg("waiting",lanes.waitingFor(id))),
+                e -> openLanes(player,id));
         menu.button(31,Msg.icon(player,Material.NETHER_STAR,course.problems().isEmpty() ? "editor.edit.play" : "editor.edit.play-blocked"),
                 e -> { if(admin(player)) participants.enter(player,id,e.isRightClick()); });
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.edit.delete"),e -> openDelete(player,id));
@@ -232,14 +237,28 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private void setRegion(Player player,String id) {
         Selections.Selected selected=selections.selected(player.getUniqueId());
         if(selected==null) { tell(player,"editor.region.no-selection"); return; }
+        Course before=store.get(id);
         update(player,id,c -> c.withRegion(selected.world(),selected.region()));
         tell(player,"editor.region.done",Msg.arg("region",selected.region().describe()));
+        Course after=store.get(id);
+        if(after!=null && !after.lanes().isEmpty() && before!=null && before.world().equals(after.world())) tell(player,"editor.lanes.region-changed");
+    }
+    /**
+     * Only lane 1 is edited: true (and told) when the position is in lane 2 or later.
+     * Lane 1's copies follow it by sync.
+     */
+    boolean inCopy(Player player,Course course,double x,double y,double z) {
+        if(course.lanes().isEmpty() || !player.getWorld().getUID().equals(course.world())) return false;
+        int lane=course.laneAt((int)Math.floor(x),(int)Math.floor(y),(int)Math.floor(z));
+        if(lane<=0) return false;
+        tell(player,"editor.lanes.edit-lane1",Msg.arg("lane",lane+1)); return true;
     }
     private void setStart(Player player,String id) {
         Course course=store.get(id); if(course==null) return;
         Location at=player.getLocation();
         if(!at.getWorld().getUID().equals(course.world())) { tell(player,"editor.same-world",Msg.arg("world",worldName(player,course))); return; }
         if(course.region()==null) { tell(player,"editor.start.no-region"); return; }
+        if(inCopy(player,course,at.getX(),at.getY(),at.getZ())) return;
         Spot spot=new Spot(at.getX(),at.getY(),at.getZ(),at.getYaw(),at.getPitch());
         if(!course.contains(spot)) { tell(player,"editor.start.outside"); return; }
         if(!player.isOnGround()) { tell(player,"editor.start.not-ground"); return; }
@@ -254,6 +273,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         Block goal=GroundGeometry.supporting(at.getWorld(),player.getBoundingBox(),at.getY()).stream()
                 .filter(b -> b.getType()==Material.DIAMOND_BLOCK).findFirst().orElse(null);
         if(goal==null) { tell(player,"editor.goal.not-diamond"); return; }
+        if(inCopy(player,course,goal.getX(),goal.getY(),goal.getZ())) return;
         if(course.region()==null || !course.region().contains(goal.getX(),goal.getY(),goal.getZ())) { tell(player,"editor.goal.outside"); return; }
         BlockPos pos=new BlockPos(goal.getX(),goal.getY(),goal.getZ());
         boolean removing=course.goals().contains(pos);
@@ -285,6 +305,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(!player.getWorld().getUID().equals(course.world())) { tell(player,"editor.same-world",Msg.arg("world",worldName(player,course))); return; }
         if(course.route().size()>=Course.MAX_ROUTE_POINTS) { tell(player,"editor.route.full",Msg.arg("max",Course.MAX_ROUTE_POINTS)); return; }
         Location at=player.getLocation();
+        if(inCopy(player,course,at.getX(),at.getY(),at.getZ())) return;
         // Body center, so the route runs where the player actually is.
         RoutePoint point=new RoutePoint(at.getX(),at.getY()+.9,at.getZ());
         update(player,id,c -> c.edit().addRoutePoint(point).build());
@@ -323,6 +344,110 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.open(player);
     }
 
+    // ---- Lanes ----
+    /** Lane list (state, who plays it), adding lanes, sync from lane 1, removing the last lane. */
+    void openLanes(Player player,String id) {
+        Course course=store.get(id);
+        if(course==null) { tell(player,"editor.deleted",Msg.arg("id",id)); openList(player); return; }
+        Menu menu=new Menu(6,Msg.plain(player,"editor.lanes.title",Msg.arg("name",course.name())));
+        for(int lane=0;lane<Math.min(course.laneCount(),45);lane++) {
+            int index=lane;
+            menu.button(lane,laneIcon(player,course,lane),e -> {
+                Course now=store.get(id); if(now==null || index>=now.laneCount() || now.start()==null) return;
+                Spot s=now.inLane(index).start();
+                teleport(player,now,s.x(),s.y(),s.z(),s.yaw(),s.pitch());
+            });
+        }
+        menu.button(45,Msg.icon(player,Material.ARROW,"editor.back"),e -> openEdit(player,id));
+        menu.label(46,Msg.icon(player,Material.BOOK,"editor.lanes.help"));
+        menu.button(47,Msg.icon(player,Material.LIME_DYE,"editor.lanes.add",Msg.arg("max",Course.MAX_LANES)),e -> askLanes(player,id));
+        menu.button(49,Msg.icon(player,Material.ECHO_SHARD,"editor.lanes.sync"),e -> {
+            if(!admin(player)) return;
+            Course now=store.get(id); if(now==null) return;
+            if(now.lanes().isEmpty()) { tell(player,"editor.lanes.none"); return; }
+            if(now.region()==null) { tell(player,"editor.start.no-region"); return; }
+            List<Integer> all=new ArrayList<>(); for(int lane=1;lane<now.laneCount();lane++) all.add(lane);
+            lanes.sync(now,all,player);
+            tell(player,"editor.lanes.sync-started",Msg.arg("count",all.size()));
+            openLanes(player,id);
+        });
+        menu.button(51,Msg.icon(player,Material.BARRIER,"editor.lanes.remove"),e -> {
+            if(!e.isShiftClick()) { tell(player,"editor.lanes.remove-shift"); return; }
+            Course now=store.get(id); if(now==null) return;
+            if(now.lanes().isEmpty()) { tell(player,"editor.lanes.none"); return; }
+            int last=now.laneCount()-1;
+            if(lanes.state(id,last)==Lanes.State.IN_USE) { tell(player,"editor.lanes.remove-in-use",Msg.arg("lane",last+1)); return; }
+            List<BlockPos> rest=new ArrayList<>(now.lanes()); rest.removeLast();
+            if(!save(player,id,c -> c.edit().lanes(rest).build())) return;
+            lanes.trim(store.get(id));
+            tell(player,"editor.lanes.removed",Msg.arg("lane",last+1));
+            openLanes(player,id);
+        });
+        menu.button(53,Msg.icon(player,Material.CLOCK,"editor.lanes.refresh",Msg.arg("waiting",lanes.waitingFor(id))),e -> openLanes(player,id));
+        menu.open(player);
+    }
+    private ItemStack laneIcon(Player player,Course course,int lane) {
+        Lanes.State state=lanes.state(course.id(),lane);
+        Material material=switch(state) { case FREE -> Material.LIME_CONCRETE; case IN_USE -> Material.ORANGE_CONCRETE; case PENDING -> Material.YELLOW_CONCRETE; case COPYING -> Material.LIGHT_BLUE_CONCRETE; };
+        UUID occupant=lanes.occupant(course.id(),lane);
+        String who=occupant==null ? "" : Optional.ofNullable(Bukkit.getOfflinePlayer(occupant).getName()).orElse(occupant.toString());
+        List<Component> lore=new ArrayList<>();
+        lore.add(line(player,"editor.lanes.state."+state.name(),Msg.arg("player",who),Msg.arg("percent",lanes.percent(course.id(),lane))));
+        lore.add(line(player,"editor.lanes.offset",Msg.arg("offset",course.laneOffset(lane).describe())));
+        Region region=course.laneRegion(lane);
+        if(region!=null) lore.add(line(player,"editor.lanes.region",Msg.arg("region",region.describe())));
+        lore.add(line(player,lane==0 ? "editor.lanes.lane1" : "editor.lanes.click"));
+        ItemStack icon=new ItemStack(material);
+        icon.editMeta(meta -> { meta.displayName(Msg.text(player,"editor.lanes.entry",Msg.arg("lane",lane+1))); meta.lore(lore); });
+        return icon;
+    }
+    /** "4 x 200": four lanes, each 200 further along x than the one before. "4 0 0 -150": the step given directly. */
+    private void askLanes(Player player,String id) {
+        prompts.ask(player,"editor.prompt.lanes",text -> {
+            Course course=store.get(id); if(course==null || !admin(player)) return;
+            if(course.region()==null) { tell(player,"editor.start.no-region"); return; }
+            String[] parts=text.strip().toLowerCase(Locale.ROOT).split("\\s+");
+            int count; BlockPos step;
+            try {
+                count=Integer.parseInt(parts[0]);
+                if(parts.length==3 && parts[1].matches("[xyz]")) {
+                    int d=Integer.parseInt(parts[2]);
+                    step=switch(parts[1]) { case "x" -> new BlockPos(d,0,0); case "y" -> new BlockPos(0,d,0); default -> new BlockPos(0,0,d); };
+                } else if(parts.length==4) step=new BlockPos(Integer.parseInt(parts[1]),Integer.parseInt(parts[2]),Integer.parseInt(parts[3]));
+                else { tell(player,"editor.lanes.input-invalid"); return; }
+            } catch(NumberFormatException e) { tell(player,"editor.lanes.input-invalid"); return; }
+            if(count<1 || course.laneCount()+count>Course.MAX_LANES) { tell(player,"editor.lanes.too-many",Msg.arg("max",Course.MAX_LANES)); return; }
+            if(step.equals(BlockPos.ZERO)) { tell(player,"editor.lanes.input-invalid"); return; }
+            List<BlockPos> next=new ArrayList<>(course.lanes());
+            BlockPos last=course.laneOffset(course.laneCount()-1);
+            for(int i=1;i<=count;i++) next.add(new BlockPos(last.x()+step.x()*i,last.y()+step.y()*i,last.z()+step.z()*i));
+            Course planned;
+            try { planned=course.edit().lanes(next).build(); }
+            catch(IllegalArgumentException e) { tell(player,"editor.lanes.input-invalid"); return; }
+            String problem=laneProblem(planned);
+            if(problem!=null) { tell(player,problem); return; }
+            if(!save(player,id,c -> c.edit().lanes(next).build())) return;
+            List<Integer> added=new ArrayList<>(); for(int lane=course.laneCount();lane<planned.laneCount();lane++) added.add(lane);
+            lanes.sync(planned,added,player);
+            tell(player,"editor.lanes.added",Msg.arg("count",count),Msg.arg("total",planned.laneCount()));
+            openLanes(player,id);
+        },Msg.arg("max",Course.MAX_LANES-1));
+    }
+    /** Why these lanes cannot be placed (message key), or null: overlapping, outside the world's height, or on another course. */
+    private String laneProblem(Course course) {
+        if(course.lanesOverlap()) return "editor.lanes.overlap";
+        World world=Bukkit.getWorld(course.world());
+        for(int lane=1;lane<course.laneCount();lane++) {
+            Region r=course.laneRegion(lane);
+            if(world!=null && (r.minY()<world.getMinHeight() || r.maxY()>=world.getMaxHeight())) return "editor.lanes.height";
+            for(Course other:store.all()) {
+                if(other.id().equals(course.id()) || other.region()==null || !other.world().equals(course.world())) continue;
+                for(int o=0;o<other.laneCount();o++) if(other.laneRegion(o).overlaps(r)) return "editor.lanes.other-course";
+            }
+        }
+        return null;
+    }
+
     // ---- Wand ----
     @EventHandler(priority=EventPriority.HIGHEST)
     public void wandClick(PlayerInteractEvent event) {
@@ -349,6 +474,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         String id=editing.get(player.getUniqueId());
         Course course=id==null ? null : store.get(id);
         if(course==null) { tell(player,"editor.placeable.no-course"); return; }
+        if(inCopy(player,course,block.getX(),block.getY(),block.getZ())) return;
         if(!block.getWorld().getUID().equals(course.world()) || course.region()==null || !course.region().contains(block.getX(),block.getY(),block.getZ())) {
             tell(player,"editor.placeable.outside",Msg.arg("name",course.name())); return;
         }
@@ -403,6 +529,12 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             Course course=editing.containsKey(id) ? store.get(editing.get(id)) : null;
             if(course==null || !course.world().equals(world)) continue;
             if(course.region()!=null) box(player,course.region(),COURSE);
+            Location here=player.getLocation();
+            for(int lane=1;lane<course.laneCount();lane++) {
+                Region r=course.laneRegion(lane);
+                double dx=Math.max(0,Math.max(r.minX()-here.getX(),here.getX()-r.maxX()-1)),dz=Math.max(0,Math.max(r.minZ()-here.getZ(),here.getZ()-r.maxZ()-1));
+                if(dx*dx+dz*dz<=LANE_OUTLINE_DISTANCE*LANE_OUTLINE_DISTANCE) box(player,r,LANE);
+            }
             Spot s=course.start();
             if(s!=null) for(double y=0;y<=2;y+=.25) dust(player,s.x(),s.y()+y,s.z(),START);
             for(BlockPos g:course.goals()) box(player,g.x()-.05,g.y()-.05,g.z()-.05,g.x()+1.05,g.y()+1.05,g.z()+1.05,GOAL);
@@ -462,7 +594,9 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             if(e.world().equals(world)) labels.add(label("free",world,e.trigger()));
         String id=shownCourse(player);
         Course course=id==null ? null : store.get(id);
-        if(course!=null && course.world().equals(world)) for(Trigger t:course.triggers()) labels.add(label(course.id(),world,t));
+        // Every lane shows the labels at its own plates.
+        if(course!=null && course.world().equals(world)) for(int lane=0;lane<course.laneCount();lane++)
+            for(Trigger t:course.triggers()) labels.add(label(course.id(),world,t.moved(course.laneOffset(lane))));
         return labels;
     }
     private TriggerLabels.Label label(String owner,UUID world,Trigger t) {

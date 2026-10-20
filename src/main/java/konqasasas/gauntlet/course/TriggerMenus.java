@@ -49,6 +49,8 @@ final class TriggerMenus {
         void list(Player player);
         /** Where "back" goes from the trigger screen. */
         void back(Player player);
+        /** The course, for course triggers (null for free triggers). */
+        default Course course() { return null; }
     }
     private final CourseEditor editor;
     private final ItemMenus items;
@@ -56,8 +58,10 @@ final class TriggerMenus {
     private record WaterTarget(Host host,BlockPos pos,int index) {}
     /** Cells of a builder's water action, for the particle outlines. */
     record WaterView(UUID world,List<BlockPos> cells) {}
-    /** Copied actions per builder, for pasting onto another plate. */
-    private final Map<UUID,List<TriggerAction>> clipboard=new HashMap<>();
+    /** Actions copied from the plate at from, for pasting onto another plate (as they are, or moved along with the plate). */
+    private record Copied(BlockPos from,List<TriggerAction> actions) {}
+    /** Copied actions per builder. */
+    private final Map<UUID,Copied> clipboard=new HashMap<>();
     private final Map<UUID,WaterTarget> waterTargets=new HashMap<>();
     TriggerMenus(CourseEditor editor,ItemMenus items) { this.editor=editor; this.items=items; }
     void forget(UUID player) { clipboard.remove(player); waterTargets.remove(player); }
@@ -77,6 +81,7 @@ final class TriggerMenus {
             @Override public UUID world() { Course c=editor.store.get(id); return c==null ? null : c.world(); }
             @Override public void list(Player player) { openList(player,id); }
             @Override public void back(Player player) { editor.openEdit(player,id); }
+            @Override public Course course() { return editor.store.get(id); }
         };
     }
     private Host free(UUID world) {
@@ -109,6 +114,7 @@ final class TriggerMenus {
         Block feet=player.getLocation().getBlock();
         if(feet.getType()!=Material.HEAVY_WEIGHTED_PRESSURE_PLATE) { editor.tell(player,"editor.trigger.not-plate"); return; }
         BlockPos pos=new BlockPos(feet.getX(),feet.getY(),feet.getZ());
+        if(editor.inCopy(player,course,pos.x(),pos.y(),pos.z())) return;
         if(course.region()==null || !course.region().contains(pos.x(),pos.y(),pos.z())) { editor.tell(player,"editor.trigger.outside"); return; }
         if(course.trigger(pos)==null) {
             if(!editor.save(player,id,c -> c.edit().trigger(new Trigger(pos,List.of())).build())) return;
@@ -231,22 +237,38 @@ final class TriggerMenus {
         });
         menu.button(31,Msg.icon(player,Material.ENDER_PEARL,"editor.trigger.go"),e -> editor.teleport(player,host.world(),pos.x()+.5,pos.y(),pos.z()+.5,player.getYaw(),player.getPitch()));
         menu.button(33,Msg.icon(player,Material.PAPER,"editor.trigger.copy",Msg.arg("count",trigger.actions().size())),e -> {
-            clipboard.put(player.getUniqueId(),trigger.actions());
+            clipboard.put(player.getUniqueId(),new Copied(pos,trigger.actions()));
             editor.tell(player,"editor.trigger.copied",Msg.arg("count",trigger.actions().size()));
         });
-        List<TriggerAction> copied=clipboard.get(player.getUniqueId());
+        Copied copied=clipboard.get(player.getUniqueId());
+        BlockPos shift=copied==null ? BlockPos.ZERO : pos.minus(copied.from());
         menu.button(34,Msg.icon(player,Material.MAP,copied==null ? "editor.trigger.paste-empty" : "editor.trigger.paste",
-                Msg.arg("count",copied==null ? 0 : copied.size())),e -> {
-            List<TriggerAction> actions=clipboard.get(player.getUniqueId());
-            if(actions==null) { editor.tell(player,"editor.trigger.paste-none"); return; }
+                Msg.arg("count",copied==null ? 0 : copied.actions().size()),Msg.arg("shift",shift.describe())),e -> {
+            Copied now=clipboard.get(player.getUniqueId());
+            if(now==null) { editor.tell(player,"editor.trigger.paste-none"); return; }
             if(!trigger.actions().isEmpty() && !e.isShiftClick()) { editor.tell(player,"editor.trigger.paste-shift"); return; }
-            if(host.change(player,pos,t -> t.withActions(actions))) { editor.tell(player,"editor.trigger.pasted",Msg.arg("count",actions.size())); openTrigger(player,host,pos); }
+            // Right click: mob spots and water cells move with the plate (same layout around this plate).
+            BlockPos d=e.isRightClick() ? pos.minus(now.from()) : BlockPos.ZERO;
+            List<TriggerAction> actions=now.actions().stream().map(a -> a.moved(d)).toList();
+            Course course=host.course();
+            if(course!=null && actions.stream().anyMatch(a -> outsideLane1(course,a))) { editor.tell(player,"editor.trigger.paste-other-lane"); return; }
+            if(host.change(player,pos,t -> t.withActions(actions)))
+                { editor.tell(player,d.equals(BlockPos.ZERO) ? "editor.trigger.pasted" : "editor.trigger.pasted-moved",Msg.arg("count",actions.size()),Msg.arg("shift",d.describe())); openTrigger(player,host,pos); }
         });
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.trigger.delete"),e -> {
             if(!e.isShiftClick()) { editor.tell(player,"editor.trigger.delete-shift"); return; }
             if(host.delete(player,pos)) { editor.tell(player,"editor.trigger.delete-done"); host.list(player); }
         });
         menu.open(player);
+    }
+    /** True when a mob spot or water cell of the action lies in lane 2 or later of the course (only lane 1 is edited). */
+    private static boolean outsideLane1(Course course,TriggerAction a) {
+        if(course.lanes().isEmpty()) return false;
+        return switch(a.type()) {
+            case MOB -> course.laneAt((int)Math.floor(a.mobAt().x()),(int)Math.floor(a.mobAt().y()),(int)Math.floor(a.mobAt().z()))>0;
+            case WATER -> a.waterCells().stream().anyMatch(c -> course.laneAt(c.x(),c.y(),c.z())>0);
+            default -> false;
+        };
     }
     private void addAction(Player player,Host host,BlockPos pos,TriggerAction action) {
         if(host.change(player,pos,t -> {
@@ -284,6 +306,8 @@ final class TriggerMenus {
         TriggerAction action=target==null ? null : waterAction(target);
         if(action==null) { waterTargets.remove(player.getUniqueId()); editor.tell(player,"editor.water.no-target"); return; }
         if(!block.getWorld().getUID().equals(target.host().world())) { editor.tell(player,"editor.water.other-world"); return; }
+        Course course=target.host().course();
+        if(course!=null && editor.inCopy(player,course,block.getX(),block.getY(),block.getZ())) return;
         BlockPos cell=new BlockPos(block.getX(),block.getY(),block.getZ());
         boolean removing=action.waterCells().contains(cell);
         if(!removing && action.waterCells().size()>=TriggerAction.MAX_WATER_CELLS) { editor.tell(player,"editor.water.full",Msg.arg("max",TriggerAction.MAX_WATER_CELLS)); return; }
@@ -335,6 +359,8 @@ final class TriggerMenus {
             Spot spot=spec.position()==null ? new Spot(at.getX(),at.getY(),at.getZ(),at.getYaw(),at.getPitch())
                     : new Spot(spec.position()[0],spec.position()[1],spec.position()[2],0,0);
             TriggerAction action=TriggerAction.mob(spec.stored(),spot);
+            Course course=host.course();
+            if(course!=null && editor.inCopy(player,course,spot.x(),spot.y(),spot.z())) return;
             if(replace<0) addAction(player,host,pos,action); else replaceAction(player,host,pos,replace,action);
             editor.tell(player,"editor.mob.position",Msg.arg("spot",spot.describe()));
         });
@@ -386,6 +412,8 @@ final class TriggerMenus {
                 menu.button(10,Msg.icon(player,Material.WRITABLE_BOOK,"editor.action.mob-input",Msg.arg("mob",action.mob())),e -> askMob(player,host,pos,index));
                 menu.button(11,Msg.icon(player,Material.COMPASS,"editor.action.mob-here",Msg.arg("spot",action.mobAt().describe())),e -> {
                     Location at=player.getLocation();
+                    Course course=host.course();
+                    if(course!=null && editor.inCopy(player,course,at.getX(),at.getY(),at.getZ())) return;
                     replaceAction(player,host,pos,index,TriggerAction.mob(action.mob(),new Spot(at.getX(),at.getY(),at.getZ(),at.getYaw(),at.getPitch())));
                 });
                 menu.button(12,Msg.icon(player,Material.ENDER_PEARL,"editor.action.mob-go"),

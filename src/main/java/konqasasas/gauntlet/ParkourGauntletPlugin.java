@@ -53,6 +53,8 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private KitRuns kit;
     private WaterFlows water;
     private TriggerLabels triggerLabels;
+    private Lanes lanes;
+    private Ghosts ghosts;
     private final Set<UUID> pendingRefills=new HashSet<>();
     private final LavaExtinguishTracker lavaExtinguish=new LavaExtinguishTracker();
     private final Set<UUID> pendingLavaRetries=new HashSet<>();
@@ -95,12 +97,14 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
                     catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Scaffold cleanup incomplete; journal retained",e); }
                 }
                 @Override public Object key(Block block) { return ParkourGauntletPlugin.key(block); }
+                @Override public String before(Block block) { PlacedBlock placed=state.block(ParkourGauntletPlugin.key(block)); return placed==null ? null : placed.before(); }
             };
             FreeTriggerStore freeTriggers=new FreeTriggerStore(data.resolve("triggers.json"));
             courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
             water=new WaterFlows(this,data.resolve("water.json"));
             water.start();
-            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems,water);
+            lanes=new Lanes(this,courseStore,scaffold,water,data.resolve("lanes.json"));
+            participants=new Participants(this,courseStore,runs,playerData,new ReturnStore(data.resolve("participants.json")),scaffold,courseItems,water,lanes);
 
             DisplayStyle style;
             try { style=DisplayStyle.load(getClassLoader(),data.resolve("display.yml"),getLogger()); }
@@ -114,12 +118,17 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             Teleports.beforeTeleport(nameTags::detach);
             visibility=new Visibility(this,playerData,nameTags);
             participants.visibility(visibility);
+            // In a course, other players are seen only as ghosts in your own lane.
+            visibility.hideWhile(participants::active);
+            ghosts=new Ghosts(this,courseStore,participants,visibility::shown);
             lobby=new Lobby(this,scaffold,visibility,participants::active);
             tabList=new TabList(this,display);
             sidebar=new Sidebar(this,display,playerData,this::courseView);
 
             participants.start();
-            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants);
+            lanes.start();
+            ghosts.start();
+            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes);
             courses.start();
             kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint);
             kit.start();
@@ -129,7 +138,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             // Players in a course see its cells; builders see the course they hold the wand or marker for.
             placeable=new PlaceableDisplays(this,courseStore,p -> {
                 Participants.View view=participants.view(p);
-                return view!=null ? view.course() : courses.shownCourse(p);
+                if(view!=null) return new PlaceableDisplays.Shown(view.course(),view.lane());
+                String shown=courses.shownCourse(p);
+                return shown==null ? null : new PlaceableDisplays.Shown(shown,0);
             });
             placeable.start();
             nameTags.start();
@@ -169,7 +180,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(tabList!=null) tabList.stop();
         if(nameTags!=null) nameTags.stop();
         if(visibility!=null) visibility.stop();
+        if(ghosts!=null) ghosts.stop();
         if(participants!=null) participants.stop();
+        if(lanes!=null) lanes.stop();
         if(water!=null) water.stop();
         if(state!=null) try { cleanup(state.allBlocks()); }
         catch(IOException|RuntimeException e) { getLogger().log(Level.SEVERE,"Cleanup incomplete; journal retained for next start",e); }

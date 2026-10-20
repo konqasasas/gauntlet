@@ -15,23 +15,28 @@ import org.joml.*;
 /**
  * Placeable cells shown as small lime wool cubes (BlockDisplay). A course's cubes
  * exist only while someone needs them, and only those players see them: players
- * in that course, and builders holding the wand or marker for it. Never saved.
+ * in that course, and builders holding the wand or marker for it. Each lane has
+ * its own cubes, at its own cells. Never saved.
  */
 public final class PlaceableDisplays implements Listener {
+    /** The course and lane (0 = lane 1) whose cells a player should see. */
+    public record Shown(String course,int lane) {
+        String key() { return course+"#"+lane; }
+    }
     static final String TAG="gauntlet_placeable";
     private static final long SYNC_TICKS=10;
     private static final float SIZE=.25f;
     private final JavaPlugin plugin;
     private final CourseStore courses;
-    /** The course whose cells this player should see, or null. */
-    private final Function<Player,String> shownCourse;
-    /** course id -> cell -> display */
+    /** The course and lane whose cells this player should see, or null. */
+    private final Function<Player,Shown> shownCourse;
+    /** course#lane -> cell -> display */
     private final Map<String,Map<BlockPos,BlockDisplay>> displays=new HashMap<>();
-    /** player -> course whose cubes they currently see */
+    /** player -> course#lane whose cubes they currently see */
     private final Map<UUID,String> viewing=new HashMap<>();
     private BukkitTask task;
 
-    public PlaceableDisplays(JavaPlugin plugin,CourseStore courses,Function<Player,String> shownCourse) {
+    public PlaceableDisplays(JavaPlugin plugin,CourseStore courses,Function<Player,Shown> shownCourse) {
         this.plugin=plugin; this.courses=courses; this.shownCourse=shownCourse;
     }
     public void start() {
@@ -46,19 +51,22 @@ public final class PlaceableDisplays implements Listener {
     }
 
     private void sync() {
-        Map<String,List<Player>> wanted=new HashMap<>();
+        Map<String,Course> wanted=new HashMap<>();
+        Map<UUID,String> keys=new HashMap<>();
         for(Player player:Bukkit.getOnlinePlayers()) {
-            String id=shownCourse.apply(player);
-            Course course=id==null ? null : courses.get(id);
-            if(course!=null && !course.placeable().isEmpty()) wanted.computeIfAbsent(id,k -> new ArrayList<>()).add(player);
+            Shown shown=shownCourse.apply(player);
+            Course course=shown==null ? null : courses.get(shown.course());
+            if(course==null || course.placeable().isEmpty() || shown.lane()>=course.laneCount()) continue;
+            wanted.putIfAbsent(shown.key(),course.inLane(shown.lane()));
+            keys.put(player.getUniqueId(),shown.key());
         }
-        // Courses nobody needs: remove their cubes.
-        for(String id:List.copyOf(displays.keySet())) if(!wanted.containsKey(id)) { displays.remove(id).values().forEach(Entity::remove); }
-        for(var entry:wanted.entrySet()) update(courses.get(entry.getKey()));
+        // Lanes nobody needs: remove their cubes.
+        for(String key:List.copyOf(displays.keySet())) if(!wanted.containsKey(key)) { displays.remove(key).values().forEach(Entity::remove); }
+        wanted.forEach(this::update);
         // Show or hide per viewer.
         viewing.keySet().removeIf(id -> Bukkit.getPlayer(id)==null);
         for(Player player:Bukkit.getOnlinePlayers()) {
-            String id=shownCourse.apply(player);
+            String id=keys.get(player.getUniqueId());
             if(id!=null && !displays.containsKey(id)) id=null;
             String before=viewing.get(player.getUniqueId());
             if(Objects.equals(before,id)) { if(id!=null) showAll(player,id); continue; }
@@ -71,9 +79,9 @@ public final class PlaceableDisplays implements Listener {
     private void showAll(Player player,String id) {
         for(BlockDisplay d:displays.get(id).values()) if(!player.canSee(d)) player.showEntity(plugin,d);
     }
-    /** Makes the course's cubes match its cells. */
-    private void update(Course course) {
-        Map<BlockPos,BlockDisplay> cells=displays.computeIfAbsent(course.id(),k -> new HashMap<>());
+    /** Makes the lane's cubes match its cells (course is the copy moved into that lane). */
+    private void update(String key,Course course) {
+        Map<BlockPos,BlockDisplay> cells=displays.computeIfAbsent(key,k -> new HashMap<>());
         World world=Bukkit.getWorld(course.world());
         Set<BlockPos> target=new HashSet<>(course.placeable());
         cells.entrySet().removeIf(e -> {

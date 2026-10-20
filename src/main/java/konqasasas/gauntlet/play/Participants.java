@@ -53,7 +53,9 @@ public final class Participants implements Listener {
     private record Save(Location at,ItemStack[] contents,List<PotionEffect> effects,Set<BlockPos> fired,Set<Object> scaffold,
                         Map<String,List<CourseMobs.Saved>> mobs,List<WaterFlows.Saved> water,double along) {}
     private static final class Session {
-        final String course; boolean practice; int rev;
+        final String course; final int lane; boolean practice; int rev;
+        /** The course definition and its copy moved into this lane (rebuilt when the definition changes). */
+        Course base,laned;
         final RunClock clock=new RunClock();
         int lastClientTick; long startNanos,startedAt; boolean unmeasured,goalReached,flew;
         RunRecord.Reason pendingFail;
@@ -63,11 +65,11 @@ public final class Participants implements Listener {
         final Set<BlockPos> fired=new HashSet<>();
         final Map<String,List<UUID>> mobs=new HashMap<>();
         Save save,previousSave;
-        Session(String course,boolean practice) { this.course=course; this.practice=practice; }
+        Session(String course,int lane,boolean practice) { this.course=course; this.lane=lane; this.practice=practice; }
         Double progress() { return route.usable() ? route.fraction(furthest) : null; }
     }
-    /** What the sidebar shows about a player's current course. */
-    public record View(String course,boolean practice) {}
+    /** What the sidebar shows about a player's current course. lane: 0 = lane 1. */
+    public record View(String course,int lane,boolean practice) {}
     private final JavaPlugin plugin;
     private final CourseStore courses;
     private final RunLog runs;
@@ -80,12 +82,15 @@ public final class Participants implements Listener {
     private final TriggerActions actions;
     private final NamespacedKey itemKey;
     private final Map<UUID,Session> sessions=new HashMap<>();
+    private final Lanes lanes;
     private Visibility visibility;
 
-    public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items,WaterFlows water) {
+    public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items,WaterFlows water,Lanes lanes) {
         this.plugin=plugin; this.courses=courses; this.runs=runs; this.data=data; this.returns=returns; this.scaffold=scaffold; this.items=items; this.water=water;
+        this.lanes=lanes;
         itemKey=new NamespacedKey(plugin,"play");
         actions=new TriggerActions(items,mobs,water);
+        lanes.admit(this::admitted,this::active);
     }
     /** Shared with the builder kit: one tracker, so neither removes the other's mobs as leftovers. */
     CourseMobs mobs() { return mobs; }
@@ -110,7 +115,20 @@ public final class Participants implements Listener {
     public boolean active(Player player) { return sessions.containsKey(player.getUniqueId()); }
     public View view(Player player) {
         Session session=sessions.get(player.getUniqueId());
-        return session==null ? null : new View(session.course,session.practice);
+        return session==null ? null : new View(session.course,session.lane,session.practice);
+    }
+    /** Everyone in a course, with their lane. */
+    public Map<UUID,View> views() {
+        Map<UUID,View> views=new HashMap<>();
+        sessions.forEach((id,s) -> views.put(id,new View(s.course,s.lane,s.practice)));
+        return views;
+    }
+    /** The course as played in the session's lane; null when it was deleted or lost that lane. */
+    private Course course(Session session) {
+        Course base=courses.get(session.course);
+        if(base==null || session.lane>=base.laneCount()) return null;
+        if(base!=session.base) { session.base=base; session.laned=base.inLane(session.lane); }
+        return session.laned;
     }
 
     // ---- Entering and leaving ----
@@ -125,21 +143,37 @@ public final class Participants implements Listener {
         if(!player.hasPermission(ADMIN) && course.status()!=CourseStatus.DONE) { Msg.send(player,"play.enter.unpublished"); return; }
         if(Bukkit.getWorld(course.world())==null) { Msg.send(player,"play.enter.world-unloaded"); return; }
         UUID uuid=player.getUniqueId();
+        // Every lane taken (or being synced): wait in line; the current course, if any, goes on meanwhile.
+        int lane=lanes.claim(course,uuid);
+        if(lane<0) {
+            Msg.send(player,"play.lane.waiting",Msg.arg("course",course.name()),Msg.arg("position",lanes.enqueue(uuid,id,practice)));
+            return;
+        }
+        lanes.dequeue(uuid);
         Session previous=sessions.remove(uuid);
         if(previous!=null) { record(player,previous,RunRecord.Result.RETIRE,null); mobs.remove(allMobs(previous)); scaffold.clear(player); water.clear(player); }
         // Keep an older entry: it holds the inventory from before any participant run.
         else if(returns.get(uuid)==null) {
             try { returns.put(uuid,capture(player)); }
-            catch(IOException|RuntimeException e) { failure(player,"play.enter.save-failed",e); return; }
+            catch(IOException|RuntimeException e) { lanes.release(uuid); failure(player,"play.enter.save-failed",e); return; }
         }
-        Session session=new Session(id,practice); sessions.put(uuid,session);
+        Session session=new Session(id,lane,practice); sessions.put(uuid,session);
+        Course laned=course(session);
         player.closeInventory();
         player.setAllowFlight(false);
-        if(!toStart(player,course)) { end(player); return; }
-        reset(player,session,course);
+        if(!toStart(player,laned)) { end(player); return; }
+        reset(player,session,laned);
+        if(visibility!=null) visibility.apply(player);
         Msg.send(player,practice ? "play.enter.practice" : "play.enter.official",Msg.arg("course",course.name()));
+        if(course.laneCount()>1) Msg.send(player,"play.lane.entered",Msg.arg("lane",lane+1),Msg.arg("count",course.laneCount()));
+    }
+    /** A waiting player whose turn came. */
+    private void admitted(Player player,String course,boolean practice) {
+        Sounds.system(player,Sound.BLOCK_NOTE_BLOCK_PLING,1f,1.5f);
+        enter(player,course,practice);
     }
     public void leave(Player player) {
+        if(lanes.dequeue(player.getUniqueId())) { Msg.send(player,"play.lane.left-queue"); if(!active(player)) return; }
         if(sessions.containsKey(player.getUniqueId())) { end(player); Msg.send(player,"play.leave.done"); }
         else if(returns.get(player.getUniqueId())!=null) { restore(player); Msg.send(player,"play.leave.restored"); }
         else Msg.send(player,"play.leave.not-active");
@@ -147,10 +181,12 @@ public final class Participants implements Listener {
     private void end(Player player) {
         Session session=sessions.remove(player.getUniqueId());
         if(session!=null) { record(player,session,RunRecord.Result.QUIT,null); mobs.remove(allMobs(session)); }
+        lanes.release(player.getUniqueId());
         scaffold.clear(player); water.clear(player); stopMotion(player);
         for(PotionEffect effect:player.getActivePotionEffects()) player.removePotionEffect(effect.getType());
         player.sendActionBar(Component.empty());
         restore(player);
+        if(visibility!=null) visibility.apply(player);
     }
     private ReturnStore.Saved capture(Player player) {
         Location at=player.getLocation();
@@ -228,7 +264,7 @@ public final class Participants implements Listener {
     }
     /** Q on slot 1, failure: back to the start (official) or the save point (practice). */
     private void restart(Player player,Session session) {
-        Course course=courses.get(session.course);
+        Course course=course(session);
         if(course==null || !course.problems().isEmpty()) { end(player); Msg.send(player,"play.course-changed"); return; }
         record(player,session,RunRecord.Result.RETIRE,null);
         if(session.practice && session.save!=null) load(player,session);
@@ -286,7 +322,7 @@ public final class Participants implements Listener {
         systemItems(player,session);
     }
     private void switchMode(Player player,Session session) {
-        Course course=courses.get(session.course); if(course==null) { end(player); return; }
+        Course course=course(session); if(course==null) { end(player); return; }
         record(player,session,RunRecord.Result.RETIRE,null);
         session.practice=!session.practice; session.save=null; session.previousSave=null;
         if(toStart(player,course)) reset(player,session,course);
@@ -314,7 +350,7 @@ public final class Participants implements Listener {
         try {
             runs.append(new RunRecord(UUID.randomUUID(),session.course,session.rev,player.getUniqueId(),result,reason==null ? null : reason.name(),
                     ticks,session.startedAt>0 ? now-session.startedAt : null,progress,session.startedAt>0 ? session.startedAt : null,now,
-                    at.getX(),at.getY(),at.getZ(),null,plugin.getPluginMeta().getVersion()));
+                    at.getX(),at.getY(),at.getZ(),session.lane+1,plugin.getPluginMeta().getVersion()));
         } catch(RuntimeException e) { plugin.getLogger().log(Level.SEVERE,"Cannot record run",e); }
     }
     private void goal(Player player,Session session,Course course) {
@@ -372,7 +408,7 @@ public final class Participants implements Listener {
         Player player=event.getPlayer(); Session session=sessions.get(player.getUniqueId());
         if(session==null) return;
         session.lastClientTick=Bukkit.getCurrentTick();
-        Course course=courses.get(session.course);
+        Course course=course(session);
         if(course==null || !course.problems().isEmpty()) { end(player); Msg.send(player,"play.course-changed"); return; }
         if(player.isDead()) return;
         Location at=player.getLocation(); boolean sameWorld=at.getWorld().getUID().equals(course.world());
@@ -414,7 +450,7 @@ public final class Participants implements Listener {
     @EventHandler public void serverTick(ServerTickEndEvent event) {
         int now=Bukkit.getCurrentTick();
         for(var entry:List.copyOf(sessions.entrySet())) {
-            Session session=entry.getValue(); Player player=Bukkit.getPlayer(entry.getKey()); Course course=courses.get(session.course);
+            Session session=entry.getValue(); Player player=Bukkit.getPlayer(entry.getKey()); Course course=course(session);
             if(player==null || course==null || player.isDead()) continue;
             if(session.pendingFail!=null && !session.goalReached) {
                 // Damage callbacks only flag the failure; teleporting there can be undone by the rest of that movement.
@@ -490,7 +526,7 @@ public final class Participants implements Listener {
     public void placeOutside(BlockPlaceEvent event) {
         Session session=sessions.get(event.getPlayer().getUniqueId());
         if(session==null || session.goalReached) return;
-        Course course=courses.get(session.course);
+        Course course=course(session);
         var block=event.getBlockPlaced();
         if(course==null || course.canPlace(block.getX(),block.getY(),block.getZ())) return;
         event.setCancelled(true);
@@ -507,7 +543,7 @@ public final class Participants implements Listener {
     public void damage(EntityDamageEvent event) {
         if(!(event.getEntity() instanceof Player player)) return;
         Session session=sessions.get(player.getUniqueId()); if(session==null) return;
-        Course course=courses.get(session.course); if(course==null || !course.failLava()) return;
+        Course course=course(session); if(course==null || !course.failLava()) return;
         if(event.getCause()==EntityDamageEvent.DamageCause.LAVA) { event.setCancelled(true); if(!session.goalReached) session.pendingFail=RunRecord.Reason.LAVA; }
         else if(event.getCause()==EntityDamageEvent.DamageCause.FIRE_TICK) { event.setCancelled(true); player.setFireTicks(0); }
     }
@@ -515,7 +551,7 @@ public final class Participants implements Listener {
     public void combust(EntityCombustByBlockEvent event) {
         if(!(event.getEntity() instanceof Player player)) return;
         Session session=sessions.get(player.getUniqueId()); if(session==null) return;
-        Course course=courses.get(session.course); if(course==null || !course.failLava()) return;
+        Course course=course(session); if(course==null || !course.failLava()) return;
         Block source=event.getCombuster();
         if((source!=null && source.getType()==Material.LAVA) || (source==null && player.isInLava())) {
             event.setCancelled(true); if(!session.goalReached) session.pendingFail=RunRecord.Reason.LAVA;
@@ -600,7 +636,7 @@ public final class Participants implements Listener {
     public void respawn(PlayerRespawnEvent event) {
         Player player=event.getPlayer(); Session session=sessions.get(player.getUniqueId());
         if(session==null) return;
-        Course course=courses.get(session.course);
+        Course course=course(session);
         World world=course==null ? null : Bukkit.getWorld(course.world());
         if(course==null || world==null || course.start()==null) return;
         Spot s=course.start();
@@ -610,7 +646,7 @@ public final class Participants implements Listener {
             if(session.practice && session.save!=null) load(player,session); else reset(player,session,course);
         });
     }
-    @EventHandler public void quit(PlayerQuitEvent event) { if(active(event.getPlayer())) end(event.getPlayer()); }
+    @EventHandler public void quit(PlayerQuitEvent event) { lanes.dequeue(event.getPlayer().getUniqueId()); if(active(event.getPlayer())) end(event.getPlayer()); }
     @EventHandler public void join(PlayerJoinEvent event) {
         Player player=event.getPlayer();
         if(returns.get(player.getUniqueId())!=null) Bukkit.getScheduler().runTask(plugin,() -> { if(player.isOnline() && !active(player)) restore(player); });
