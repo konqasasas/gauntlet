@@ -45,6 +45,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private TabList tabList;
     private Sidebar sidebar;
     private PlaceableDisplays placeable;
+    private FreePlaceableDisplays freePlaceableDisplays;
     private InvisibleGear invisibleGear;
     private DialogMenu menu;
     private PlayerDisplay display;
@@ -103,6 +104,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
                 @Override public String before(Block block) { PlacedBlock placed=state.block(ParkourGauntletPlugin.key(block)); return placed==null ? null : placed.before(); }
             };
             FreeTriggerStore freeTriggers=new FreeTriggerStore(data.resolve("triggers.json"));
+            FreePlaceableStore freePlaceable=new FreePlaceableStore(data.resolve("placeable.json"));
             courseItems=new CourseItems(templateStore,scaffold,new NamespacedKey(this,"course_item"));
             water=new WaterFlows(this,data.resolve("water.json"));
             water.start();
@@ -134,9 +136,10 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             participants.start();
             lanes.start();
             ghosts.start();
-            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes,spaces);
+            courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes,spaces,freePlaceable);
             courses.start();
-            kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint);
+            kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint,
+                    freePlaceable,item -> tools.kind(item)==ToolItems.Kind.SCAFFOLD,this::retry);
             kit.start();
             // The kit block in hand shows free triggers, but not to someone playing a course (they hold the same block).
             triggerLabels=new TriggerLabels(this,p -> courses.triggerLabels(p,!participants.active(p) && tools.kind(p.getInventory().getItemInMainHand())==ToolItems.Kind.SCAFFOLD));
@@ -149,6 +152,10 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
                 return shown==null ? null : new PlaceableDisplays.Shown(shown,0);
             });
             placeable.start();
+            // Cells outside the courses: to builders holding the kit block or the marker, not while playing a course.
+            freePlaceableDisplays=new FreePlaceableDisplays(this,freePlaceable,p -> p.hasPermission("gauntlet.admin") && !participants.active(p)
+                    && (tools.kind(p.getInventory().getItemInMainHand())==ToolItems.Kind.SCAFFOLD || courses.holdsMarker(p)));
+            freePlaceableDisplays.start();
             nameTags.start();
             visibility.start();
             lobby.start();
@@ -176,6 +183,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     @Override public void onDisable() {
         if(packs!=null) packs.stop();
         if(placeable!=null) placeable.stop();
+        if(freePlaceableDisplays!=null) freePlaceableDisplays.stop();
         if(triggerLabels!=null) triggerLabels.stop();
         if(kit!=null) kit.stop();
         if(invisibleGear!=null) invisibleGear.stop();
@@ -248,13 +256,15 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(!allowed(player)) return true;
         if(args.length==1 && args[0].equalsIgnoreCase("trigger")) { courses.freeTriggers(player); return true; }
         if(args.length>=1 && args[0].equalsIgnoreCase("rank")) { rankCommand(player,args); return true; }
+        if(args.length==1 && args[0].equalsIgnoreCase("placeable")) { kit.toggleLimit(player); return true; }
+        if(args.length==1 && args[0].equalsIgnoreCase("marker")) { courses.giveMarker(player); return true; }
         if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"editor.kit.usage"); return true; }
         if(!tools.grant(player)) tell(player,"editor.kit.full");
         else tell(player,"editor.kit.given");
         return true;
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
-        if(args.length==1) return List.of("kit","trigger","reload","rank").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
+        if(args.length==1) return List.of("kit","trigger","reload","rank","placeable","marker").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display","packs");
         if(args.length==2 && args[0].equalsIgnoreCase("rank"))
             return Bukkit.getOnlinePlayers().stream().map(Player::getName).filter(n -> n.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))).toList();

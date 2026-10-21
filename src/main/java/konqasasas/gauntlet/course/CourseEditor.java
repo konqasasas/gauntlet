@@ -46,6 +46,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     final Participants participants;
     final Lanes lanes;
     final Spaces spaces;
+    final FreePlaceableStore freePlaceable;
     private final CourseWand wand;
     private final PlaceMarker marker,waterMarker;
     private final Selections selections=new Selections();
@@ -56,7 +57,9 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private final Map<UUID,String> editing=new HashMap<>();
     private BukkitTask outlines;
 
-    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants,Lanes lanes,Spaces spaces) {
+    public CourseEditor(JavaPlugin plugin,CourseStore store,TemplateStore templates,FreeTriggerStore freeTriggers,CourseItems items,NamespacedKey toolKey,Participants participants,Lanes lanes,Spaces spaces,
+                        FreePlaceableStore freePlaceable) {
+        this.freePlaceable=freePlaceable;
         this.plugin=plugin; this.store=store; this.templates=templates; this.freeTriggers=freeTriggers; this.items=items; this.participants=participants; this.lanes=lanes;
         this.spaces=spaces;
         wand=new CourseWand(toolKey); marker=new PlaceMarker(toolKey,"PLACE_MARKER",Material.LIME_WOOL,"editor.marker.item");
@@ -315,6 +318,22 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(event.isRightClick() && event.isShiftClick()) {
             update(player,id,c -> c.edit().clearPlaceable().build()); tell(player,"editor.placeable.cleared"); return;
         }
+        // Shift+left: the cells registered outside the courses (for the kit) inside this course's box become the course's.
+        if(event.isLeftClick() && event.isShiftClick()) {
+            Course course=store.get(id); if(course==null || !admin(player)) return;
+            if(course.region()==null) { tell(player,"editor.start.no-region"); return; }
+            List<BlockPos> taken;
+            try { taken=freePlaceable.take(course.world(),course.region()); }
+            catch(IOException e) { failure(player,"editor.placeable.free-save-failed",e); return; }
+            if(taken.isEmpty()) { tell(player,"editor.placeable.import-none"); return; }
+            update(player,id,c -> { var b=c.edit(); for(BlockPos p:taken) if(!c.placeable().contains(p)) b.togglePlaceable(p); return b.build(); });
+            tell(player,"editor.placeable.imported",Msg.arg("count",taken.size()));
+            return;
+        }
+        giveMarker(player);
+    }
+    /** The placeable cell marker (also /gauntlet marker, for cells outside the courses). */
+    public void giveMarker(Player player) {
         if(!admin(player)) return;
         for(ItemStack item:player.getInventory().getContents()) if(marker.is(item)) { tell(player,"editor.marker.already"); return; }
         if(!player.getInventory().addItem(marker.create(player)).isEmpty()) tell(player,"editor.kit.full");
@@ -519,9 +538,14 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         event.setCancelled(true);
         Player player=event.getPlayer(); Block block=event.getBlockPlaced();
         if(!admin(player)) return;
+        BlockPos at=new BlockPos(block.getX(),block.getY(),block.getZ());
+        // Outside every course (and its lanes): a cell for trying out with the kit.
+        Course owner=courseAt(block.getWorld().getUID(),at);
+        if(owner==null) { toggleFreeCell(player,block.getWorld().getUID(),at); return; }
         String id=editing.get(player.getUniqueId());
         Course course=id==null ? null : store.get(id);
         if(course==null) { tell(player,"editor.placeable.no-course"); return; }
+        if(!owner.id().equals(course.id())) { tell(player,"editor.placeable.other-course",Msg.arg("name",owner.name()),Msg.arg("editing",course.name())); return; }
         if(inCopy(player,course,block.getX(),block.getY(),block.getZ())) return;
         if(!block.getWorld().getUID().equals(course.world()) || course.region()==null || !course.region().contains(block.getX(),block.getY(),block.getZ())) {
             tell(player,"editor.placeable.outside",Msg.arg("name",course.name())); return;
@@ -531,6 +555,22 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(save(player,id,c -> c.edit().togglePlaceable(cell).build()))
             Msg.actionBar(player,removing ? "editor.placeable.removed" : "editor.placeable.added",Msg.arg("pos",cell.describe()),
                     Msg.arg("count",course.placeable().size()+(removing ? -1 : 1)));
+    }
+    /** The course whose box (in any of its lanes) holds the cell, or null. */
+    private Course courseAt(UUID world,BlockPos at) {
+        for(Course c:store.all()) {
+            if(c.region()==null || !c.world().equals(world)) continue;
+            Space space=spaces.of(c);
+            for(int lane=0;lane<space.laneCount();lane++) if(c.region().moved(space.laneOffset(lane)).contains(at.x(),at.y(),at.z())) return c;
+        }
+        return null;
+    }
+    private void toggleFreeCell(Player player,UUID world,BlockPos cell) {
+        try {
+            boolean added=freePlaceable.toggle(world,cell);
+            Msg.actionBar(player,added ? "editor.placeable.free-added" : "editor.placeable.free-removed",Msg.arg("pos",cell.describe()),
+                    Msg.arg("count",freePlaceable.cells(world).size()));
+        } catch(IOException e) { failure(player,"editor.placeable.free-save-failed",e); }
     }
     /** The water marker is never placed either: the cell joins (or leaves) the water action opened last. */
     @EventHandler(priority=EventPriority.HIGHEST)
@@ -633,6 +673,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     /** /gauntlet trigger: the free trigger under the player (registered if new), or the list of free triggers. */
     public void freeTriggers(Player player) { if(admin(player)) triggerMenus.openFreeAtFeet(player); }
     public boolean holdsWand(Player player) { return wand.is(player.getInventory().getItemInMainHand()); }
+    public boolean holdsMarker(Player player) { return marker.is(player.getInventory().getItemInMainHand()); }
     /**
      * Labels above the plates this builder should see: free triggers in their world
      * while holding the kit block or the wand, and the triggers of the shown course.

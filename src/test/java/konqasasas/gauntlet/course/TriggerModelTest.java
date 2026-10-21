@@ -107,6 +107,19 @@ class TriggerModelTest {
         Trigger t=new Trigger(new BlockPos(0,0,0),List.of(),"n");
         assertEquals("n",t.withAction(TriggerAction.sound("s",1,1)).withoutAction(0).withActions(List.of()).name(),"Edits keep the name");
     }
+    @Test void freePlaceableCellsToggleMoveIntoACourseAndPersist() throws Exception {
+        UUID other=UUID.randomUUID();
+        BlockPos a=new BlockPos(1,2,3),b=new BlockPos(50,2,3);
+        var store=new FreePlaceableStore(dir.resolve("placeable.json"));
+        assertTrue(store.toggle(world,a)); assertTrue(store.toggle(world,b)); assertTrue(store.toggle(other,a));
+        assertFalse(store.toggle(other,a),"Placing again removes it");
+        assertTrue(store.contains(world,a)); assertFalse(store.contains(other,a));
+        assertEquals(List.of(a),store.take(world,Region.of(0,0,0,9,9,9)),"Cells inside the course box move into it");
+        assertEquals(Set.of(b),new FreePlaceableStore(dir.resolve("placeable.json")).cells(world));
+        assertEquals(Set.of(),new FreePlaceableStore(dir.resolve("placeable.json")).cells(other));
+        Files.writeString(dir.resolve("placeable.json"),"{broken");
+        assertThrows(IOException.class,() -> new FreePlaceableStore(dir.resolve("placeable.json")));
+    }
     @Test void freeTriggersPersistPerWorldAndBrokenFileIsPreserved() throws Exception {
         Path file=dir.resolve("triggers.json");
         UUID other=UUID.randomUUID();
