@@ -174,7 +174,20 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(shown<pages-1) menu.button(53,Msg.icon(player,Material.ARROW,"editor.modules.next"),e -> openModules(player,shown+1));
         menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.modules.create"),e -> askNewId(player,true));
         menu.label(51,Msg.icon(player,Material.BOOK,"editor.module.help"));
+        menu.label(47,Msg.icon(player,Material.COMPARATOR,"editor.modules.counts",difficultyCounts(player)));
         menu.open(player);
+    }
+    /** One line per difficulty: how many modules, and how many of them are complete (used by generation). */
+    public List<Component> difficultyCounts(Player player) {
+        List<Component> lines=new ArrayList<>();
+        List<Course> modules=store.all().stream().filter(c -> c.module()!=null).toList();
+        for(int d=Module.MIN_DIFFICULTY;d<=Module.MAX_DIFFICULTY;d++) {
+            int level=d;
+            long all=modules.stream().filter(c -> c.module().difficulty()==level).count();
+            long usable=modules.stream().filter(c -> c.module().difficulty()==level && c.problems().isEmpty()).count();
+            lines.add(line(player,"editor.modules.count-line",Msg.arg("difficulty",d),Msg.arg("count",all),Msg.arg("usable",usable)));
+        }
+        return lines;
     }
     private void askNewId(Player player,boolean module) {
         prompts.ask(player,module ? "editor.prompt.new-module" : "editor.prompt.new-id",text -> {

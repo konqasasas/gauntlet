@@ -95,11 +95,13 @@ generator:
   # platform のときの足場の長さ（ブロック）と、足場のブロック
   joint-length: 3
   joint-block: "minecraft:smooth_stone"
-  # プロファイル。modules 何個つなぐか / difficulty [最初, 最後]（その間を直線で上げる）
+  # プロファイル。modules 何個つなぐか / distribution 難易度1〜5の割合（比。合計100でなくてよい）/
+  # bumpiness でこぼこ（0 なら易しい順にきれいに並ぶ。大きいほど順番が入れ替わり、起伏が増える。1〜2くらいが目安）
   profiles:
     test:
       modules: 5
-      difficulty: [1, 4]
+      distribution: [3, 3, 2, 1, 1]
+      bumpiness: 1
 
 # リプレイ（本番のクリアだけ記録。運営が /replay で見る）
 replays:

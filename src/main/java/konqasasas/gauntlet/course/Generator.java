@@ -5,10 +5,14 @@ import java.util.*;
 /**
  * Plans a generated course: which modules, in which order, and where each goes.
  *
- * Difficulty goes from the profile's first value to its last in a straight line;
- * at each step the modules closest to that difficulty are tried in a random order
- * (fixed by the seed), never the same module twice in a row, and never more than
- * maxHardStreak hard modules (difficulty hardFrom or more) one after another.
+ * Difficulty: the profile gives a distribution (weights of difficulties 1-5) and a
+ * bumpiness. The course's difficulties are drawn from the distribution, then put in
+ * order from easy to hard, with each place shaken by the bumpiness (0: strictly
+ * easy to hard; more: more ups and downs), like a bumpy climb. At each place the
+ * unused modules closest to that difficulty are tried in a random order. Everything
+ * random comes from the seed. A module is used once per course (mirrored or not),
+ * and no more than maxHardStreak hard modules (difficulty hardFrom or more) follow
+ * one another.
  *
  * Modules are not turned: everything goes along +Z. Each one is placed as built or,
  * half the time (by the seed), with left and right swapped (mirrored in x around its
@@ -28,10 +32,36 @@ public final class Generator {
             return new Piece(id,difficulty,start,exit.mirrorX(a),region.mirrorX(a),m);
         }
     }
-    /** modules: how many; difficulty goes from fromDifficulty to toDifficulty. */
-    public record Profile(int modules,int fromDifficulty,int toDifficulty) {
-        public Profile { if(modules<1 || fromDifficulty<Module.MIN_DIFFICULTY || toDifficulty>Module.MAX_DIFFICULTY || toDifficulty<Module.MIN_DIFFICULTY || fromDifficulty>Module.MAX_DIFFICULTY) throw new IllegalArgumentException("Invalid profile"); }
-        int target(int index) { return modules==1 ? fromDifficulty : Math.round(fromDifficulty+(toDifficulty-fromDifficulty)*index/(float)(modules-1)); }
+    /** modules: how many. weights: of difficulties 1-5 (any scale). bumpiness: how far a place may move from easy-to-hard order. */
+    public record Profile(int modules,List<Double> weights,double bumpiness) {
+        public static final int LEVELS=Module.MAX_DIFFICULTY-Module.MIN_DIFFICULTY+1;
+        public Profile {
+            weights=List.copyOf(weights);
+            if(modules<1 || weights.size()!=LEVELS || weights.stream().anyMatch(w -> w==null || w<0 || !Double.isFinite(w))
+                    || weights.stream().mapToDouble(Double::doubleValue).sum()<=0 || bumpiness<0 || !Double.isFinite(bumpiness))
+                throw new IllegalArgumentException("Invalid profile");
+        }
+        /** Only this difficulty. */
+        public static Profile only(int modules,int difficulty,double bumpiness) {
+            List<Double> w=new ArrayList<>(Collections.nCopies(LEVELS,0.0)); w.set(difficulty-Module.MIN_DIFFICULTY,1.0);
+            return new Profile(modules,w,bumpiness);
+        }
+        /** The difficulty of each place: drawn from the weights, easy to hard, shaken by the bumpiness. */
+        List<Integer> targets(Random random) {
+            double total=weights.stream().mapToDouble(Double::doubleValue).sum();
+            List<Integer> drawn=new ArrayList<>();
+            for(int i=0;i<modules;i++) {
+                double r=random.nextDouble()*total; int level=0;
+                while(level<LEVELS-1 && r>=weights.get(level)) { r-=weights.get(level); level++; }
+                drawn.add(level+Module.MIN_DIFFICULTY);
+            }
+            Collections.sort(drawn);
+            record Slot(int difficulty,double key) {}
+            List<Slot> slots=new ArrayList<>();
+            for(int i=0;i<drawn.size();i++) slots.add(new Slot(drawn.get(i),i+random.nextGaussian()*bumpiness));
+            slots.sort(Comparator.comparingDouble(Slot::key));
+            return slots.stream().map(Slot::difficulty).toList();
+        }
     }
     /** jointLength 0 = no joint. minY..maxY: the world's height (inclusive). */
     public record Settings(int hardFrom,int maxHardStreak,int jointLength,int minY,int maxY) {}
@@ -51,8 +81,10 @@ public final class Generator {
         List<Placed> placed=new ArrayList<>();
         List<BlockPos> joints=new ArrayList<>();
         Set<BlockPos> occupied=new HashSet<>();
+        Set<String> used=new HashSet<>();
+        List<Integer> targets=profile.targets(random);
         for(int i=0;i<profile.modules();i++) {
-            int target=profile.target(i);
+            int target=targets.get(i);
             Placed last=placed.isEmpty() ? null : placed.getLast();
             BlockPos at=last==null ? origin : last.exit().plus(new BlockPos(0,0,settings.jointLength()>0 ? settings.jointLength()+1 : 0));
             List<BlockPos> joint=new ArrayList<>();
@@ -65,7 +97,7 @@ public final class Generator {
             String why=pieces.isEmpty() ? "no-modules" : "no-candidate";
             Placed chosen=null;
             for(Piece built:candidates) {
-                if(last!=null && built.id().equals(last.piece().id())) continue;
+                if(used.contains(built.id())) continue;
                 boolean mirror=random.nextBoolean();
                 Piece piece=mirror ? built.mirrored() : built;
                 if(streak && piece.difficulty()>=settings.hardFrom()) continue;
@@ -86,7 +118,7 @@ public final class Generator {
             joints.addAll(joint);
             for(BlockPos c:chosen.piece().solid()) occupied.add(c.plus(chosen.offset()));
             occupied.addAll(joint);
-            placed.add(chosen);
+            placed.add(chosen); used.add(chosen.piece().id());
         }
         return new Plan(placed,joints,null,-1,0);
     }

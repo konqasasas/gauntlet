@@ -19,7 +19,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   /module settings                           what generation uses now
  *   /module place                              the test place: the block under your feet
  *   /module set <key> <value>                  hard-from, max-hard-streak, joint, joint-length, joint-block
- *   /module profile <name> <modules> <from> <to> | /module profile remove <name>
+ *   /module profile <name> <modules> <w1> <w2> <w3> <w4> <w5> [bumpiness] | /module profile remove <name>
+ *     (w1-w5: the weights of difficulties 1-5, any scale; bumpiness 0 = easy to hard in order, more = more ups and downs)
  *
  * Settings are written to config.yml (generator section) and used by the next generation.
  */
@@ -86,14 +87,20 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
                     save("generator.profiles."+args[2],null);
                     Msg.send(player,"editor.modules.profile-removed",Msg.arg("profile",args[2])); return true;
                 }
-                if(args.length!=5 || !args[1].matches("[a-z0-9_-]{1,24}")) { Msg.send(player,"editor.modules.usage"); return true; }
-                int modules,from,to;
-                try { modules=Integer.parseInt(args[2]); from=Integer.parseInt(args[3]); to=Integer.parseInt(args[4]); }
-                catch(NumberFormatException e) { Msg.send(player,"editor.modules.usage"); return true; }
-                try { new Generator.Profile(modules,from,to); } catch(IllegalArgumentException e) { Msg.send(player,"editor.generate.bad-profile",Msg.arg("profile",args[1])); return true; }
-                save("generator.profiles."+args[1]+".modules",modules);
-                save("generator.profiles."+args[1]+".difficulty",List.of(from,to));
-                Msg.send(player,"editor.modules.profile-set",Msg.arg("profile",args[1]),Msg.arg("modules",modules),Msg.arg("from",from),Msg.arg("to",to));
+                if((args.length!=8 && args.length!=9) || !args[1].matches("[a-z0-9_-]{1,24}")) { Msg.send(player,"editor.modules.usage"); return true; }
+                int modules; List<Double> weights=new ArrayList<>(); double bumpiness;
+                try {
+                    modules=Integer.parseInt(args[2]);
+                    for(int i=3;i<8;i++) weights.add(Double.parseDouble(args[i]));
+                    bumpiness=args.length==9 ? Double.parseDouble(args[8]) : 1;
+                } catch(NumberFormatException e) { Msg.send(player,"editor.modules.usage"); return true; }
+                try { new Generator.Profile(modules,weights,bumpiness); } catch(IllegalArgumentException e) { Msg.send(player,"editor.generate.bad-profile",Msg.arg("profile",args[1])); return true; }
+                String path="generator.profiles."+args[1];
+                save(path+".difficulty",null);
+                save(path+".modules",modules);
+                save(path+".distribution",weights);
+                save(path+".bumpiness",bumpiness);
+                Msg.send(player,"editor.modules.profile-set",Msg.arg("profile",args[1]),Msg.arg("modules",modules),Msg.arg("distribution",describe(weights)),Msg.arg("bumpiness",bumpiness));
             }
             default -> Msg.send(player,"editor.modules.usage");
         }
@@ -108,12 +115,21 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
         if(g==null) { Msg.send(player,"editor.generate.no-place"); return; }
         Msg.send(player,"editor.modules.settings",Msg.arg("place",g.getString("place","")),Msg.arg("hard",g.getInt("hard-from",4)),Msg.arg("streak",g.getInt("max-hard-streak",2)),
                 Msg.arg("joint",g.getString("joint","none")),Msg.arg("length",g.getInt("joint-length",3)),Msg.arg("block",g.getString("joint-block","minecraft:smooth_stone")));
+        for(var line:editor.difficultyCounts(player)) player.sendMessage(line);
         ConfigurationSection profiles=g.getConfigurationSection("profiles");
         if(profiles!=null) for(String name:profiles.getKeys(false)) {
-            List<Integer> range=profiles.getIntegerList(name+".difficulty");
-            player.sendMessage(Msg.text(player,"editor.modules.profile-line",Msg.arg("profile",name),Msg.arg("modules",profiles.getInt(name+".modules",5)),
-                    Msg.arg("from",range.isEmpty() ? 1 : range.getFirst()),Msg.arg("to",range.isEmpty() ? 5 : range.getLast())));
+            Generator.Profile p;
+            try { p=GeneratedCourses.profile(profiles.getConfigurationSection(name)); } catch(RuntimeException e) { continue; }
+            player.sendMessage(Msg.text(player,"editor.modules.profile-line",Msg.arg("profile",name),Msg.arg("modules",p.modules()),
+                    Msg.arg("distribution",describe(p.weights())),Msg.arg("bumpiness",p.bumpiness())));
         }
+    }
+    /** "1:10% 2:30% ..." */
+    private static String describe(List<Double> weights) {
+        double total=weights.stream().mapToDouble(Double::doubleValue).sum();
+        List<String> parts=new ArrayList<>();
+        for(int i=0;i<weights.size();i++) parts.add((i+1)+":"+Math.round(weights.get(i)*100/total)+"%");
+        return String.join(" ",parts);
     }
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         List<String> all=new ArrayList<>();

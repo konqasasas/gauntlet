@@ -35,9 +35,8 @@ public final class GeneratedCourses {
         Location origin=parsePlace(config.getString("place",""));
         if(origin==null) { Msg.send(player,"editor.generate.no-place"); return; }
         World world=origin.getWorld();
-        List<Integer> range=p.getIntegerList("difficulty");
         Generator.Profile profile;
-        try { profile=new Generator.Profile(p.getInt("modules",5),range.isEmpty() ? 1 : range.getFirst(),range.isEmpty() ? 5 : range.getLast()); }
+        try { profile=profile(p); }
         catch(IllegalArgumentException e) { Msg.send(player,"editor.generate.bad-profile",Msg.arg("profile",profileName)); return; }
         int joint=config.getString("joint","none").equalsIgnoreCase("platform") ? Math.max(1,config.getInt("joint-length",3)) : 0;
         Generator.Settings settings=new Generator.Settings(config.getInt("hard-from",4),Math.max(0,config.getInt("max-hard-streak",2)),joint,world.getMinHeight(),world.getMaxHeight()-1);
@@ -110,6 +109,20 @@ public final class GeneratedCourses {
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) b.loadout(slot,first.loadout().get(slot));
         return b.build();
     }
+    /**
+     * A profile from config: modules, distribution (weights of difficulties 1-5) and bumpiness.
+     * Profiles written before distributions existed (difficulty: [from, to]) weigh that range evenly.
+     */
+    static Generator.Profile profile(ConfigurationSection p) {
+        List<Double> weights=p.getDoubleList("distribution");
+        if(weights.isEmpty()) {
+            List<Integer> range=p.getIntegerList("difficulty");
+            int from=range.isEmpty() ? 1 : range.getFirst(),to=range.isEmpty() ? 5 : range.getLast();
+            weights=new ArrayList<>();
+            for(int d=Module.MIN_DIFFICULTY;d<=Module.MAX_DIFFICULTY;d++) weights.add(d>=Math.min(from,to) && d<=Math.max(from,to) ? 1.0 : 0.0);
+        }
+        return new Generator.Profile(p.getInt("modules",5),weights,p.getDouble("bumpiness",1));
+    }
     /** The module's definition as placed: mirrored around its start column when it was, then moved. */
     private static Course asPlaced(Course module,Generator.Placed placed) {
         return (placed.mirrored() ? module.mirrorX(placed.piece().start().x()) : module).moved(placed.offset());
@@ -136,7 +149,11 @@ public final class GeneratedCourses {
     private static Set<BlockPos> solid(World world,Region r) {
         Set<BlockPos> solid=new HashSet<>();
         for(int x=r.minX();x<=r.maxX();x++) for(int y=r.minY();y<=r.maxY();y++) for(int z=r.minZ();z<=r.maxZ();z++)
-            if(!world.getBlockAt(x,y,z).getType().isAir()) solid.add(new BlockPos(x,y,z));
+        {
+            // Glass marks a module's box while building: it is never copied.
+            Material type=world.getBlockAt(x,y,z).getType();
+            if(!type.isAir() && type!=Material.GLASS) solid.add(new BlockPos(x,y,z));
+        }
         return solid;
     }
     private static void fill(World world,Region r,BlockData data) {

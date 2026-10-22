@@ -14,24 +14,42 @@ class GeneratorTest {
     private static final Generator.Settings NO_JOINT=new Generator.Settings(4,2,0,-64,319);
 
     @Test void eachStartLandsOnThePreviousGoalHeightIncluded() {
-        List<Generator.Piece> pieces=List.of(piece("a",1,5,2),piece("b",1,4,-1));
-        Generator.Plan plan=Generator.plan(pieces,new Generator.Profile(4,1,1),NO_JOINT,new BlockPos(100,64,0),7);
+        List<Generator.Piece> pieces=List.of(piece("a",1,5,2),piece("b",1,4,-1),piece("c",1,6,1),piece("d",1,3,0));
+        Generator.Plan plan=Generator.plan(pieces,Generator.Profile.only(4,1,0),NO_JOINT,new BlockPos(100,64,0),7);
         assertTrue(plan.ok(),plan.failure());
         assertEquals(new BlockPos(100,64,0),plan.placed().getFirst().start());
         for(int i=1;i<plan.placed().size();i++) assertEquals(plan.placed().get(i-1).exit(),plan.placed().get(i).start(),"Seamless at "+i);
-        for(int i=1;i<plan.placed().size();i++) assertNotEquals(plan.placed().get(i-1).piece().id(),plan.placed().get(i).piece().id(),"Never the same twice in a row");
+        assertEquals(4,plan.placed().stream().map(p -> p.piece().id()).distinct().count(),"Each module once per course");
+        assertEquals("no-candidate",Generator.plan(pieces,Generator.Profile.only(5,1,0),NO_JOINT,BlockPos.ZERO,7).failure(),"Not enough modules for five");
     }
     @Test void jointsAreFlatAndTheSeedRepeats() {
-        List<Generator.Piece> pieces=List.of(piece("a",1,5,0),piece("b",2,5,1),piece("c",3,5,0),piece("d",4,5,1),piece("e",5,5,0));
-        Generator.Settings joint=new Generator.Settings(4,2,3,-64,319);
-        Generator.Plan plan=Generator.plan(pieces,new Generator.Profile(5,1,5),joint,BlockPos.ZERO,42);
+        List<Generator.Piece> pieces=new ArrayList<>();
+        for(int d=1;d<=5;d++) for(int k=0;k<5;k++) pieces.add(piece("m"+d+"-"+k,d,5,k%2));
+        Generator.Settings joint=new Generator.Settings(6,2,3,-64,319); // no hard-streak limit here
+        Generator.Plan plan=Generator.plan(pieces,new Generator.Profile(5,List.of(1.0,1.0,1.0,1.0,1.0),0),joint,BlockPos.ZERO,42);
         assertTrue(plan.ok(),plan.failure());
         for(int i=1;i<plan.placed().size();i++)
             assertEquals(plan.placed().get(i-1).exit().plus(new BlockPos(0,0,4)),plan.placed().get(i).start(),"Three joint blocks between");
         assertEquals(4*4,plan.joints().size(),"The old goal block and three more, four times");
-        assertEquals(List.of(1,2,3,4,5),plan.placed().stream().map(p -> p.piece().difficulty()).toList(),"Difficulty goes up in a line");
+        List<Integer> d=plan.placed().stream().map(p -> p.piece().difficulty()).toList();
+        assertEquals(d.stream().sorted().toList(),d,"No bumpiness: easy to hard in order");
         assertEquals(plan.placed().stream().map(p -> p.piece().id()).toList(),
-                Generator.plan(pieces,new Generator.Profile(5,1,5),joint,BlockPos.ZERO,42).placed().stream().map(p -> p.piece().id()).toList(),"Same seed, same course");
+                Generator.plan(pieces,new Generator.Profile(5,List.of(1.0,1.0,1.0,1.0,1.0),0),joint,BlockPos.ZERO,42).placed().stream().map(p -> p.piece().id()).toList(),"Same seed, same course");
+    }
+    @Test void distributionAndBumpiness() {
+        Random random=new Random(5);
+        Generator.Profile smooth=new Generator.Profile(2000,List.of(1.0,3.0,3.0,2.0,1.0),0);
+        List<Integer> t=smooth.targets(random);
+        assertEquals(t.stream().sorted().toList(),t,"Bumpiness 0: in order");
+        long twos=t.stream().filter(x -> x==2).count(),fives=t.stream().filter(x -> x==5).count();
+        assertTrue(twos>500 && twos<700,"About 30%: "+twos); assertTrue(fives>140 && fives<260,"About 10%: "+fives);
+        List<Integer> bumpy=new Generator.Profile(30,List.of(1.0,1.0,1.0,1.0,1.0),2).targets(new Random(3));
+        int downs=0; for(int i=1;i<bumpy.size();i++) if(bumpy.get(i)<bumpy.get(i-1)) downs++;
+        assertTrue(downs>0,"Ups and downs");
+        assertTrue(bumpy.subList(0,10).stream().mapToInt(Integer::intValue).average().orElse(0)<bumpy.subList(20,30).stream().mapToInt(Integer::intValue).average().orElse(0),"Still a climb");
+        assertThrows(IllegalArgumentException.class,() -> new Generator.Profile(3,List.of(0.0,0.0,0.0,0.0,0.0),1));
+        assertThrows(IllegalArgumentException.class,() -> new Generator.Profile(3,List.of(1.0,1.0),1));
+        assertThrows(IllegalArgumentException.class,() -> new Generator.Profile(3,List.of(1.0,1.0,1.0,1.0,1.0),-1));
     }
     @Test void halfTheModulesAreMirroredAroundTheirStart() {
         // An L-shaped module: forward 3, then 2 to the +X side.
@@ -41,30 +59,33 @@ class GeneratorTest {
         assertEquals(BlockPos.ZERO,m.start()); assertEquals(new BlockPos(-2,0,2),m.exit());
         assertEquals(Region.of(-2,0,0,0,3,2),m.region());
         assertTrue(m.solid().contains(new BlockPos(-2,0,2)) && !m.solid().contains(new BlockPos(2,0,2)));
-        Generator.Piece other=new Generator.Piece("o",1,BlockPos.ZERO,new BlockPos(0,0,3),Region.of(-1,0,0,1,3,3),Set.of(BlockPos.ZERO,new BlockPos(0,0,3)));
-        Generator.Plan plan=Generator.plan(List.of(l,other),new Generator.Profile(40,1,1),NO_JOINT,BlockPos.ZERO,9);
+        List<Generator.Piece> many=new ArrayList<>();
+        for(int i=0;i<40;i++) many.add(new Generator.Piece("l"+i,1,BlockPos.ZERO,new BlockPos(2,0,2),Region.of(0,0,0,2,3,2),solid));
+        Generator.Plan plan=Generator.plan(many,Generator.Profile.only(40,1,0),NO_JOINT,BlockPos.ZERO,9);
         assertTrue(plan.ok(),plan.failure());
         long mirrored=plan.placed().stream().filter(Generator.Placed::mirrored).count();
         assertTrue(mirrored>5 && mirrored<35,"About half: "+mirrored);
         for(int i=1;i<plan.placed().size();i++) assertEquals(plan.placed().get(i-1).exit(),plan.placed().get(i).start());
     }
     @Test void noMoreThanTwoHardModulesInARow() {
-        List<Generator.Piece> pieces=List.of(piece("h1",5,4,0),piece("h2",5,4,0),piece("h3",4,4,0),piece("easy",2,4,0));
-        Generator.Plan plan=Generator.plan(pieces,new Generator.Profile(9,5,5),NO_JOINT,BlockPos.ZERO,1);
+        List<Generator.Piece> pieces=new ArrayList<>();
+        for(int i=0;i<6;i++) pieces.add(piece("h"+i,i%2==0 ? 5 : 4,4,0));
+        for(int i=0;i<4;i++) pieces.add(piece("easy"+i,2,4,0));
+        Generator.Plan plan=Generator.plan(pieces,Generator.Profile.only(9,5,0),NO_JOINT,BlockPos.ZERO,1);
         assertTrue(plan.ok(),plan.failure());
         int run=0;
         for(Generator.Placed p:plan.placed()) { run=p.piece().difficulty()>=4 ? run+1 : 0; assertTrue(run<=2,"Hard streak "+run); }
     }
     @Test void stopsAndSaysWhereWhenNothingFits() {
-        Generator.Plan high=Generator.plan(List.of(piece("up",1,3,10),piece("up2",1,3,10)),new Generator.Profile(5,1,1),new Generator.Settings(4,2,0,0,30),BlockPos.ZERO,3);
+        Generator.Plan high=Generator.plan(List.of(piece("up",1,3,10),piece("up2",1,3,10),piece("up3",1,3,10),piece("up4",1,3,10),piece("up5",1,3,10)),Generator.Profile.only(5,1,0),new Generator.Settings(4,2,0,0,30),BlockPos.ZERO,3);
         assertFalse(high.ok());
         assertEquals("height",high.failure()); assertEquals(2,high.failedAt());
-        assertEquals("no-modules",Generator.plan(List.of(),new Generator.Profile(2,1,1),NO_JOINT,BlockPos.ZERO,0).failure());
+        assertEquals("no-modules",Generator.plan(List.of(),Generator.Profile.only(2,1,0),NO_JOINT,BlockPos.ZERO,0).failure());
         // A module whose blocks reach back over the previous one.
         Set<BlockPos> back=new HashSet<>(Set.of(new BlockPos(0,0,0),new BlockPos(0,0,-2),new BlockPos(0,0,2)));
         Generator.Piece hook=new Generator.Piece("hook",1,BlockPos.ZERO,new BlockPos(0,0,2),Region.of(0,0,-2,0,2,2),back);
         Generator.Piece hook2=new Generator.Piece("hook2",1,BlockPos.ZERO,new BlockPos(0,0,2),Region.of(0,0,-2,0,2,2),back);
-        Generator.Plan overlap=Generator.plan(List.of(hook,hook2),new Generator.Profile(2,1,1),NO_JOINT,BlockPos.ZERO,0);
+        Generator.Plan overlap=Generator.plan(List.of(hook,hook2),Generator.Profile.only(2,1,0),NO_JOINT,BlockPos.ZERO,0);
         assertEquals("overlap",overlap.failure()); assertEquals(1,overlap.failedAt());
     }
 }
