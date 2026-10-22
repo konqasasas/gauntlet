@@ -241,9 +241,15 @@ editor.module.help.name: "モジュールの作り方"
 editor.module.help.lore:
   - "<color:#cdbf9c>範囲・スタート（入口）・ゴール（出口。複数ならいちばん +Z 側）・トリガー・ルート・設置可能箇所はコースと同じ"
   - "<color:#cdbf9c>使えるブロックの種類は初期装備、数は右の3つ"
-  - "<color:#cdbf9c>回転はしないので、+Z に向かって進む形で作る"
+  - "<color:#cdbf9c>回転はしないので、+Z に向かって進む形で作る（置くときに半分の確率で左右反転する）"
   - "<color:#cdbf9c>/module generate プロファイル [シード] で試験場所につないだコースができる"
 editor.modules.title: "モジュール（自動生成の部品）"
+editor.modules.title-page: "モジュール（<page>／<pages>ページ）"
+editor.modules.previous.name: "前のページ"
+editor.modules.previous.lore: []
+editor.modules.next.name: "次のページ"
+editor.modules.next.lore: []
+editor.modules.removed: "生成したコース <id> を消しました（置いたブロックは空気に戻しました）。"
 editor.modules.entry: "<color:#c9a0e8>難易度 <difficulty>　モジュール時間 <seconds>秒"
 editor.modules.create.name: "モジュールを作る"
 editor.modules.create.lore:
@@ -251,7 +257,7 @@ editor.modules.create.lore:
 editor.modules.back.name: "モジュールの一覧へ"
 editor.modules.back.lore: []
 editor.prompt.new-module: "新しいモジュールのIDを入力してください（英小文字・数字・_・-、32文字まで）"
-editor.modules.usage: "/module | generate プロファイル [シード] | play プロファイル | practice プロファイル | settings | place | set 項目 値 | profile 名前 個数 最初の難易度 最後の難易度 | profile remove 名前"
+editor.modules.usage: "/module | generate プロファイル [シード] | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 最初の難易度 最後の難易度 | profile remove 名前"
 editor.modules.settings: "生成の設定：試験場所 <place>　難しい=難易度<hard>以上（続けて<streak>個まで）　つなぎ目 <joint>（長さ<length>、<block>）"
 editor.modules.profile-line: "<color:#cdbf9c>・プロファイル <profile>：<modules>個、難易度 <from>→<to>"
 editor.modules.not-generated: "<profile> の生成したコースがありません。先に /module generate で作ってください。"

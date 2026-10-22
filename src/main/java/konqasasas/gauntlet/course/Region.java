@@ -15,6 +15,8 @@ public record Region(int minX,int minY,int minZ,int maxX,int maxY,int maxZ) {
         int bx=(int)Math.floor(x),by=(int)Math.floor(y),bz=(int)Math.floor(z);
         return bx>=minX && bx<=maxX && by>=minY && by<=maxY && bz>=minZ && bz<=maxZ;
     }
+    /** Left and right swapped around block column a. */
+    public Region mirrorX(int a) { return new Region(2*a-maxX,minY,minZ,2*a-minX,maxY,maxZ); }
     public Region moved(BlockPos d) { return new Region(minX+d.x(),minY+d.y(),minZ+d.z(),maxX+d.x(),maxY+d.y(),maxZ+d.z()); }
     /** True when the other box lies wholly inside this one (false for null). */
     public boolean contains(Region o) {

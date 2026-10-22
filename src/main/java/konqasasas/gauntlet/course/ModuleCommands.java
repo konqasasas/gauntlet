@@ -15,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   /module                                   the module list (create, edit: the course editor)
  *   /module generate <profile> [seed]          build gen_<profile> at the test place
  *   /module play <profile> | practice <profile>  play the generated course (official / practice)
+ *   /module remove <profile>                   clear the generated course and delete it
  *   /module settings                           what generation uses now
  *   /module place                              the test place: the block under your feet
  *   /module set <key> <value>                  hard-from, max-hard-streak, joint, joint-length, joint-block
@@ -51,6 +52,7 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
                 if(course==null || course.segments().isEmpty()) { Msg.send(player,"editor.modules.not-generated",Msg.arg("profile",args[1])); return true; }
                 editor.participants.enter(player,id,args[0].equalsIgnoreCase("practice"));
             }
+            case "remove" -> { if(args.length==2) generated.remove(player,args[1]); else Msg.send(player,"editor.modules.usage"); }
             case "settings" -> settings(player);
             case "place" -> {
                 Block under=player.getLocation().subtract(0,.01,0).getBlock();
@@ -116,8 +118,8 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         List<String> all=new ArrayList<>();
         ConfigurationSection profiles=plugin.getConfig().getConfigurationSection("generator.profiles");
-        if(args.length==1) all.addAll(List.of("generate","play","practice","settings","place","set","profile"));
-        else if(args.length==2 && Set.of("generate","play","practice").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
+        if(args.length==1) all.addAll(List.of("generate","play","practice","remove","settings","place","set","profile"));
+        else if(args.length==2 && Set.of("generate","play","practice","remove").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
         else if(args.length==2 && args[0].equalsIgnoreCase("set")) all.addAll(KEYS);
         else if(args.length==3 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("joint")) all.addAll(List.of("none","platform"));
         else if(args.length==2 && args[0].equalsIgnoreCase("profile")) { all.add("remove"); if(profiles!=null) all.addAll(profiles.getKeys(false)); }

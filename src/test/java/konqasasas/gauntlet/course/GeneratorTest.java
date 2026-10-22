@@ -33,6 +33,21 @@ class GeneratorTest {
         assertEquals(plan.placed().stream().map(p -> p.piece().id()).toList(),
                 Generator.plan(pieces,new Generator.Profile(5,1,5),joint,BlockPos.ZERO,42).placed().stream().map(p -> p.piece().id()).toList(),"Same seed, same course");
     }
+    @Test void halfTheModulesAreMirroredAroundTheirStart() {
+        // An L-shaped module: forward 3, then 2 to the +X side.
+        Set<BlockPos> solid=new HashSet<>(Set.of(new BlockPos(0,0,0),new BlockPos(0,0,1),new BlockPos(0,0,2),new BlockPos(1,0,2),new BlockPos(2,0,2)));
+        Generator.Piece l=new Generator.Piece("l",1,BlockPos.ZERO,new BlockPos(2,0,2),Region.of(0,0,0,2,3,2),solid);
+        Generator.Piece m=l.mirrored();
+        assertEquals(BlockPos.ZERO,m.start()); assertEquals(new BlockPos(-2,0,2),m.exit());
+        assertEquals(Region.of(-2,0,0,0,3,2),m.region());
+        assertTrue(m.solid().contains(new BlockPos(-2,0,2)) && !m.solid().contains(new BlockPos(2,0,2)));
+        Generator.Piece other=new Generator.Piece("o",1,BlockPos.ZERO,new BlockPos(0,0,3),Region.of(-1,0,0,1,3,3),Set.of(BlockPos.ZERO,new BlockPos(0,0,3)));
+        Generator.Plan plan=Generator.plan(List.of(l,other),new Generator.Profile(40,1,1),NO_JOINT,BlockPos.ZERO,9);
+        assertTrue(plan.ok(),plan.failure());
+        long mirrored=plan.placed().stream().filter(Generator.Placed::mirrored).count();
+        assertTrue(mirrored>5 && mirrored<35,"About half: "+mirrored);
+        for(int i=1;i<plan.placed().size();i++) assertEquals(plan.placed().get(i-1).exit(),plan.placed().get(i).start());
+    }
     @Test void noMoreThanTwoHardModulesInARow() {
         List<Generator.Piece> pieces=List.of(piece("h1",5,4,0),piece("h2",5,4,0),piece("h3",4,4,0),piece("easy",2,4,0));
         Generator.Plan plan=Generator.plan(pieces,new Generator.Profile(9,5,5),NO_JOINT,BlockPos.ZERO,1);

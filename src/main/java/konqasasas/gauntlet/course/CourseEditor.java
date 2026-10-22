@@ -153,13 +153,15 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         icon.editMeta(meta -> { meta.displayName(Icons.text(course.name())); meta.lore(lore); });
         return icon;
     }
-    /** The modules (/module): courses marked as pieces of generated courses. */
-    public void openModules(Player player) {
+    /** The modules (/module): courses marked as pieces of generated courses, by name (numbers in order: m1-2 before m1-10), 45 a page. */
+    public void openModules(Player player) { openModules(player,0); }
+    void openModules(Player player,int page) {
         if(!admin(player)) return;
-        Menu menu=new Menu(6,Msg.plain(player,"editor.modules.title"));
-        List<Course> modules=store.all().stream().filter(c -> c.module()!=null).toList();
-        for(int i=0;i<Math.min(modules.size(),45);i++) {
-            Course module=modules.get(i);
+        List<Course> modules=store.all().stream().filter(c -> c.module()!=null).sorted((a,b) -> NaturalOrder.compare(a.name(),b.name())).toList();
+        int pages=Math.max(1,(modules.size()+44)/45); int shown=Math.clamp(page,0,pages-1);
+        Menu menu=new Menu(6,Msg.plain(player,"editor.modules.title-page",Msg.arg("page",shown+1),Msg.arg("pages",pages)));
+        for(int i=0;i<45 && shown*45+i<modules.size();i++) {
+            Course module=modules.get(shown*45+i);
             ItemStack icon=courseIcon(player,module);
             icon.editMeta(meta -> {
                 List<Component> lore=new ArrayList<>(Objects.requireNonNullElse(meta.lore(),List.of()));
@@ -168,8 +170,10 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             });
             menu.button(i,icon,e -> openEdit(player,module.id()));
         }
+        if(shown>0) menu.button(45,Msg.icon(player,Material.ARROW,"editor.modules.previous"),e -> openModules(player,shown-1));
+        if(shown<pages-1) menu.button(53,Msg.icon(player,Material.ARROW,"editor.modules.next"),e -> openModules(player,shown+1));
         menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.modules.create"),e -> askNewId(player,true));
-        menu.label(53,Msg.icon(player,Material.BOOK,"editor.module.help"));
+        menu.label(51,Msg.icon(player,Material.BOOK,"editor.module.help"));
         menu.open(player);
     }
     private void askNewId(Player player,boolean module) {

@@ -142,6 +142,18 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
     public int laneAt(int x,int y,int z) { return space().laneAt(x,y,z); }
     /** The course as played in the lane: every position moved by its offset, no lanes of its own. */
     public Course inLane(int lane) { return lane==0 && lanes.isEmpty() ? this : moved(laneOffset(lane)); }
+    /**
+     * Left and right swapped (going along +Z) around block column a: every position
+     * mirrored in x, facings turned the other way. Used to place a module both ways.
+     */
+    public Course mirrorX(int a) {
+        Spot s=start;
+        return new Course(id,name,status,author,world,region==null ? null : region.mirrorX(a),
+                s==null ? null : new Spot(2*a+1-s.x(),s.y(),s.z(),-s.yaw(),s.pitch()),
+                goals.stream().map(g -> g.mirrorX(a)).toList(),timeLimitSeconds,loadout,triggers.stream().map(t -> t.mirrorX(a)).toList(),
+                failLava,failOutside,rev,route.stream().map(p -> new RoutePoint(2*a+1-p.x(),p.y(),p.z())).toList(),
+                placeable.stream().map(p -> p.mirrorX(a)).toList(),lanes,module,segments);
+    }
     /** Every position moved by d (the definition for a lane at that offset). */
     public Course moved(BlockPos d) {
         Spot s=start;

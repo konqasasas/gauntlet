@@ -10,7 +10,9 @@ import java.util.*;
  * (fixed by the seed), never the same module twice in a row, and never more than
  * maxHardStreak hard modules (difficulty hardFrom or more) one after another.
  *
- * Modules are not turned: everything goes along +Z. Each module is moved so that
+ * Modules are not turned: everything goes along +Z. Each one is placed as built or,
+ * half the time (by the seed), with left and right swapped (mirrored in x around its
+ * start), so one module gives two layouts. Each module is moved so that
  * its start block lands on the previous module's goal block (no joint), or after
  * a flat joint of jointLength blocks. A module that would leave the world's height
  * or whose blocks would hit blocks already placed is skipped for the next candidate;
@@ -18,7 +20,14 @@ import java.util.*;
  */
 public final class Generator {
     /** A module: start = the block under its start spot, exit = its goal block, solid = its non-air blocks. */
-    public record Piece(String id,int difficulty,BlockPos start,BlockPos exit,Region region,Set<BlockPos> solid) {}
+    public record Piece(String id,int difficulty,BlockPos start,BlockPos exit,Region region,Set<BlockPos> solid) {
+        /** Left and right swapped around the start's column. */
+        public Piece mirrored() {
+            int a=start.x();
+            Set<BlockPos> m=new HashSet<>(); for(BlockPos c:solid) m.add(c.mirrorX(a));
+            return new Piece(id,difficulty,start,exit.mirrorX(a),region.mirrorX(a),m);
+        }
+    }
     /** modules: how many; difficulty goes from fromDifficulty to toDifficulty. */
     public record Profile(int modules,int fromDifficulty,int toDifficulty) {
         public Profile { if(modules<1 || fromDifficulty<Module.MIN_DIFFICULTY || toDifficulty>Module.MAX_DIFFICULTY || toDifficulty<Module.MIN_DIFFICULTY || fromDifficulty>Module.MAX_DIFFICULTY) throw new IllegalArgumentException("Invalid profile"); }
@@ -26,7 +35,8 @@ public final class Generator {
     }
     /** jointLength 0 = no joint. minY..maxY: the world's height (inclusive). */
     public record Settings(int hardFrom,int maxHardStreak,int jointLength,int minY,int maxY) {}
-    public record Placed(Piece piece,BlockPos offset) {
+    /** piece is as placed (mirrored when mirrored is true); its start column is the mirror's axis. */
+    public record Placed(Piece piece,BlockPos offset,boolean mirrored) {
         public BlockPos start() { return piece.start().plus(offset); }
         public BlockPos exit() { return piece.exit().plus(offset); }
         public Region region() { return piece.region().moved(offset); }
@@ -54,8 +64,10 @@ public final class Generator {
             candidates.sort(Comparator.comparingInt(p -> Math.abs(p.difficulty()-target)));
             String why=pieces.isEmpty() ? "no-modules" : "no-candidate";
             Placed chosen=null;
-            for(Piece piece:candidates) {
-                if(last!=null && piece.id().equals(last.piece().id())) continue;
+            for(Piece built:candidates) {
+                if(last!=null && built.id().equals(last.piece().id())) continue;
+                boolean mirror=random.nextBoolean();
+                Piece piece=mirror ? built.mirrored() : built;
                 if(streak && piece.difficulty()>=settings.hardFrom()) continue;
                 BlockPos offset=at.minus(piece.start());
                 Region r=piece.region().moved(offset);
@@ -68,7 +80,7 @@ public final class Generator {
                     if(occupied.contains(moved) || joint.contains(moved)) { hit=true; break; }
                 }
                 if(hit) { why="overlap"; continue; }
-                chosen=new Placed(piece,offset); break;
+                chosen=new Placed(piece,offset,mirror); break;
             }
             if(chosen==null) return new Plan(placed,joints,why,i,target);
             joints.addAll(joint);

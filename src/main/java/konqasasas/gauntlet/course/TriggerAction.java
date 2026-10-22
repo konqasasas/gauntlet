@@ -52,6 +52,14 @@ public record TriggerAction(Type type,ItemRef item,Placement placement,boolean a
         return water(next,waterTicks);
     }
     public TriggerAction clearWaterCells() { return water(List.of(),waterTicks); }
+    /** Left and right swapped around block column a: the mob's spot (and facing) and the water cells. */
+    public TriggerAction mirrorX(int a) {
+        return switch(type) {
+            case MOB -> mob(mob,new Spot(2*a+1-mobAt.x(),mobAt.y(),mobAt.z(),-mobAt.yaw(),mobAt.pitch()));
+            case WATER -> water(waterCells.stream().map(c -> c.mirrorX(a)).toList(),waterTicks);
+            default -> this;
+        };
+    }
     /** The same action moved by d: the mob's spot and the water cells follow, nothing else has a position. */
     public TriggerAction moved(BlockPos d) {
         if(d.equals(BlockPos.ZERO)) return this;

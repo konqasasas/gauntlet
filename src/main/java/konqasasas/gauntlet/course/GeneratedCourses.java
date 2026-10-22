@@ -14,7 +14,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 /**
  * /gauntlet generate <profile> [seed]: builds a course out of modules at the test
  * place (config generator.place) and saves it as the course gen_<profile>, playable
- * like any course. The previous course of that profile is cleared first.
+ * like any course. Every course generated before (of any profile) is cleared first:
+ * they all share the test place. /module remove clears one.
  *
  * Copying: the boxes of the new modules are emptied, then every module's blocks
  * are copied in order (a later module's start block replaces the earlier goal
@@ -63,11 +64,15 @@ public final class GeneratedCourses {
                     Msg.arg("reason",Msg.text(player,"editor.generate.reason."+plan.failure())),Msg.arg("modules",pieces.size()));
             return;
         }
-        // Clear the previous course of this profile, and the boxes the new one takes.
+        // Clear every course generated before (the same profile's is kept as a definition, for its records), and the boxes the new one takes.
         Course previous=store.get(id);
-        if(previous!=null && previous.region()!=null && Bukkit.getWorld(previous.world())!=null) fill(Bukkit.getWorld(previous.world()),previous.region(),Material.AIR.createBlockData());
+        for(Course old:store.all()) {
+            if(old.segments().isEmpty()) continue;
+            clear(old);
+            if(!old.id().equals(id)) try { store.delete(old.id()); } catch(IOException e) { plugin.getLogger().log(Level.WARNING,"Cannot delete generated course "+old.id(),e); }
+        }
         for(Generator.Placed placed:plan.placed()) fill(world,placed.region(),Material.AIR.createBlockData());
-        for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,placed.piece(),placed.offset());
+        for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,pieces.stream().filter(x -> x.id().equals(placed.piece().id())).findFirst().orElseThrow(),placed);
         for(BlockPos j:plan.joints()) world.getBlockAt(j.x(),j.y(),j.z()).setBlockData(jointBlock,false);
 
         Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous);
@@ -87,7 +92,7 @@ public final class GeneratedCourses {
         List<Trigger> triggers=new ArrayList<>(); List<RoutePoint> route=new ArrayList<>(); List<BlockPos> placeable=new ArrayList<>();
         Region box=null;
         for(Generator.Placed placed:plan.placed()) {
-            Course moved=sources.get(placed.piece().id()).moved(placed.offset());
+            Course moved=asPlaced(sources.get(placed.piece().id()),placed);
             Module m=sources.get(placed.piece().id()).module();
             segments.add(new Segment(placed.piece().id(),moved.region(),m.seconds(),moved.loadout(),m.counts()));
             for(Trigger t:moved.triggers()) if(triggers.stream().noneMatch(x -> x.pos().equals(t.pos()))) triggers.add(t);
@@ -96,7 +101,7 @@ public final class GeneratedCourses {
             box=box==null ? moved.region() : union(box,moved.region());
         }
         for(BlockPos j:plan.joints()) box=union(box,new Region(j.x(),j.y(),j.z(),j.x(),j.y()+3,j.z()));
-        Course first=sources.get(plan.placed().getFirst().piece().id()).moved(plan.placed().getFirst().offset());
+        Course first=asPlaced(sources.get(plan.placed().getFirst().piece().id()),plan.placed().getFirst());
         String name=("生成 "+profile+" #"+Long.toHexString(seed)).substring(0,Math.min(Course.MAX_NAME_LENGTH,("生成 "+profile+" #"+Long.toHexString(seed)).length()));
         Course base=previous!=null ? previous : Course.create(id,author,world);
         var b=base.edit().name(name).status(CourseStatus.DRAFT).region(world,box).start(first.start()).goals(List.of(plan.placed().getLast().exit()))
@@ -104,6 +109,25 @@ public final class GeneratedCourses {
                 .placeable(placeable).lanes(List.of()).module(null).segments(segments).failLava(true).failOutside(true);
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) b.loadout(slot,first.loadout().get(slot));
         return b.build();
+    }
+    /** The module's definition as placed: mirrored around its start column when it was, then moved. */
+    private static Course asPlaced(Course module,Generator.Placed placed) {
+        return (placed.mirrored() ? module.mirrorX(placed.piece().start().x()) : module).moved(placed.offset());
+    }
+    /** /module remove: clears the generated course of the profile and deletes it. */
+    public void remove(Player player,String profile) {
+        String id=profile.toLowerCase(Locale.ROOT); if(!id.startsWith("gen_")) id="gen_"+id;
+        Course course=store.get(id);
+        if(course==null || course.segments().isEmpty()) { Msg.send(player,"editor.modules.not-generated",Msg.arg("profile",profile)); return; }
+        clear(course);
+        try { store.delete(id); }
+        catch(IOException e) { Msg.send(player,"editor.generate.save-failed"); plugin.getLogger().log(Level.SEVERE,"Cannot delete "+id,e); return; }
+        Msg.send(player,"editor.modules.removed",Msg.arg("id",id));
+    }
+    /** Every block of a generated course back to air. */
+    private static void clear(Course course) {
+        World world=course.region()==null ? null : Bukkit.getWorld(course.world());
+        if(world!=null) fill(world,course.region(),Material.AIR.createBlockData());
     }
     private static Region union(Region a,Region b) {
         return new Region(Math.min(a.minX(),b.minX()),Math.min(a.minY(),b.minY()),Math.min(a.minZ(),b.minZ()),
@@ -121,12 +145,19 @@ public final class GeneratedCourses {
             if(!block.getBlockData().equals(data)) block.setBlockData(data,false);
         }
     }
-    /** The module's non-air blocks (block entities with their contents). */
-    private static void copy(World from,World to,Generator.Piece piece,BlockPos d) {
-        for(BlockPos c:piece.solid()) {
-            Block source=from.getBlockAt(c.x(),c.y(),c.z()),target=to.getBlockAt(c.x()+d.x(),c.y()+d.y(),c.z()+d.z());
-            if(source.getState(false) instanceof TileState) source.getState().copy(target.getLocation()).update(true,false);
-            else target.setBlockData(source.getBlockData(),false);
+    /** The module's non-air blocks (block entities with their contents); turned the other way when mirrored. */
+    private static void copy(World from,World to,Generator.Piece built,Generator.Placed placed) {
+        int axis=built.start().x(); BlockPos d=placed.offset();
+        for(BlockPos c:built.solid()) {
+            BlockPos at=(placed.mirrored() ? c.mirrorX(axis) : c).plus(d);
+            Block source=from.getBlockAt(c.x(),c.y(),c.z()),target=to.getBlockAt(at.x(),at.y(),at.z());
+            BlockData data=source.getBlockData().clone();
+            if(placed.mirrored()) data.mirror(org.bukkit.block.structure.Mirror.FRONT_BACK);
+            if(source.getState(false) instanceof TileState) {
+                BlockState state=source.getState().copy(target.getLocation());
+                state.setBlockData(data);
+                state.update(true,false);
+            } else target.setBlockData(data,false);
         }
     }
     /** "world x y z": where the first module's start block goes. */

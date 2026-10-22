@@ -49,6 +49,22 @@ class LaneModelTest {
         assertEquals(base.rev(),lane2.rev(),"Same revision: records are shared by the lanes");
         assertEquals(base.inLane(0).region(),base.region());
     }
+    @Test void mirroringSwapsLeftAndRight() {
+        Course m=course().mirrorX(1);
+        assertEquals(Region.of(-7,0,0,2,9,9),m.region());
+        assertEquals(new Spot(2,1,1,-45,0),m.start(),"The start (x 1) stays in its column, facing the other way");
+        assertTrue(m.isGoal(-6,0,8));
+        Trigger t=m.trigger(new BlockPos(0,1,2));
+        assertNotNull(t);
+        assertEquals(new Spot(-0.5,1,3.5,-90,10),t.actions().getFirst().mobAt());
+        assertEquals(List.of(new BlockPos(-2,2,4),new BlockPos(-3,2,4)),t.actions().get(1).waterCells());
+        assertTrue(m.canPlace(-3,1,5));
+        assertEquals(List.of(new RoutePoint(2,2,1)),m.route());
+        assertEquals(course(),m.mirrorX(1),"Twice is the original");
+        assertTrue(NaturalOrder.compare("m1-2","m1-10")<0);
+        assertTrue(NaturalOrder.compare("m2-1","m1-10")>0);
+        assertTrue(NaturalOrder.compare("M1","m1")==0);
+    }
     @Test void laneAtFindsTheCopy() {
         Course base=course().edit().lanes(List.of(new BlockPos(20,0,0),new BlockPos(40,0,0))).build();
         assertEquals(0,base.laneAt(0,0,0)); assertEquals(1,base.laneAt(29,9,9)); assertEquals(2,base.laneAt(40,5,5));
