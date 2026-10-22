@@ -82,3 +82,35 @@ eras:
   # 時代の途中でログアウトした人が戻ったとき、全レーンが使用中なら待つ場所。
   # "ワールド名 x y z" または "ワールド名 x y z yaw pitch"。空ならロビーのスポーン
   waiting-spot: ""
+
+# 自動生成の試作（/module generate <プロファイル> [シード]）。モジュールは /module で作る。下の値は /module place・set・profile でも変えられる
+generator:
+  # 試験場所。"ワールド名 x y z"：最初のモジュールのスタートのブロックを置く位置。コースは +Z に向かって伸びる
+  place: ""
+  # この難易度以上を「難しい」とし、続けて置くのは max-hard-streak 個まで
+  hard-from: 4
+  max-hard-streak: 2
+  # つなぎ目：none（前のゴールの位置に次のスタート）/ platform（間に平らな足場）
+  joint: none
+  # platform のときの足場の長さ（ブロック）と、足場のブロック
+  joint-length: 3
+  joint-block: "minecraft:smooth_stone"
+  # プロファイル。modules 何個つなぐか / difficulty [最初, 最後]（その間を直線で上げる）
+  profiles:
+    test:
+      modules: 5
+      difficulty: [1, 4]
+
+# リプレイ（本番のクリアだけ記録。運営が /replay で見る）
+replays:
+  # プレイヤー×コース×版ごとに、ベストのほかに残す直近のクリアの数
+  recent: 3
+  # 全部のリプレイの容量の上限（MB）。超えたら、誰のベストでもない古いものから消す
+  max-mb: 1024
+  # 再生中の操作アイテムを頭にするときの、頭のテクスチャの値（Minecraft-Heads などの「Value」）。空ならふつうのアイテム
+  keys:
+    back: ""
+    pause: ""
+    forward: ""
+    speed: ""
+    stop: ""

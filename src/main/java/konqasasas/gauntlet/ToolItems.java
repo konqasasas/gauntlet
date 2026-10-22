@@ -68,7 +68,10 @@ final class ToolItems {
         // Replace the stack, not the mirror held by BlockItem's native placement
         // call. That call may consume its old reference after BlockPlaceEvent.
         PlayerInventory inv=player.getInventory();
-        for(int slot=0;slot<inv.getSize();slot++) if(kind(inv.getItem(slot))==Kind.SCAFFOLD) {
+        // Scaffold handed out in a set number (a module of a generated course) is not refilled.
+        NamespacedKey limited=new NamespacedKey(key.getNamespace(),"limited");
+        for(int slot=0;slot<inv.getSize();slot++) if(kind(inv.getItem(slot))==Kind.SCAFFOLD
+                && !inv.getItem(slot).getItemMeta().getPersistentDataContainer().has(limited,PersistentDataType.BYTE)) {
             ItemStack copy=inv.getItem(slot).clone(); copy.setAmount(64); inv.setItem(slot,copy);
         }
     }

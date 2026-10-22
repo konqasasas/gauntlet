@@ -16,6 +16,42 @@ class DataStoreTest {
     private static RunRecord run(String course,int rev,UUID player,RunRecord.Result result,long ticks,Double progress) {
         return new RunRecord(UUID.randomUUID(),course,rev,player,result,result==RunRecord.Result.FAIL ? "LAVA" : null,ticks,ticks*50,progress,1L,2L,0,0,0,null,"test");
     }
+    private static RunRecord clear(String course,int rev,UUID player,long ticks,long endedAt) {
+        return new RunRecord(UUID.randomUUID(),course,rev,player,RunRecord.Result.CLEAR,null,ticks,ticks*50,1.0,1L,endedAt,0,0,0,1,"test");
+    }
+    @Test void rankingsBestPerPlayerTiesFirstCarryAndTakingOff() throws Exception {
+        UUID a=UUID.randomUUID(),b=UUID.randomUUID(),c=UUID.randomUUID(),admin=UUID.randomUUID();
+        try(Database db=Database.open(dir.resolve("g.db"),LOG)) {
+            RunLog log=new RunLog(db);
+            RunRecord aSlow=clear("x",1,a,300,10),aBest=clear("x",1,a,200,20);
+            log.append(aSlow); log.append(aBest);
+            log.append(clear("x",1,b,200,15));                          // same time as a's best, set earlier
+            log.append(run("x",1,c,RunRecord.Result.INVALID,100,null)); // not a clear
+            log.append(clear("x",0,c,150,5));                           // an older revision
+            log.append(clear("y",1,c,50,5));                            // another course
+            Rankings r=new Rankings(db);
+            Rankings.Board board=r.course("x",1,a);
+            assertEquals(List.of(b,a),board.top().stream().map(Rankings.Row::player).toList(),"Ties go to whoever set it first");
+            assertEquals(200,board.mine().ticks()); assertEquals(2,board.mine().place()); assertEquals(2,board.entries());
+            r.carry("x",1,0,admin);
+            assertEquals(List.of(1,0),r.revs("x",1));
+            assertEquals(c,r.course("x",1,a).top().getFirst().player(),"Carried over from revision 0");
+            r.carry("x",1,null,admin);
+            assertEquals(List.of(1),r.revs("x",1));
+            assertEquals(1,r.voidRun(aBest.id().toString().substring(0,8),admin,"cheat"));
+            assertEquals(0,r.voidRun("abc",admin,"too short"),"A run id needs 8 characters");
+            assertEquals(300,r.course("x",1,a).mine().ticks(),"The other run counts");
+            assertEquals(1,r.voidPlayer(a,"x",admin,"all"));
+            assertNull(r.course("x",1,a).mine());
+            assertTrue(r.runs(a,"x").stream().allMatch(Rankings.Run::voided),"Kept, only marked");
+            assertEquals(2,r.restorePlayer(a,"x"));
+            assertEquals(200,r.course("x",1,a).mine().ticks());
+            Progress p=new Progress(db); p.load();
+            p.setRank(b,1); Thread.sleep(5); p.setRank(a,1); p.setRank(a,2); p.setRank(a,1);
+            assertEquals(List.of(b,a),r.rank(1,a).top().stream().map(Rankings.Row::player).toList(),"First to reach the rank");
+            assertEquals(List.of(a),r.rank(2,a).top().stream().map(Rankings.Row::player).toList(),"Kept after the rank was set lower");
+        }
+    }
     @Test void reachedCoursesAndResumeSurviveRestart() throws Exception {
         UUID a=UUID.randomUUID(),b=UUID.randomUUID();
         try(Database db=Database.open(dir.resolve("g.db"),LOG)) {

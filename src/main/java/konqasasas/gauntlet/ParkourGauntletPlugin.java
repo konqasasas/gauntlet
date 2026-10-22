@@ -51,6 +51,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     private PlayerDisplay display;
     private ResourcePacks packs;
     private Progress progress;
+    private GeneratedCourses generated;
+    private konqasasas.gauntlet.replay.ReplayViewer replayViewer;
+    private konqasasas.gauntlet.cosmetic.Cosmetics cosmetics;
     private CourseItems courseItems;
     private KitRuns kit;
     private WaterFlows water;
@@ -71,6 +74,9 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             LegacyImport.run(database,data,getLogger());
             runs=new RunLog(database); runs.load();
             progress=new Progress(database); progress.load();
+            cosmetics=new konqasasas.gauntlet.cosmetic.Cosmetics(database,konqasasas.gauntlet.cosmetic.Catalog.load(getClassLoader(),data.resolve("cosmetics.yml")));
+            cosmetics.load();
+            new konqasasas.gauntlet.cosmetic.CosmeticCommands(this,cosmetics,data.resolve("cosmetics.yml")).start();
             playerData=new PlayerData(this,database);
             Msg.init(messages,playerData::uiLanguage);
             Sounds.init(playerData);
@@ -83,6 +89,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             Objects.requireNonNull(getCommand("gauntlet")).setExecutor(this);
             getCommand("gauntlet").setTabCompleter(this);
             courseStore=new CourseStore(data.resolve("courses"));
+            generated=new GeneratedCourses(this,courseStore);
             Spaces spaces=new Spaces(courseStore,new EraStore(data.resolve("eras.json")));
             TemplateStore templateStore=new TemplateStore(data.resolve("templates.json"));
             Scaffold scaffold=new Scaffold() {
@@ -121,6 +128,15 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             }
             display=new PlayerDisplay(new Ranks(progress::rank),style);
             participants.rankUps(new RankUps(rank -> display.style().badge(rank)));
+            // Replays: official clears are recorded; builders watch them with /replay.
+            var replayStore=new konqasasas.gauntlet.replay.ReplayStore(database,data.resolve("replays"),Math.max(0,getConfig().getInt("replays.recent",3)),
+                    Math.max(1,getConfig().getLong("replays.max-mb",1024))*1024*1024);
+            var recorder=new konqasasas.gauntlet.replay.ReplayRecorder(this,replayStore);
+            recorder.start();
+            water.onChange(recorder::changed);
+            participants.replays(recorder);
+            replayViewer=new konqasasas.gauntlet.replay.ReplayViewer(this,replayStore,courseStore,participants::active);
+            replayViewer.start();
             nameTags=new NameTags(this,display,playerData,participants::active);
             Teleports.beforeTeleport(nameTags::detach);
             visibility=new Visibility(this,playerData,nameTags);
@@ -138,6 +154,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             ghosts.start();
             courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes,spaces,freePlaceable);
             courses.start();
+            new ModuleCommands(this,courses,generated).start();
             kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint,
                     freePlaceable,item -> tools.kind(item)==ToolItems.Kind.SCAFFOLD,this::retry);
             kit.start();
@@ -174,6 +191,14 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             packs=new ResourcePacks(this);
             packs.start();
             menu.packState(packs::menuState);
+            // Rankings: names in their rank colors with the badge; rows in the ranking_row slot's standard look.
+            RankingScreens rankingScreens=new RankingScreens(this,new Rankings(database),courseStore,id -> {
+                String name=Optional.ofNullable(Bukkit.getOfflinePlayer(id).getName()).orElse(id.toString().substring(0,8));
+                int rank=Math.clamp(progress.rank(id),0,Ranks.MAX);
+                return display.style().full(display.style().badge(rank),false,display.style().rank(rank,name));
+            },() -> cosmetics.catalog().standard("ranking_row").theme());
+            rankingScreens.start();
+            menu.rankings(rankingScreens);
             getLogger().info("Parkour Gauntlet ready: /gauntlet kit, /course (Paper 26.3)");
         } catch(IOException|RuntimeException e) {
             getLogger().log(Level.SEVERE,"Cannot initialize Parkour Gauntlet; existing state was preserved",e);
@@ -195,6 +220,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(nameTags!=null) nameTags.stop();
         if(visibility!=null) visibility.stop();
         if(ghosts!=null) ghosts.stop();
+        if(replayViewer!=null) replayViewer.stop();
         if(participants!=null) participants.stop();
         if(lanes!=null) lanes.stop();
         if(water!=null) water.stop();
@@ -258,6 +284,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
         if(args.length>=1 && args[0].equalsIgnoreCase("rank")) { rankCommand(player,args); return true; }
         if(args.length==1 && args[0].equalsIgnoreCase("placeable")) { kit.toggleLimit(player); return true; }
         if(args.length==1 && args[0].equalsIgnoreCase("marker")) { courses.giveMarker(player); return true; }
+
         if(args.length!=1 || !args[0].equalsIgnoreCase("kit")) { tell(player,"editor.kit.usage"); return true; }
         if(!tools.grant(player)) tell(player,"editor.kit.full");
         else tell(player,"editor.kit.given");
@@ -266,6 +293,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         if(args.length==1) return List.of("kit","trigger","reload","rank","placeable","marker").stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).toList();
         if(args.length==2 && args[0].equalsIgnoreCase("reload")) return List.of("lang","menu","display","packs");
+
         if(args.length==2 && args[0].equalsIgnoreCase("rank"))
             return Bukkit.getOnlinePlayers().stream().map(Player::getName).filter(n -> n.toLowerCase(Locale.ROOT).startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         return List.of();

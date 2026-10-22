@@ -1,0 +1,30 @@
+# 装飾（見た目だけのもの）の一覧。サーバーでは plugins/ParkourGauntlet/cosmetics.yml に書いたものが足される
+# （枠は追加、商品とまとめ売りは同じ ID なら上書き）。変更後は /cosmetic reload で反映する。
+#
+# slots   枠の一覧。足すだけで枠が増える。各枠に standard の商品が1つ要る。
+#         名前の色・ランク・称号・トロフィー（name_color / rank / title / trophy）は実力の証明なので枠にできない。
+# items   商品。slot 枠 / theme 見た目の中身の名前（演出などはこの名前で選ぶ）/
+#         obtain 入手方法（start 最初から全員 / reward 報酬のみ・売らない / purchase 購入）/
+#         standard その枠の標準（何も選んでいないときに使う。obtain は start）
+# bundles まとめ売り。items に purchase の商品を並べる。買うと中の商品を1つずつ持つ
+slots:
+  - stage_clear      # ステージクリア
+  - rank_up          # ランクアップの儀式
+  - room_arrival     # 部屋に届く演出
+  - record_wall      # 記録の壁に加わる演出
+  - ranking_row      # 順位の行
+  - result_card      # 結果カード
+  - room_theme       # 部屋の内装
+  - furniture        # 家具
+  - pedestal         # 台座
+items:
+  stage_clear.standard: { slot: stage_clear, theme: standard, standard: true }
+  rank_up.standard: { slot: rank_up, theme: standard, standard: true }
+  room_arrival.standard: { slot: room_arrival, theme: standard, standard: true }
+  record_wall.standard: { slot: record_wall, theme: standard, standard: true }
+  ranking_row.standard: { slot: ranking_row, theme: standard, standard: true }
+  result_card.standard: { slot: result_card, theme: standard, standard: true }
+  room_theme.standard: { slot: room_theme, theme: standard, standard: true }
+  furniture.standard: { slot: furniture, theme: standard, standard: true }
+  pedestal.standard: { slot: pedestal, theme: standard, standard: true }
+bundles: {}

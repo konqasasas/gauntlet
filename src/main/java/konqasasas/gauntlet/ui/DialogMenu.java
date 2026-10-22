@@ -49,6 +49,9 @@ public final class DialogMenu implements Listener,CommandExecutor {
     private final Participants participants;
     private DialogTemplates templates=DialogTemplates.empty(NAMESPACE);
     private Function<Player,PackStatus.State> packState=p -> PackStatus.State.READY;
+    private RankingScreens rankings;
+    /** The ranking screens, opened by dcg:ranking {course:"<id>"} or {rank:"<n>"}. */
+    public void rankings(RankingScreens screens) { rankings=screens; }
 
     public DialogMenu(JavaPlugin plugin,PlayerData data,Lobby lobby,Participants participants) {
         this.plugin=plugin; this.data=data; this.lobby=lobby; this.participants=participants;
@@ -180,6 +183,11 @@ public final class DialogMenu implements Listener,CommandExecutor {
                 open(player,screen);
             }
             case "close" -> player.closeDialog();
+            case "ranking" -> {
+                if(rankings==null) { Msg.send(player,"menu.unavailable"); return; }
+                if(payload.get("course")!=null) rankings.openCourse(player,payload.get("course"));
+                else rankings.openRank(player,payload.integer("rank",1));
+            }
             case "lobby" -> toLobby(player);
             case "emote_play" -> emote(player,payload.get("model"),payload.get("id"));
             // Every card fits on one page until the editor exports lists.

@@ -110,7 +110,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         }
         if(args.length==2 && (args[0].equalsIgnoreCase("play") || args[0].equalsIgnoreCase("practice"))) {
             boolean admin=sender.hasPermission(ADMIN);
-            return store.all().stream().filter(c -> admin || c.status()==CourseStatus.DONE).map(Course::id)
+            return store.all().stream().filter(c -> (admin || c.status()==CourseStatus.DONE) && c.module()==null && c.segments().isEmpty()).map(Course::id)
                     .filter(id -> id.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         }
         return List.of();
@@ -126,14 +126,15 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     // ---- Course list ----
     void openList(Player player) {
         Menu menu=new Menu(6,Msg.plain(player,"editor.list.title"));
-        List<Course> courses=store.all();
+        // Modules (pieces of generated courses) have their own list: /module.
+        List<Course> courses=store.all().stream().filter(c -> c.module()==null && c.segments().isEmpty()).toList();
         for(int i=0;i<Math.min(courses.size(),45);i++) {
             Course course=courses.get(i);
             menu.button(i,courseIcon(player,course),e -> openEdit(player,course.id()));
         }
         List<Component> createLore=new ArrayList<>();
         if(courses.size()>45) createLore.add(line(player,"editor.list.more",Msg.arg("count",courses.size())));
-        menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.list.create",createLore),e -> askNewId(player));
+        menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.list.create",createLore),e -> askNewId(player,false));
         menu.button(47,Msg.icon(player,Material.CLOCK,"editor.eras-button",Msg.arg("count",spaces.eras().all().size())),e -> eraMenus.openList(player));
         menu.button(51,Msg.icon(player,Material.CHEST,"editor.templates-button"),e -> itemMenus.openTemplates(player,() -> openList(player)));
         menu.button(53,Msg.icon(player,Material.HEAVY_WEIGHTED_PRESSURE_PLATE,"editor.free-triggers-button",Msg.arg("count",freeTriggers.all().size())),
@@ -152,12 +153,32 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         icon.editMeta(meta -> { meta.displayName(Icons.text(course.name())); meta.lore(lore); });
         return icon;
     }
-    private void askNewId(Player player) {
-        prompts.ask(player,"editor.prompt.new-id",text -> {
+    /** The modules (/module): courses marked as pieces of generated courses. */
+    public void openModules(Player player) {
+        if(!admin(player)) return;
+        Menu menu=new Menu(6,Msg.plain(player,"editor.modules.title"));
+        List<Course> modules=store.all().stream().filter(c -> c.module()!=null).toList();
+        for(int i=0;i<Math.min(modules.size(),45);i++) {
+            Course module=modules.get(i);
+            ItemStack icon=courseIcon(player,module);
+            icon.editMeta(meta -> {
+                List<Component> lore=new ArrayList<>(Objects.requireNonNullElse(meta.lore(),List.of()));
+                lore.addFirst(line(player,"editor.modules.entry",Msg.arg("difficulty",module.module().difficulty()),Msg.arg("seconds",module.module().seconds())));
+                meta.lore(lore);
+            });
+            menu.button(i,icon,e -> openEdit(player,module.id()));
+        }
+        menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.modules.create"),e -> askNewId(player,true));
+        menu.label(53,Msg.icon(player,Material.BOOK,"editor.module.help"));
+        menu.open(player);
+    }
+    private void askNewId(Player player,boolean module) {
+        prompts.ask(player,module ? "editor.prompt.new-module" : "editor.prompt.new-id",text -> {
             if(!admin(player)) return;
             String id=text.toLowerCase(Locale.ROOT);
             if(!CourseStore.validId(id)) { tell(player,"editor.new.invalid-id",Msg.arg("text",text)); return; }
             Course course=Course.create(id,player.getUniqueId(),player.getWorld().getUID());
+            if(module) course=course.edit().module(Module.standard()).build();
             Selections.Selected selected=selections.selected(player.getUniqueId());
             if(selected!=null) course=course.withRegion(selected.world(),selected.region());
             try { store.create(course); }
@@ -224,7 +245,9 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(24,Msg.icon(player,course.failOutside() ? Material.STRUCTURE_VOID : Material.GLASS,"editor.edit.fail-outside",Msg.arg("state",onOff(player,course.failOutside()))),
                 e -> update(player,id,c -> c.edit().failOutside(!c.failOutside()).build()));
         menu.button(25,Msg.icon(player,Material.CHEST,"editor.templates-button"),e -> itemMenus.openTemplates(player,() -> openEdit(player,id)));
-        menu.button(27,Msg.icon(player,Material.ARROW,"editor.back-to-list"),e -> openList(player));
+        boolean modular=course.module()!=null || !course.segments().isEmpty();
+        menu.button(27,Msg.icon(player,Material.ARROW,modular ? "editor.modules.back" : "editor.back-to-list"),
+                e -> { if(modular) openModules(player); else openList(player); });
         menu.button(28,Msg.icon(player,Material.LEAD,"editor.edit.route",Msg.arg("count",course.route().size()),
                 Msg.arg("length",String.format(Locale.ROOT,"%.1f",new RouteProgress(course.route()).total()))),e -> editRoute(player,id,e));
         menu.button(29,Msg.icon(player,Material.LIME_WOOL,"editor.edit.placeable",Msg.arg("count",course.placeable().size())),e -> placeableButton(player,id,e));
@@ -233,6 +256,9 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(30,Msg.icon(player,Material.RAIL,era==null ? "editor.edit.lanes" : "editor.edit.lanes-era",Msg.arg("count",space.laneCount()),
                 Msg.arg("waiting",lanes.waitingFor(space)),Msg.arg("era",era==null ? "" : era.name())),
                 e -> { if(era!=null && e.isRightClick()) eraMenus.openEra(player,era.id()); else openLanes(player,space.key(),() -> openEdit(player,id)); });
+        menu.button(32,Msg.icon(player,course.module()==null ? Material.GRAY_DYE : Material.PURPLE_DYE,course.module()==null ? "editor.edit.module-off" : "editor.edit.module",
+                Msg.arg("difficulty",course.module()==null ? 0 : course.module().difficulty()),Msg.arg("seconds",course.module()==null ? 0 : course.module().seconds())),
+                e -> openModule(player,id));
         menu.button(31,Msg.icon(player,Material.NETHER_STAR,course.problems().isEmpty() ? "editor.edit.play" : "editor.edit.play-blocked"),
                 e -> { if(admin(player)) participants.enter(player,id,e.isRightClick()); });
         menu.button(35,Msg.icon(player,Material.BARRIER,"editor.edit.delete"),e -> openDelete(player,id));
@@ -388,6 +414,36 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         });
         menu.button(15,Msg.icon(player,Material.LIME_CONCRETE,"editor.delete.cancel"),e -> openEdit(player,id));
         menu.open(player);
+    }
+
+    // ---- Module (a piece of generated courses) ----
+    /** On/off, difficulty, time, and how many of each loadout item it hands out. */
+    void openModule(Player player,String id) {
+        Course course=store.get(id);
+        if(course==null) { tell(player,"editor.deleted",Msg.arg("id",id)); openList(player); return; }
+        Menu menu=new Menu(3,Msg.plain(player,"editor.module.title",Msg.arg("name",course.name())));
+        Module m=course.module();
+        menu.button(10,Msg.icon(player,m==null ? Material.GRAY_DYE : Material.PURPLE_DYE,m==null ? "editor.module.off" : "editor.module.on"),e -> {
+            if(save(player,id,c -> c.edit().module(c.module()==null ? Module.standard() : null).build())) openModule(player,id);
+        });
+        if(m!=null) {
+            menu.button(11,Msg.icon(player,Material.BLAZE_POWDER,"editor.module.difficulty",Msg.arg("value",m.difficulty())),
+                    e -> changeModule(player,id,x -> x.withDifficulty(x.difficulty()+(e.isRightClick() ? -1 : 1))));
+            menu.button(12,Msg.icon(player,Material.CLOCK,"editor.module.seconds",Msg.arg("value",m.seconds())),
+                    e -> changeModule(player,id,x -> x.withSeconds(x.seconds()+(e.isShiftClick() ? 10 : 1)*(e.isRightClick() ? -1 : 1))));
+            for(int slot=0;slot<Course.COURSE_SLOTS;slot++) {
+                int index=slot; int count=m.counts().get(slot);
+                menu.button(14+slot,Msg.icon(player,Material.CHEST,"editor.module.count",Msg.arg("slot",slot+1),Msg.arg("item",items.name(player,course.loadout().get(slot))),
+                        Msg.arg("value",count==0 ? Msg.text(player,"editor.module.unlimited") : Component.text(count))),
+                        e -> changeModule(player,id,x -> x.withCount(index,x.counts().get(index)+(e.isShiftClick() ? 10 : 1)*(e.isRightClick() ? -1 : 1))));
+            }
+        }
+        menu.label(22,Msg.icon(player,Material.BOOK,"editor.module.help"));
+        menu.button(18,Msg.icon(player,Material.ARROW,"editor.back"),e -> openEdit(player,id));
+        menu.open(player);
+    }
+    private void changeModule(Player player,String id,UnaryOperator<Module> change) {
+        if(save(player,id,c -> c.module()==null ? c : c.edit().module(change.apply(c.module())).build())) openModule(player,id);
     }
 
     // ---- Lanes (of an era, or of a course outside the eras) ----

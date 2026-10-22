@@ -14,7 +14,7 @@ import java.util.logging.Logger;
  */
 public final class Database implements AutoCloseable {
     public interface Task<T> { T run(Connection connection) throws SQLException; }
-    private static final int SCHEMA=3;
+    private static final int SCHEMA=4;
     private final ExecutorService worker=Executors.newSingleThreadExecutor(r -> { Thread t=new Thread(r,"Gauntlet-DB"); t.setDaemon(true); return t; });
     private final Logger logger;
     private Connection connection;
@@ -72,6 +72,27 @@ public final class Database implements AutoCloseable {
                     // Rank (Anulus) from beating era bosses; 0 for newcomers, so they have no row.
                     s.execute("CREATE TABLE ranks(player TEXT PRIMARY KEY,rank INTEGER NOT NULL,updated_at INTEGER NOT NULL)");
                     s.execute("INSERT INTO schema_version(version) VALUES(3)");
+                }
+                if(version<4) {
+                    // Cosmetics: what each player owns and uses, and every purchase (kept even when an item is taken back).
+                    s.execute("CREATE TABLE owned(player TEXT NOT NULL,item TEXT NOT NULL,source TEXT NOT NULL,acquired_at INTEGER NOT NULL,PRIMARY KEY(player,item))");
+                    s.execute("CREATE TABLE equipped(player TEXT NOT NULL,slot TEXT NOT NULL,item TEXT NOT NULL,PRIMARY KEY(player,slot))");
+                    // buyer and recipient are kept apart so that gifts can come later.
+                    s.execute("CREATE TABLE purchases(id TEXT PRIMARY KEY,buyer TEXT NOT NULL,recipient TEXT NOT NULL,bundle TEXT,created_at INTEGER NOT NULL,provider TEXT,provider_order TEXT)");
+                    s.execute("CREATE INDEX purchases_buyer ON purchases(buyer)");
+                    s.execute("CREATE INDEX purchases_recipient ON purchases(recipient)");
+                    s.execute("CREATE TABLE purchase_items(purchase TEXT NOT NULL,item TEXT NOT NULL,PRIMARY KEY(purchase,item))");
+                    // Rankings: records taken off the ranking (kept, with who/when/why, and can be put back),
+                    // revisions that carry the records of the one before, and when each rank was first reached.
+                    s.execute("ALTER TABLE runs ADD COLUMN voided_at INTEGER");
+                    s.execute("ALTER TABLE runs ADD COLUMN voided_by TEXT");
+                    s.execute("ALTER TABLE runs ADD COLUMN voided_reason TEXT");
+                    s.execute("CREATE TABLE rev_carry(course TEXT NOT NULL,rev INTEGER NOT NULL,from_rev INTEGER NOT NULL,by TEXT,at INTEGER NOT NULL,PRIMARY KEY(course,rev))");
+                    s.execute("CREATE TABLE rank_ups(player TEXT NOT NULL,rank INTEGER NOT NULL,at INTEGER NOT NULL,PRIMARY KEY(player,rank))");
+                    // Replays of official clears (the files are in replays/; this is their index).
+                    s.execute("CREATE TABLE replays(run TEXT PRIMARY KEY,player TEXT NOT NULL,course TEXT NOT NULL,rev INTEGER NOT NULL,ticks INTEGER NOT NULL,created_at INTEGER NOT NULL,bytes INTEGER NOT NULL)");
+                    s.execute("CREATE INDEX replays_player ON replays(player,course,rev)");
+                    s.execute("INSERT INTO schema_version(version) VALUES(4)");
                 }
                 c.commit();
             } catch(SQLException e) { c.rollback(); throw e; }

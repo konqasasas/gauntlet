@@ -29,6 +29,21 @@ commands:
   settings:
     description: Personal settings
     usage: /settings [<key> <value>]
+  module:
+    description: Modules for generated courses (builders)
+    usage: /module [generate <profile> [seed] | play <profile> | practice <profile> | settings | place | set <key> <value> | profile <name> <modules> <from> <to>]
+    permission: gauntlet.admin
+  ranking:
+    description: Rankings
+    usage: /ranking <course> | /ranking rank <n>
+  replay:
+    description: Watch recorded runs (builders)
+    usage: /replay list [player] | play <id> | pause | back | forward | speed | stop
+    permission: gauntlet.admin
+  cosmetic:
+    description: Cosmetics for builders (testing)
+    usage: /cosmetic catalog|list|grant|revoke|equip|purchases|reload
+    permission: gauntlet.admin
 permissions:
   gauntlet.admin:
     description: Use course creation tools

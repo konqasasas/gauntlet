@@ -43,8 +43,13 @@ public final class Progress {
         long now=System.currentTimeMillis();
         db.write("rank "+player,c -> {
             try(PreparedStatement s=c.prepareStatement("INSERT OR REPLACE INTO ranks(player,rank,updated_at) VALUES(?,?,?)")) {
-                s.setString(1,player.toString()); s.setInt(2,rank); s.setLong(3,now); return s.executeUpdate();
+                s.setString(1,player.toString()); s.setInt(2,rank); s.setLong(3,now); s.executeUpdate();
             }
+            // The first time each rank was reached, for the rank-up order (kept even if the rank is set lower later).
+            if(rank>0) try(PreparedStatement s=c.prepareStatement("INSERT OR IGNORE INTO rank_ups(player,rank,at) VALUES(?,?,?)")) {
+                s.setString(1,player.toString()); s.setInt(2,rank); s.setLong(3,now); s.executeUpdate();
+            }
+            return null;
         });
     }
     public boolean reached(UUID player,String course) { return reached.getOrDefault(player,Set.of()).contains(course); }

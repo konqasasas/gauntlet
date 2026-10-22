@@ -63,6 +63,9 @@ public final class WaterFlows implements Listener {
     private BukkitTask task;
 
     public WaterFlows(JavaPlugin plugin,Path file) { this.plugin=plugin; this.file=file; }
+    /** Told of every block this class changes (setType fires no event), for replays. */
+    private java.util.function.Consumer<Block> changeListener=b -> {};
+    public void onChange(java.util.function.Consumer<Block> listener) { changeListener=listener; }
     public void start() throws IOException {
         if(Files.exists(file)) {
             try {
@@ -93,7 +96,7 @@ public final class WaterFlows implements Listener {
             Cell cell=new Cell(world.getUID(),pos.x(),pos.y(),pos.z());
             if(!block.getType().isAir() || byCell.containsKey(cell)) continue;
             track(flow,cell);
-            block.setType(Material.WATER);
+            block.setType(Material.WATER); changeListener.accept(block);
         }
     }
     /** Removes all water of this player. */
@@ -136,6 +139,7 @@ public final class WaterFlows implements Listener {
                 track(flow,cell);
                 try { block.setBlockData(Bukkit.createBlockData(entry.getValue())); }
                 catch(IllegalArgumentException e) { block.setType(Material.WATER); }
+                changeListener.accept(block);
             }
         }
     }
@@ -157,7 +161,7 @@ public final class WaterFlows implements Listener {
             if(world==null) { leftovers.add(cell); continue; }
             Block block=world.getBlockAt(cell.x(),cell.y(),cell.z());
             // No physics: neighbours of the same water are removed in this loop too.
-            if(block.getType()==Material.WATER) block.setType(Material.AIR,false);
+            if(block.getType()==Material.WATER) { block.setType(Material.AIR,false); changeListener.accept(block); }
         }
         dirty=true;
     }
@@ -171,7 +175,7 @@ public final class WaterFlows implements Listener {
         World world=Bukkit.getWorld(flow.world); if(world==null) return;
         for(Cell cell:flow.cells) {
             Block block=world.getBlockAt(cell.x(),cell.y(),cell.z());
-            if(block.getType()==Material.WATER && block.getBlockData() instanceof Levelled water && water.getLevel()==0) block.setType(Material.AIR);
+            if(block.getType()==Material.WATER && block.getBlockData() instanceof Levelled water && water.getLevel()==0) { block.setType(Material.AIR); changeListener.accept(block); }
         }
     }
     /** Drained away: stop tracking without touching any block. */
