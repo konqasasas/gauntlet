@@ -57,7 +57,9 @@ public final class GeneratedCourses {
             pieces.add(new Generator.Piece(c.id(),c.module().difficulty(),start,exit,c.region(),solid(w,c.region())));
             sources.put(c.id(),c);
         }
-        Generator.Plan plan=Generator.plan(pieces,profile,settings,new BlockPos(origin.getBlockX(),origin.getBlockY(),origin.getBlockZ()),seed);
+        Generator.Plan plan;
+        try { plan=Generator.plan(pieces,profile,settings,new BlockPos(origin.getBlockX(),origin.getBlockY(),origin.getBlockZ()),seed); }
+        catch(Generator.BandConflict e) { Msg.send(player,"editor.generate.band-conflict",Msg.arg("profile",profileName),Msg.arg("band",GeneratorMenus.describe(player,e.band))); return; }
         if(!plan.ok()) {
             Msg.send(player,"editor.generate.stuck",Msg.arg("index",plan.failedAt()+1),Msg.arg("difficulty",plan.target()),
                     Msg.arg("reason",Msg.text(player,"editor.generate.reason."+plan.failure())),Msg.arg("modules",pieces.size()));
@@ -110,7 +112,8 @@ public final class GeneratedCourses {
         return b.build();
     }
     /**
-     * A profile from config: modules, distribution (weights of difficulties 1-5) and bumpiness.
+     * A profile from config: modules, distribution (weights of difficulties 1-5), bumpiness and
+     * bands ("4-5:1-2": difficulties 4-5 at least 1, at most 2 times).
      * Profiles written before distributions existed (difficulty: [from, to]) weigh that range evenly.
      */
     static Generator.Profile profile(ConfigurationSection p) {
@@ -121,7 +124,9 @@ public final class GeneratedCourses {
             weights=new ArrayList<>();
             for(int d=Module.MIN_DIFFICULTY;d<=Module.MAX_DIFFICULTY;d++) weights.add(d>=Math.min(from,to) && d<=Math.max(from,to) ? 1.0 : 0.0);
         }
-        return new Generator.Profile(p.getInt("modules",5),weights,p.getDouble("bumpiness",1));
+        List<Generator.Band> bands=new ArrayList<>();
+        for(String band:p.getStringList("bands")) bands.add(Generator.Band.parse(band));
+        return new Generator.Profile(p.getInt("modules",5),weights,p.getDouble("bumpiness",1),bands);
     }
     /** The module's definition as placed: mirrored around its start column when it was, then moved. */
     private static Course asPlaced(Course module,Generator.Placed placed) {

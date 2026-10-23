@@ -32,28 +32,74 @@ public final class Generator {
             return new Piece(id,difficulty,start,exit.mirrorX(a),region.mirrorX(a),m);
         }
     }
-    /** modules: how many. weights: of difficulties 1-5 (any scale). bumpiness: how far a place may move from easy-to-hard order. */
-    public record Profile(int modules,List<Double> weights,double bumpiness) {
+    /** A rule of a profile: between min and max places have a difficulty from..to (inclusive). */
+    public record Band(int from,int to,int min,int max) {
+        public Band {
+            if(from<Module.MIN_DIFFICULTY || to>Module.MAX_DIFFICULTY || from>to || min<0 || max<min) throw new IllegalArgumentException("Invalid band");
+        }
+        boolean holds(int difficulty) { return difficulty>=from && difficulty<=to; }
+        /** "4-5:1-2" */
+        public String text() { return from+"-"+to+":"+min+"-"+max; }
+        public static Band parse(String text) {
+            String[] p=text.strip().split("[-:]");
+            if(p.length!=4) throw new IllegalArgumentException("Invalid band "+text);
+            return new Band(Integer.parseInt(p[0].strip()),Integer.parseInt(p[1].strip()),Integer.parseInt(p[2].strip()),Integer.parseInt(p[3].strip()));
+        }
+    }
+    /** The bands of a profile cannot all hold; which one could not be met. */
+    public static final class BandConflict extends IllegalStateException {
+        public final Band band;
+        BandConflict(Band band) { super("Band cannot be met: "+band.text()); this.band=band; }
+    }
+    /**
+     * modules: how many. weights: of difficulties 1-5 (any scale). bumpiness: how far a place may move
+     * from easy-to-hard order. bands: how many places a difficulty range must have.
+     */
+    public record Profile(int modules,List<Double> weights,double bumpiness,List<Band> bands) {
         public static final int LEVELS=Module.MAX_DIFFICULTY-Module.MIN_DIFFICULTY+1;
         public Profile {
             weights=List.copyOf(weights);
+            bands=bands==null ? List.of() : List.copyOf(bands);
             if(modules<1 || weights.size()!=LEVELS || weights.stream().anyMatch(w -> w==null || w<0 || !Double.isFinite(w))
                     || weights.stream().mapToDouble(Double::doubleValue).sum()<=0 || bumpiness<0 || !Double.isFinite(bumpiness))
                 throw new IllegalArgumentException("Invalid profile");
         }
+        public Profile(int modules,List<Double> weights,double bumpiness) { this(modules,weights,bumpiness,null); }
         /** Only this difficulty. */
         public static Profile only(int modules,int difficulty,double bumpiness) {
             List<Double> w=new ArrayList<>(Collections.nCopies(LEVELS,0.0)); w.set(difficulty-Module.MIN_DIFFICULTY,1.0);
             return new Profile(modules,w,bumpiness);
         }
-        /** The difficulty of each place: drawn from the weights, easy to hard, shaken by the bumpiness. */
+        /**
+         * The difficulty of each place: drawn from the weights, changed until every band holds
+         * (a place outside a band that needs more is redrawn inside it, and the other way round,
+         * by the weights), then put easy to hard and shaken by the bumpiness.
+         * Throws BandConflict when the bands cannot all hold.
+         */
         List<Integer> targets(Random random) {
-            double total=weights.stream().mapToDouble(Double::doubleValue).sum();
             List<Integer> drawn=new ArrayList<>();
-            for(int i=0;i<modules;i++) {
-                double r=random.nextDouble()*total; int level=0;
-                while(level<LEVELS-1 && r>=weights.get(level)) { r-=weights.get(level); level++; }
-                drawn.add(level+Module.MIN_DIFFICULTY);
+            for(int i=0;i<modules;i++) drawn.add(draw(random,d -> true));
+            for(int round=0;round<modules*bands.size()*4+8 && !bands.isEmpty();round++) {
+                boolean changed=false;
+                for(Band band:bands) {
+                    long inside=drawn.stream().filter(band::holds).count();
+                    if(inside<band.min()) {
+                        List<Integer> outside=new ArrayList<>();
+                        for(int i=0;i<drawn.size();i++) if(!band.holds(drawn.get(i))) outside.add(i);
+                        if(outside.isEmpty()) throw new BandConflict(band);
+                        drawn.set(pick(outside,drawn,random),draw(random,band::holds)); changed=true;
+                    } else if(inside>band.max()) {
+                        List<Integer> in=new ArrayList<>();
+                        for(int i=0;i<drawn.size();i++) if(band.holds(drawn.get(i))) in.add(i);
+                        if(band.from()==Module.MIN_DIFFICULTY && band.to()==Module.MAX_DIFFICULTY) throw new BandConflict(band);
+                        drawn.set(pick(in,drawn,random),draw(random,d -> !band.holds(d))); changed=true;
+                    }
+                }
+                if(!changed) break;
+            }
+            for(Band band:bands) {
+                long inside=drawn.stream().filter(band::holds).count();
+                if(inside<band.min() || inside>band.max()) throw new BandConflict(band);
             }
             Collections.sort(drawn);
             record Slot(int difficulty,double key) {}
@@ -61,6 +107,34 @@ public final class Generator {
             for(int i=0;i<drawn.size();i++) slots.add(new Slot(drawn.get(i),i+random.nextGaussian()*bumpiness));
             slots.sort(Comparator.comparingDouble(Slot::key));
             return slots.stream().map(Slot::difficulty).toList();
+        }
+        /** One of these places, preferring one whose change leaves every band at or above its min. */
+        private int pick(List<Integer> places,List<Integer> drawn,Random random) {
+            List<Integer> free=new ArrayList<>();
+            for(int i:places) {
+                int d=drawn.get(i);
+                if(bands.stream().noneMatch(b -> b.holds(d) && drawn.stream().filter(b::holds).count()<=b.min())) free.add(i);
+            }
+            List<Integer> from=free.isEmpty() ? places : free;
+            return from.get(random.nextInt(from.size()));
+        }
+        /** A difficulty allowed by the filter, by the weights (evenly when the allowed ones all weigh 0). */
+        private int draw(Random random,java.util.function.IntPredicate allowed) {
+            double total=0;
+            for(int l=0;l<LEVELS;l++) if(allowed.test(l+Module.MIN_DIFFICULTY)) total+=weights.get(l);
+            if(total<=0) {
+                List<Integer> any=new ArrayList<>();
+                for(int l=0;l<LEVELS;l++) if(allowed.test(l+Module.MIN_DIFFICULTY)) any.add(l+Module.MIN_DIFFICULTY);
+                return any.get(random.nextInt(any.size()));
+            }
+            double r=random.nextDouble()*total;
+            for(int l=0;l<LEVELS;l++) {
+                if(!allowed.test(l+Module.MIN_DIFFICULTY)) continue;
+                if(r<weights.get(l)) return l+Module.MIN_DIFFICULTY;
+                r-=weights.get(l);
+            }
+            for(int l=LEVELS-1;l>=0;l--) if(allowed.test(l+Module.MIN_DIFFICULTY)) return l+Module.MIN_DIFFICULTY;
+            throw new IllegalStateException("No difficulty allowed");
         }
     }
     /** jointLength 0 = no joint. minY..maxY: the world's height (inclusive). */

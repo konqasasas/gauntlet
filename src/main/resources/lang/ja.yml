@@ -260,7 +260,7 @@ editor.modules.create.lore:
 editor.modules.back.name: "モジュールの一覧へ"
 editor.modules.back.lore: []
 editor.prompt.new-module: "新しいモジュールのIDを入力してください（英小文字・数字・_・-、32文字まで）"
-editor.modules.usage: "/module | generate プロファイル [シード] | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 難易度1〜5の割合（5つ） [でこぼこ] | profile remove 名前"
+editor.modules.usage: "/module | menu（生成の設定の画面） | generate プロファイル [シード] | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 難易度1〜5の割合（5つ） [でこぼこ] | profile remove 名前"
 editor.modules.settings: "生成の設定：試験場所 <place>　難しい=難易度<hard>以上（続けて<streak>個まで）　つなぎ目 <joint>（長さ<length>、<block>）"
 editor.modules.profile-line: "<color:#cdbf9c>・プロファイル <profile>：<modules>個、分布 <distribution>、でこぼこ <bumpiness>"
 editor.modules.not-generated: "<profile> の生成したコースがありません。先に /module generate で作ってください。"
@@ -279,6 +279,107 @@ editor.generate.reason.no-candidate: "使えるモジュールが足りない（
 editor.generate.reason.no-modules: "モジュールが1つもない（完成していないものは使わない）"
 editor.generate.save-failed: "生成したコースを保存できませんでした。"
 editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。/module play <id> で遊べます。"
+editor.generate.band-conflict: "プロファイル <profile> の難易度帯の決まりを満たせません（<band>）。個数や、ほかの帯との組み合わせを見直してください。ワールドは変えていません。"
+editor.modules.generator.name: "生成の設定"
+editor.modules.generator.lore:
+  - "<color:#cdbf9c>試験場所・難しいモジュールの続き方・つなぎ目"
+  - "<color:#cdbf9c>プロファイル（個数・難易度の分布・でこぼこ・難易度帯の個数）"
+editor.generator.title: "生成の設定"
+editor.generator.on: "あり"
+editor.generator.off: "なし"
+editor.generator.place.name: "試験場所：<place>"
+editor.generator.place.lore:
+  - "<color:#cdbf9c>クリックで、足元のブロックにする（ここから +Z に伸びる）"
+editor.generator.hard-from.name: "難しいモジュール：難易度<value>以上"
+editor.generator.hard-from.lore:
+  - "<color:#cdbf9c>左クリックで上げる、右クリックで下げる"
+editor.generator.streak.name: "難しいモジュールは続けて<value>個まで"
+editor.generator.streak.lore:
+  - "<color:#cdbf9c>左クリックで増やす、右クリックで減らす（0 なら続けない）"
+editor.generator.joint.name: "つなぎ目：<value>"
+editor.generator.joint.lore:
+  - "<color:#cdbf9c>クリックで切り替え（あり：モジュールの間に平らな足場を置く）"
+editor.generator.joint-length.name: "つなぎ目の長さ：<value>"
+editor.generator.joint-length.lore:
+  - "<color:#cdbf9c>左クリックで増やす、右クリックで減らす（Shift で5ずつ）"
+editor.generator.joint-block.name: "つなぎ目のブロック：<value>"
+editor.generator.joint-block.lore:
+  - "<color:#cdbf9c>ブロックを手に持つか、カーソルに持ってクリック"
+editor.generator.need-block: "ブロックを手に持ってからクリックしてください。"
+editor.generator.profile.name: "プロファイル <profile>"
+editor.generator.profile.lore:
+  - "<color:#cdbf9c>クリックで編集・生成"
+editor.generator.profile-broken: "<color:#e07a6a>値がおかしいので生成できません（開いて直せます）"
+editor.generator.new-profile.name: "プロファイルを作る"
+editor.generator.new-profile.lore:
+  - "<color:#cdbf9c>名前をチャットで入力（英小文字・数字・_・-、24文字まで）"
+editor.generator.prompt-profile: "新しいプロファイルの名前を入力してください（英小文字・数字・_・-、24文字まで）"
+editor.generator.bad-name: "<text> は使えないか、もうある名前です。"
+editor.generator.help.name: "使い方"
+editor.generator.help.lore:
+  - "<color:#cdbf9c>数字は左クリックで増やし、右クリックで減らす。Shift を押しながらだと大きく変わる"
+  - "<color:#cdbf9c>変えた値はすぐ config.yml に保存され、次の生成から使われる"
+  - "<color:#cdbf9c>/module settings で、文字でも確かめられる"
+editor.generator.back.name: "生成の設定へ"
+editor.generator.back.lore: []
+editor.generator.back-profile.name: "プロファイルへ戻る"
+editor.generator.back-profile.lore: []
+editor.generator.profile-title: "プロファイル：<profile>"
+editor.generator.summary: "<color:#cdbf9c><modules>個、でこぼこ <bumpiness>"
+editor.generator.summary-distribution: "<color:#cdbf9c>分布 <distribution>"
+editor.generator.summary-band: "<color:#cdbf9c>・<band>"
+editor.generator.modules.name: "モジュールの数：<value>"
+editor.generator.modules.lore:
+  - "<color:#cdbf9c>左クリックで増やす、右クリックで減らす（Shift で5ずつ）"
+editor.generator.bumpiness.name: "でこぼこ：<value>"
+editor.generator.bumpiness.lore:
+  - "<color:#cdbf9c>0 なら易しい順にきれいに並ぶ。大きいほど起伏が増える"
+  - "<color:#cdbf9c>左クリックで0.5上げる、右クリックで0.5下げる（Shift で2ずつ）"
+editor.generator.weight.name: "難易度<difficulty>の割合：<weight>（<percent>%）"
+editor.generator.weight.lore:
+  - "<color:#cdbf9c>割合は比（合計100でなくてよい）。左クリックで増やす、右クリックで減らす（Shift で5ずつ）"
+editor.generator.samples.name: "試し引き"
+editor.generator.samples.lore:
+  - "<color:#cdbf9c>今の設定で引いた難易度の並び（クリックで引き直す）"
+editor.generator.sample: "<color:#e2c27a><order>"
+editor.generator.conflict: "<color:#e07a6a>難易度帯の決まりを満たせません：<band>"
+editor.generator.band.name: "難易度帯：<band>"
+editor.generator.band.lore:
+  - "<color:#cdbf9c>クリックで編集"
+editor.generator.band-text: "難易度<levels>を<count>個"
+editor.generator.new-band.name: "難易度帯の決まりを足す"
+editor.generator.new-band.lore:
+  - "<color:#cdbf9c>「この難易度のモジュールは〇個〜〇個」を決める"
+  - "<color:#cdbf9c>足りなければ帯の中から、多すぎれば帯の外から、分布の割合で引き直す"
+editor.generator.band-title: "難易度帯：<profile>"
+editor.generator.band-from.name: "帯の下限：難易度<value>"
+editor.generator.band-from.lore:
+  - "<color:#cdbf9c>左クリックで上げる、右クリックで下げる"
+editor.generator.band-to.name: "帯の上限：難易度<value>"
+editor.generator.band-to.lore:
+  - "<color:#cdbf9c>左クリックで上げる、右クリックで下げる"
+editor.generator.band-min.name: "最少：<value>個"
+editor.generator.band-min.lore:
+  - "<color:#cdbf9c>左クリックで増やす、右クリックで減らす（Shift で5ずつ）"
+editor.generator.band-max.name: "最多：<value>個"
+editor.generator.band-max.lore:
+  - "<color:#cdbf9c>左クリックで増やす、右クリックで減らす（Shift で5ずつ）"
+editor.generator.band-delete.name: "この決まりを消す"
+editor.generator.band-delete.lore: []
+editor.generator.generate.name: "生成する"
+editor.generator.generate.lore:
+  - "<color:#cdbf9c>試験場所に gen_<profile> を作る（前に生成したコースは消える）"
+editor.generator.generate-seed.name: "シードを決めて生成する"
+editor.generator.generate-seed.lore:
+  - "<color:#cdbf9c>シードをチャットで入力（同じシードなら同じコースになる）"
+editor.generator.prompt-seed: "シードを入力してください（数字か文字）"
+editor.generator.play.name: "遊ぶ"
+editor.generator.play.lore: []
+editor.generator.practice.name: "練習する"
+editor.generator.practice.lore: []
+editor.generator.delete.name: "プロファイル <profile> を消す"
+editor.generator.delete.lore:
+  - "<color:#e07a6a>Shift を押しながらクリックで消す"
 editor.replay.usage: "/replay list [人] | play 記録ID | pause | back | forward | speed | stop"
 editor.replay.list: "リプレイ：<count>件（新しい順、20件まで）"
 editor.replay.list-line: "<color:#cdbf9c>・<id>　<player>　<course>（版<rev>）　<time>s　<at>"

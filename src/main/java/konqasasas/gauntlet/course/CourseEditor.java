@@ -53,6 +53,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private final ItemMenus itemMenus;
     private final TriggerMenus triggerMenus;
     private final EraMenus eraMenus;
+    /** The generator's settings, set by /module once it starts. */
+    GeneratorMenus generatorMenus;
     /** The course each builder last opened, shown while holding the wand. */
     private final Map<UUID,String> editing=new HashMap<>();
     private BukkitTask outlines;
@@ -175,6 +177,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(49,Msg.icon(player,Material.WRITABLE_BOOK,"editor.modules.create"),e -> askNewId(player,true));
         menu.label(51,Msg.icon(player,Material.BOOK,"editor.module.help"));
         menu.label(47,Msg.icon(player,Material.COMPARATOR,"editor.modules.counts",difficultyCounts(player)));
+        if(generatorMenus!=null) menu.button(46,Msg.icon(player,Material.CRAFTER,"editor.modules.generator"),e -> generatorMenus.openSettings(player));
         menu.open(player);
     }
     /** One line per difficulty: how many modules, and how many of them are complete (used by generation). */

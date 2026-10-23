@@ -12,7 +12,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 /**
  * /module: modules, the pieces of generated courses (builders only).
  *
- *   /module                                   the module list (create, edit: the course editor)
+ *   /module                                   the module list (create, edit: the course editor; the generator's settings as a chest GUI)
+ *   /module menu                              the generator's settings (chest GUI: profiles, distributions, bands)
  *   /module generate <profile> [seed]          build gen_<profile> at the test place
  *   /module play <profile> | practice <profile>  play the generated course (official / practice)
  *   /module remove <profile>                   clear the generated course and delete it
@@ -33,6 +34,7 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
     public void start() {
         PluginCommand command=Objects.requireNonNull(plugin.getCommand("module"));
         command.setExecutor(this); command.setTabCompleter(this);
+        editor.generatorMenus=new GeneratorMenus(plugin,editor,generated);
     }
 
     @Override public boolean onCommand(CommandSender sender,Command command,String label,String[] args) {
@@ -55,6 +57,7 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
             }
             case "remove" -> { if(args.length==2) generated.remove(player,args[1]); else Msg.send(player,"editor.modules.usage"); }
             case "settings" -> settings(player);
+            case "menu" -> editor.generatorMenus.openSettings(player);
             case "place" -> {
                 Block under=player.getLocation().subtract(0,.01,0).getBlock();
                 String place=under.getWorld().getName()+" "+under.getX()+" "+under.getY()+" "+under.getZ();
@@ -122,6 +125,8 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
             try { p=GeneratedCourses.profile(profiles.getConfigurationSection(name)); } catch(RuntimeException e) { continue; }
             player.sendMessage(Msg.text(player,"editor.modules.profile-line",Msg.arg("profile",name),Msg.arg("modules",p.modules()),
                     Msg.arg("distribution",describe(p.weights())),Msg.arg("bumpiness",p.bumpiness())));
+            for(Generator.Band band:p.bands())
+                player.sendMessage(Msg.text(player,"editor.generator.summary-band",Msg.arg("band",GeneratorMenus.describe(player,band))));
         }
     }
     /** "1:10% 2:30% ..." */
@@ -134,7 +139,7 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         List<String> all=new ArrayList<>();
         ConfigurationSection profiles=plugin.getConfig().getConfigurationSection("generator.profiles");
-        if(args.length==1) all.addAll(List.of("generate","play","practice","remove","settings","place","set","profile"));
+        if(args.length==1) all.addAll(List.of("menu","generate","play","practice","remove","settings","place","set","profile"));
         else if(args.length==2 && Set.of("generate","play","practice","remove").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
         else if(args.length==2 && args[0].equalsIgnoreCase("set")) all.addAll(KEYS);
         else if(args.length==3 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("joint")) all.addAll(List.of("none","platform"));

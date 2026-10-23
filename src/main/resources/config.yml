@@ -96,7 +96,8 @@ generator:
   joint-length: 3
   joint-block: "minecraft:smooth_stone"
   # プロファイル。modules 何個つなぐか / distribution 難易度1〜5の割合（比。合計100でなくてよい）/
-  # bumpiness でこぼこ（0 なら易しい順にきれいに並ぶ。大きいほど順番が入れ替わり、起伏が増える。1〜2くらいが目安）
+  # bumpiness でこぼこ（0 なら易しい順にきれいに並ぶ。大きいほど順番が入れ替わり、起伏が増える。1〜2くらいが目安）/
+  # bands 難易度帯の決まり（任意）。"4-5:1-2" なら難易度4〜5を1個以上2個以下。ゲーム内の /module menu で編集できる
   profiles:
     test:
       modules: 5
