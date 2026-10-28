@@ -230,7 +230,15 @@ editor.module.difficulty.lore:
 editor.module.time.name: "モジュール時間：<time>秒（<ticks>tick）"
 editor.module.time.lore:
   - "<color:#cdbf9c>生成したコースの制限時間は、モジュール時間の合計にバッファを足したもの"
-  - "<color:#cdbf9c>左：＋1秒　右：−1秒　Shift で1tickずつ　Q：数値を入力"
+  - "<color:#cdbf9c>左：＋1秒　右：−1秒　Shift で1tickずつ　Q：数値を入力（手で変えるとロック）"
+editor.module.auto.name: "モジュール時間：自動（中央値）"
+editor.module.auto.lore:
+  - "<color:#cdbf9c>通しの記録が<passes>回以上たまると、中央値に合わせて変わる"
+  - "<color:#cdbf9c>手で時間を変えるとロックされる。クリック：ロックする"
+editor.module.locked.name: "<color:#e2c27a>モジュール時間：ロック中"
+editor.module.locked.lore:
+  - "<color:#cdbf9c>手で決めた時間のまま、自動では変わらない"
+  - "<color:#cdbf9c>クリック：ロックを外す（記録がたまっていれば、すぐ中央値になる）"
 editor.module.times-none: "<color:#cdbf9c>通しの記録：まだなし"
 editor.module.times-count: "<color:#c9a0e8>通しの記録：<passes>回（<players>人）"
 editor.module.times-values: "<color:#c9a0e8>平均 <mean>　中央値 <median>　遅い方から4分の1 <slow>"
@@ -265,7 +273,7 @@ editor.modules.create.lore:
 editor.modules.back.name: "モジュールの一覧へ"
 editor.modules.back.lore: []
 editor.prompt.new-module: "新しいモジュールのIDを入力してください（英小文字・数字・_・-、32文字まで）"
-editor.modules.usage: "/module | menu（生成の設定の画面） | generate プロファイル [シード] | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 難易度1〜5の割合（5つ） [でこぼこ] | profile remove 名前"
+editor.modules.usage: "/module | menu（生成の設定の画面） | generate プロファイル [シード] | measure プロファイル [シード]（計測用） | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 難易度1〜5の割合（5つ） [でこぼこ] | profile remove 名前"
 editor.modules.settings: "生成の設定：試験場所 <place>　難しい=難易度<hard>以上（続けて<streak>個まで）　つなぎ目 <joint>（長さ<length>、<block>）"
 editor.modules.profile-line: "<color:#cdbf9c>・プロファイル <profile>：<modules>個、分布 <distribution>、でこぼこ <bumpiness>"
 editor.modules.not-generated: "<profile> の生成したコースがありません。先に /module generate で作ってください。"
@@ -284,6 +292,8 @@ editor.generate.reason.no-candidate: "使えるモジュールが足りない（
 editor.generate.reason.no-modules: "モジュールが1つもない（完成していないものは使わない）"
 editor.generate.save-failed: "生成したコースを保存できませんでした。"
 editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。制限時間 <limit>秒（モジュール時間の合計 <total>秒＋バッファ）。/module play <id> で遊べます。"
+editor.generate.done-measure: "計測用のコース <id> を生成しました（<count>個、シード <seed>、制限時間なし）：<modules>。/module play <id> で遊べます。"
+editor.generate.measured-all: "すべてのモジュールに、今の版の通しの記録が<passes>回以上あります。計測用のコースは作りませんでした。"
 editor.generate.band-conflict: "プロファイル <profile> の難易度帯の決まりを満たせません（<band>）。個数や、ほかの帯との組み合わせを見直してください。ワールドは変えていません。"
 editor.modules.generator.name: "生成の設定"
 editor.modules.generator.lore:
@@ -385,6 +395,10 @@ editor.generator.generate-seed.name: "シードを決めて生成する"
 editor.generator.generate-seed.lore:
   - "<color:#cdbf9c>シードをチャットで入力（同じシードなら同じコースになる）"
 editor.generator.prompt-seed: "シードを入力してください（数字か文字）"
+editor.generator.measure.name: "計測用に生成する"
+editor.generator.measure.lore:
+  - "<color:#cdbf9c>制限時間なし。通しの記録が<passes>回に届いていないモジュールだけでつなぐ"
+  - "<color:#cdbf9c>難易度の割合とでこぼこはこのプロファイルのまま（難易度帯の決まりと難しい連続の上限は使わない）"
 editor.generator.play.name: "遊ぶ"
 editor.generator.play.lore: []
 editor.generator.practice.name: "練習する"

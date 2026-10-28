@@ -19,6 +19,8 @@ public final class ModuleTimes {
     private record Pass(UUID player,long ticks) {}
     private final Database db;
     private final Map<Key,List<Pass>> passes=new ConcurrentHashMap<>();
+    /** Told (module, rev) after each pass is counted. */
+    private java.util.function.BiConsumer<String,Integer> onPass=(m,r) -> {};
 
     public ModuleTimes(Database db) { this.db=db; }
     public void load() throws IOException {
@@ -32,6 +34,9 @@ public final class ModuleTimes {
         passes.clear();
         read.forEach((k,v) -> passes.put(k,Collections.synchronizedList(v)));
     }
+    public void onPass(java.util.function.BiConsumer<String,Integer> listener) { onPass=listener; }
+    /** Passes of this revision so far. */
+    public int passes(String module,int rev) { List<Pass> list=passes.get(new Key(module,rev)); return list==null ? 0 : list.size(); }
     /** Counts the pass now; the row is written in the background. */
     public void add(String module,int rev,UUID player,long ticks,boolean practice,boolean generated) {
         passes.computeIfAbsent(new Key(module,rev),k -> Collections.synchronizedList(new ArrayList<>())).add(new Pass(player,ticks));
@@ -43,6 +48,7 @@ public final class ModuleTimes {
                 return s.executeUpdate();
             }
         });
+        onPass.accept(module,rev);
     }
     /** null when nobody has gone through this revision yet. */
     public Summary summary(String module,int rev) {

@@ -14,7 +14,7 @@ public record Segment(String module,Region box,int ticks,List<ItemRef> loadout,L
         List<ItemRef> slots=new ArrayList<>(loadout==null ? List.of() : loadout);
         while(slots.size()<Course.COURSE_SLOTS) slots.add(null);
         loadout=Collections.unmodifiableList(slots.subList(0,Course.COURSE_SLOTS));
-        counts=new Module(1,1,counts).counts();
+        counts=new Module(1,1,counts,false).counts();
         moduleRev=moduleRev==null ? 0 : moduleRev;
     }
     /** The time limit of a generated course: its modules' times added up, plus buffer percent of that (rounded up). */

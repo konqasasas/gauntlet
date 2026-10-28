@@ -179,6 +179,9 @@ public final class GeneratorMenus {
             try { seed=Long.parseLong(text); } catch(NumberFormatException ex) { seed=text.hashCode(); }
             generated.generate(player,name,seed);
         }));
+        menu.button(40,Msg.icon(player,Material.SPYGLASS,"editor.generator.measure",Msg.arg("passes",editor.autoPasses())),e -> {
+            player.closeInventory(); generated.generate(player,name,null,true);
+        });
         menu.button(41,Msg.icon(player,Material.FEATHER,"editor.generator.play"),e -> play(player,name,false));
         menu.button(42,Msg.icon(player,Material.CLOCK,"editor.generator.practice"),e -> play(player,name,true));
         menu.button(44,Msg.icon(player,Material.LAVA_BUCKET,"editor.generator.delete",Msg.arg("profile",name)),e -> {

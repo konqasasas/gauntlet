@@ -126,7 +126,7 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
                 && route.equals(other.route) && placeable.equals(other.placeable)
                 && Objects.equals(counts(module),counts(other.module)) && segments.equals(other.segments) && limitTicks.equals(other.limitTicks);
     }
-    /** A module's difficulty and time are settings about it, not how it plays: changing them keeps its revision (and the times through it). */
+    /** A module's difficulty, time and lock are settings about it, not how it plays: changing them keeps its revision (and the times through it). */
     private static List<Integer> counts(Module m) { return m==null ? null : m.counts(); }
     /** Trigger names are labels for builders only. */
     private static List<Trigger> unnamed(List<Trigger> triggers) { return triggers.stream().map(t -> t.withName(null)).toList(); }

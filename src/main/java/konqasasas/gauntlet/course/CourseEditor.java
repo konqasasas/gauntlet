@@ -452,10 +452,15 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(m!=null) {
             menu.button(11,Msg.icon(player,Material.BLAZE_POWDER,"editor.module.difficulty",Msg.arg("value",m.difficulty())),
                     e -> changeModule(player,id,x -> x.withDifficulty(x.difficulty()+(e.isRightClick() ? -1 : 1))));
+            menu.button(13,Msg.icon(player,m.locked() ? Material.IRON_DOOR : Material.OAK_DOOR,m.locked() ? "editor.module.locked" : "editor.module.auto",
+                    Msg.arg("passes",autoPasses())),e -> {
+                changeModule(player,id,x -> x.withLocked(!x.locked()));
+                if(m.locked()) { autoTime(id); openModule(player,id); }
+            });
             menu.button(12,Msg.icon(player,Material.CLOCK,"editor.module.time",moduleTimeLines(player,course),
                     Msg.arg("time",RunClock.seconds(m.ticks())),Msg.arg("ticks",m.ticks())),e -> {
                 if(e.getClick()==ClickType.DROP || e.getClick()==ClickType.CONTROL_DROP) askModuleTicks(player,id);
-                else changeModule(player,id,x -> x.withTicks(x.ticks()+(e.isShiftClick() ? 1 : 20)*(e.isRightClick() ? -1 : 1)));
+                else changeModule(player,id,x -> x.withTicks(x.ticks()+(e.isShiftClick() ? 1 : 20)*(e.isRightClick() ? -1 : 1)).withLocked(true));
             });
             for(int slot=0;slot<Course.COURSE_SLOTS;slot++) {
                 int index=slot; int count=m.counts().get(slot);
@@ -468,6 +473,22 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.button(18,Msg.icon(player,Material.ARROW,"editor.back"),e -> openEdit(player,id));
         menu.open(player);
     }
+    /** Passes of a revision needed before its time follows the median (generator.auto-time-passes). */
+    public int autoPasses() { return Math.max(1,plugin.getConfig().getInt("generator.auto-time-passes",5)); }
+    /**
+     * An unlocked module with enough passes through its current revision takes the median of
+     * them as its time (rounded to a tick). Called after each pass and when a module is unlocked.
+     */
+    public void autoTime(String id) {
+        Course course=store.get(id);
+        if(moduleTimes==null || course==null || course.module()==null || course.module().locked()) return;
+        var summary=moduleTimes.summary(id,course.rev());
+        if(summary==null || summary.passes()<autoPasses()) return;
+        int ticks=(int)Math.clamp(Math.round(summary.median()),1,Module.MAX_TICKS);
+        if(ticks==course.module().ticks()) return;
+        try { store.save(course.edit().module(course.module().withTicks(ticks)).build()); }
+        catch(IOException|RuntimeException e) { plugin.getLogger().log(Level.WARNING,"Cannot set the time of module "+id,e); }
+    }
     /** The clean passes through this revision of the module, as a guide for its time. */
     private List<Component> moduleTimeLines(Player player,Course course) {
         var summary=moduleTimes==null ? null : moduleTimes.summary(course.id(),course.rev());
@@ -478,7 +499,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     }
     /** A time in ticks (possibly fractional) as seconds with its ticks: 12.35s (247t). */
     private static String ticksText(double ticks) { return String.format(Locale.ROOT,"%.2fs (%dt)",ticks/20,Math.round(ticks)); }
-    /** Q on the time: type it, in ticks (247) or seconds (12.35s). */
+    /** Q on the time: type it, in ticks (247) or seconds (12.35s). A time set by hand locks it. */
     private void askModuleTicks(Player player,String id) {
         prompts.ask(player,"editor.prompt.module-ticks",text -> {
             String t=text.strip().toLowerCase(Locale.ROOT);
@@ -489,7 +510,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             } catch(NumberFormatException e) { ticks=-1; }
             if(ticks<1 || ticks>Module.MAX_TICKS) { tell(player,"editor.module.ticks-invalid",Msg.arg("max",Module.MAX_TICKS)); return; }
             int value=ticks;
-            changeModule(player,id,x -> x.withTicks(value));
+            changeModule(player,id,x -> x.withTicks(value).withLocked(true));
         },Msg.arg("max",Module.MAX_TICKS));
     }
     private void changeModule(Player player,String id,UnaryOperator<Module> change) {

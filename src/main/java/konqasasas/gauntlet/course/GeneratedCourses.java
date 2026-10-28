@@ -29,9 +29,17 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class GeneratedCourses {
     private final JavaPlugin plugin;
     private final CourseStore store;
+    private konqasasas.gauntlet.data.ModuleTimes moduleTimes;
     public GeneratedCourses(JavaPlugin plugin,CourseStore store) { this.plugin=plugin; this.store=store; }
+    public void moduleTimes(konqasasas.gauntlet.data.ModuleTimes times) { moduleTimes=times; }
 
-    public void generate(Player player,String profileName,Long seedArg) {
+    public void generate(Player player,String profileName,Long seedArg) { generate(player,profileName,seedArg,false); }
+    /**
+     * measure: a course for measuring module times. No time limit, and only modules whose current
+     * revision has fewer passes than generator.auto-time-passes (as many as the profile asks, or fewer),
+     * by the profile's difficulty weights and bumpiness but without its bands or the hard streak.
+     */
+    public void generate(Player player,String profileName,Long seedArg,boolean measure) {
         ConfigurationSection config=plugin.getConfig().getConfigurationSection("generator");
         ConfigurationSection p=config==null ? null : config.getConfigurationSection("profiles."+profileName);
         if(p==null) { Msg.send(player,"editor.generate.no-profile",Msg.arg("profile",profileName)); return; }
@@ -48,7 +56,8 @@ public final class GeneratedCourses {
         try { profile=profile(p); }
         catch(IllegalArgumentException e) { Msg.send(player,"editor.generate.bad-profile",Msg.arg("profile",profileName)); return; }
         int joint=config.getString("joint","none").equalsIgnoreCase("platform") ? Math.max(1,config.getInt("joint-length",3)) : 0;
-        Generator.Settings settings=new Generator.Settings(config.getInt("hard-from",4),Math.max(0,config.getInt("max-hard-streak",2)),joint,world.getMinHeight(),world.getMaxHeight()-1);
+        int streak=measure ? Integer.MAX_VALUE : Math.max(0,config.getInt("max-hard-streak",2));
+        Generator.Settings settings=new Generator.Settings(config.getInt("hard-from",4),streak,joint,world.getMinHeight(),world.getMaxHeight()-1);
         BlockData jointBlock;
         try { jointBlock=Bukkit.createBlockData(config.getString("joint-block","minecraft:smooth_stone")); }
         catch(IllegalArgumentException e) { jointBlock=Material.SMOOTH_STONE.createBlockData(); }
@@ -59,12 +68,17 @@ public final class GeneratedCourses {
         List<Generator.Piece> pieces=new ArrayList<>();
         for(Course c:store.all()) {
             if(c.module()==null || !c.problems().isEmpty() || !c.segments().isEmpty()) continue;
+            if(measure && moduleTimes!=null && moduleTimes.passes(c.id(),c.rev())>=Math.max(1,config.getInt("auto-time-passes",5))) continue;
             World w=Bukkit.getWorld(c.world()); if(w==null) continue;
             Spot s=c.start();
             BlockPos start=new BlockPos((int)Math.floor(s.x()),(int)Math.floor(s.y()-.01),(int)Math.floor(s.z()));
             BlockPos exit=c.goals().stream().max(java.util.Comparator.comparingInt(BlockPos::z)).orElseThrow();
             pieces.add(new Generator.Piece(c.id(),c.module().difficulty(),start,exit,c.region(),solid(w,c.region())));
             sources.put(c.id(),c);
+        }
+        if(measure) {
+            if(pieces.isEmpty()) { Msg.send(player,"editor.generate.measured-all",Msg.arg("passes",Math.max(1,config.getInt("auto-time-passes",5)))); return; }
+            profile=new Generator.Profile(Math.min(profile.modules(),pieces.size()),profile.weights(),profile.bumpiness());
         }
         Generator.Plan plan;
         try { plan=Generator.plan(pieces,profile,settings,startBlock.plus(startOffset),seed); }
@@ -87,7 +101,7 @@ public final class GeneratedCourses {
         for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,pieces.stream().filter(x -> x.id().equals(placed.piece().id())).findFirst().orElseThrow(),placed);
         for(BlockPos j:plan.joints()) world.getBlockAt(j.x(),j.y(),j.z()).setBlockData(jointBlock,false);
 
-        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,config.getDouble("buffer-percent",10)));
+        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,config.getDouble("buffer-percent",10)),measure);
         try {
             if(previous==null) store.create(course);
             else store.save(course.sameGameplay(previous) ? course : course.edit().rev(previous.rev()+1).build());
@@ -95,14 +109,14 @@ public final class GeneratedCourses {
             Msg.send(player,"editor.generate.save-failed"); plugin.getLogger().log(Level.SEVERE,"Cannot save generated course "+id,e); return;
         }
         int total=course.segments().stream().mapToInt(Segment::ticks).sum();
-        Msg.send(player,"editor.generate.done",Msg.arg("id",id),Msg.arg("count",plan.placed().size()),Msg.arg("seed",seed),
+        Msg.send(player,measure ? "editor.generate.done-measure" : "editor.generate.done",Msg.arg("id",id),Msg.arg("count",plan.placed().size()),Msg.arg("seed",seed),
                 Msg.arg("limit",konqasasas.gauntlet.play.RunClock.seconds(course.limitTicks())),Msg.arg("total",konqasasas.gauntlet.play.RunClock.seconds(total)),
                 Msg.arg("modules",String.join(" → ",plan.placed().stream().map(x -> x.piece().id()+"("+x.piece().difficulty()+")").toList())));
     }
 
     /** Everything of the modules moved into place, as one course. */
     private Course build(String id,String profile,long seed,UUID author,UUID world,Generator.Plan plan,Map<String,Course> sources,Course previous,
-                         Spot start,BlockPos startBlock,double bufferPercent) {
+                         Spot start,BlockPos startBlock,double bufferPercent,boolean measure) {
         List<Segment> segments=new ArrayList<>();
         List<Trigger> triggers=new ArrayList<>(); List<RoutePoint> route=new ArrayList<>(); List<BlockPos> placeable=new ArrayList<>();
         Region box=null;
@@ -118,11 +132,12 @@ public final class GeneratedCourses {
         for(BlockPos j:plan.joints()) box=union(box,new Region(j.x(),j.y(),j.z(),j.x(),j.y()+3,j.z()));
         box=union(box,new Region(startBlock.x(),startBlock.y(),startBlock.z(),startBlock.x(),startBlock.y()+3,startBlock.z()));
         Course first=asPlaced(sources.get(plan.placed().getFirst().piece().id()),plan.placed().getFirst());
-        String name=("生成 "+profile+" #"+Long.toHexString(seed)).substring(0,Math.min(Course.MAX_NAME_LENGTH,("生成 "+profile+" #"+Long.toHexString(seed)).length()));
+        String full=(measure ? "計測 " : "生成 ")+profile+" #"+Long.toHexString(seed);
+        String name=full.substring(0,Math.min(Course.MAX_NAME_LENGTH,full.length()));
         Course base=previous!=null ? previous : Course.create(id,author,world);
         var b=base.edit().name(name).status(CourseStatus.DRAFT).region(world,box).start(start).goals(List.of(plan.placed().getLast().exit()))
                 .timeLimit(0).triggers(triggers).route(route.size()>Course.MAX_ROUTE_POINTS ? route.subList(0,Course.MAX_ROUTE_POINTS) : route)
-                .placeable(placeable).lanes(List.of()).module(null).segments(segments).limitTicks(Segment.limit(segments,bufferPercent)).failLava(true).failOutside(true);
+                .placeable(placeable).lanes(List.of()).module(null).segments(segments).limitTicks(measure ? 0 : Segment.limit(segments,bufferPercent)).failLava(true).failOutside(true);
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) b.loadout(slot,first.loadout().get(slot));
         return b.build();
     }

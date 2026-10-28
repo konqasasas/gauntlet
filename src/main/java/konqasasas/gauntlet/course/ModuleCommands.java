@@ -15,6 +15,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   /module                                   the module list (create, edit: the course editor; the generator's settings as a chest GUI)
  *   /module menu                              the generator's settings (chest GUI: profiles, distributions, bands)
  *   /module generate <profile> [seed]          build gen_<profile> at the test place
+ *   /module measure <profile> [seed]           the same for measuring module times: no limit, only modules with too few passes
  *   /module play <profile> | practice <profile>  play the generated course (official / practice)
  *   /module remove <profile>                   clear the generated course and delete it
  *   /module settings                           what generation uses now
@@ -42,11 +43,11 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
         if(!editor.admin(player)) return true;
         if(args.length==0) { editor.openModules(player); return true; }
         switch(args[0].toLowerCase(Locale.ROOT)) {
-            case "generate" -> {
+            case "generate","measure" -> {
                 if(args.length<2 || args.length>3) { Msg.send(player,"editor.modules.usage"); return true; }
                 Long seed=null;
                 if(args.length==3) try { seed=Long.parseLong(args[2]); } catch(NumberFormatException e) { seed=(long)args[2].hashCode(); }
-                generated.generate(player,args[1],seed);
+                generated.generate(player,args[1],seed,args[0].equalsIgnoreCase("measure"));
             }
             case "play","practice" -> {
                 if(args.length!=2) { Msg.send(player,"editor.modules.usage"); return true; }
@@ -140,8 +141,8 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
     @Override public List<String> onTabComplete(CommandSender sender,Command command,String alias,String[] args) {
         List<String> all=new ArrayList<>();
         ConfigurationSection profiles=plugin.getConfig().getConfigurationSection("generator.profiles");
-        if(args.length==1) all.addAll(List.of("menu","generate","play","practice","remove","settings","place","set","profile"));
-        else if(args.length==2 && Set.of("generate","play","practice","remove").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
+        if(args.length==1) all.addAll(List.of("menu","generate","measure","play","practice","remove","settings","place","set","profile"));
+        else if(args.length==2 && Set.of("generate","measure","play","practice","remove").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
         else if(args.length==2 && args[0].equalsIgnoreCase("set")) all.addAll(KEYS);
         else if(args.length==3 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("joint")) all.addAll(List.of("none","platform"));
         else if(args.length==2 && args[0].equalsIgnoreCase("profile")) { all.add("remove"); if(profiles!=null) all.addAll(profiles.getKeys(false)); }

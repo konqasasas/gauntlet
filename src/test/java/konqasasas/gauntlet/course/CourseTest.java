@@ -82,7 +82,8 @@ class CourseTest {
     @Test void moduleTimeAndDifficultyDoNotChangeHowItPlays() {
         Course plain=Course.create("m",author,world);
         Course module=plain.edit().module(Module.standard()).build();
-        assertTrue(module.sameGameplay(module.edit().module(module.module().withTicks(345).withDifficulty(4)).build()));
+        assertTrue(module.sameGameplay(module.edit().module(module.module().withTicks(345).withDifficulty(4).withLocked(true)).build()));
+        assertFalse(Module.standard().locked(),"A new module follows the median");
         assertFalse(module.sameGameplay(module.edit().module(module.module().withCount(0,5)).build()));
         assertFalse(plain.sameGameplay(module),"Turning it into a module does");
     }
