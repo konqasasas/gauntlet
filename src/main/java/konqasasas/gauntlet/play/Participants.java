@@ -73,8 +73,9 @@ public final class Participants implements Listener {
         /**
          * The module being timed (a segment, or a module course played alone): since which client tick
          * (RunClock.received), and whether it is still clean (no save loaded, no flight since entering it).
+         * passOutside: the course starts outside its first module, whose time counts once the player is in its box.
          */
-        long passFrom; boolean passClean;
+        long passFrom; boolean passClean,passOutside;
         final RunClock clock=new RunClock();
         int lastClientTick; long startNanos,startedAt; boolean unmeasured,goalReached,flew;
         RunRecord.Reason pendingFail;
@@ -314,7 +315,10 @@ public final class Participants implements Listener {
         Spot s=course.start(); session.waitAt=new Vector(s.x(),s.y(),s.z()); session.goalAt=null;
         // A generated course starts in its first module, with that module's items and time.
         session.segment=-1;
-        if(!course.segments().isEmpty()) enterSegment(player,session,course,0);
+        if(!course.segments().isEmpty()) {
+            enterSegment(player,session,course,0);
+            session.passOutside=!course.segments().getFirst().box().contains(s.x(),s.y(),s.z());
+        }
         else beginPass(session);
     }
     /**
@@ -340,19 +344,22 @@ public final class Participants implements Listener {
     }
     /** The next module, when the player is inside its box. */
     private void advanceSegment(Player player,Session session,Course course,Location at) {
+        if(session.passOutside && session.segment>=0 && course.segments().get(session.segment).box().contains(at.getX(),at.getY(),at.getZ())) {
+            session.passFrom=session.clock.received(); session.passOutside=false;
+        }
         int next=session.segment+1;
         if(next<course.segments().size() && course.segments().get(next).box().contains(at.getX(),at.getY(),at.getZ())) {
             finishPass(player,session,course);
             enterSegment(player,session,course,next);
         }
     }
-    private static void beginPass(Session session) { session.passFrom=session.clock.received(); session.passClean=true; }
+    private static void beginPass(Session session) { session.passFrom=session.clock.received(); session.passClean=true; session.passOutside=false; }
     /**
      * Leaving the module being timed (into the next one, or at the goal): its time goes to the module
      * times when nothing reset it on the way and the clock was running from its start.
      */
     private void finishPass(Player player,Session session,Course course) {
-        if(moduleTimes==null || !session.passClean || session.unmeasured || session.clock.phase()==RunClock.Phase.WAITING) return;
+        if(moduleTimes==null || !session.passClean || session.passOutside || session.unmeasured || session.clock.phase()==RunClock.Phase.WAITING) return;
         session.passClean=false;
         long ticks=session.clock.received()-session.passFrom;
         if(ticks<=0) return;
@@ -567,7 +574,7 @@ public final class Participants implements Listener {
         if(session.clock.tick(moved)) {
             session.startNanos=System.nanoTime(); session.startedAt=System.currentTimeMillis();
             // The module being timed starts with the run, not when the player was put at the start.
-            session.passFrom=session.clock.received();
+            if(!session.passOutside) session.passFrom=session.clock.received();
             if(replays!=null && !session.practice) replays.begin(player,course);
         }
         if(player.isFlying()) { session.flew=true; session.passClean=false; }

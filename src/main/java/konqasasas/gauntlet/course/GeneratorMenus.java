@@ -31,6 +31,14 @@ public final class GeneratorMenus {
         return g!=null ? g : plugin.getConfig().createSection("generator");
     }
     private void save(String path,Object value) { plugin.getConfig().set("generator."+path,value); plugin.saveConfig(); }
+    /** Ticks typed as 247 or as seconds 12.35s; -1 when malformed. */
+    static int parseTicks(String text) {
+        String t=text.strip().toLowerCase(Locale.ROOT);
+        try {
+            return t.endsWith("s") || t.endsWith("秒") ? (int)Math.round(Double.parseDouble(t.replace("秒","").replace("s","").strip())*20)
+                    : Integer.parseInt(t.replace("t","").strip());
+        } catch(NumberFormatException e) { return -1; }
+    }
     /** +1 / -1 by left / right click, times big with Shift. */
     private static int step(InventoryClickEvent e,int big) { return (e.isRightClick() ? -1 : 1)*(e.isShiftClick() ? big : 1); }
 
@@ -53,6 +61,18 @@ public final class GeneratorMenus {
                     save("start-offset",d.x()+" "+d.y()+" "+d.z());
                     openSettings(player);
                 }));
+        int startTicks=Math.max(0,g.getInt("start-ticks",0));
+        menu.button(4,Msg.icon(player,Material.CLOCK,"editor.generator.start-ticks",Msg.arg("time",konqasasas.gauntlet.play.RunClock.seconds(startTicks)),Msg.arg("ticks",startTicks)),e -> {
+            if(e.getClick()==org.bukkit.event.inventory.ClickType.DROP || e.getClick()==org.bukkit.event.inventory.ClickType.CONTROL_DROP) {
+                editor.prompts.ask(player,"editor.prompt.start-ticks",text -> {
+                    int ticks=parseTicks(text);
+                    if(ticks<0 || ticks>Module.MAX_TICKS) { editor.tell(player,"editor.generator.start-ticks-invalid",Msg.arg("max",Module.MAX_TICKS)); return; }
+                    save("start-ticks",ticks); openSettings(player);
+                });
+                return;
+            }
+            save("start-ticks",Math.clamp(startTicks+(e.isShiftClick() ? 1 : 20)*(e.isRightClick() ? -1 : 1),0,Module.MAX_TICKS)); openSettings(player);
+        });
         int hard=g.getInt("hard-from",4),streak=g.getInt("max-hard-streak",2);
         menu.button(2,Msg.icon(player,Material.BLAZE_POWDER,"editor.generator.hard-from",Msg.arg("value",hard)),e -> {
             save("hard-from",Math.clamp(hard+step(e,1),Module.MIN_DIFFICULTY,Module.MAX_DIFFICULTY)); openSettings(player);

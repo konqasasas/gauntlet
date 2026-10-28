@@ -101,7 +101,7 @@ public final class GeneratedCourses {
         for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,pieces.stream().filter(x -> x.id().equals(placed.piece().id())).findFirst().orElseThrow(),placed);
         for(BlockPos j:plan.joints()) world.getBlockAt(j.x(),j.y(),j.z()).setBlockData(jointBlock,false);
 
-        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",10))),measure);
+        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,config.getInt("start-ticks",0)),Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",10))),measure);
         try {
             if(previous==null) store.create(course);
             else store.save(course.sameGameplay(previous) ? course : course.edit().rev(previous.rev()+1).build());
@@ -116,7 +116,7 @@ public final class GeneratedCourses {
 
     /** Everything of the modules moved into place, as one course. */
     private Course build(String id,String profile,long seed,UUID author,UUID world,Generator.Plan plan,Map<String,Course> sources,Course previous,
-                         Spot start,BlockPos startBlock,double bufferPercent,boolean measure) {
+                         Spot start,BlockPos startBlock,int startTicks,double bufferPercent,boolean measure) {
         List<Segment> segments=new ArrayList<>();
         List<Trigger> triggers=new ArrayList<>(); List<RoutePoint> route=new ArrayList<>(); List<BlockPos> placeable=new ArrayList<>();
         Region box=null;
@@ -140,7 +140,7 @@ public final class GeneratedCourses {
         Course base=previous!=null ? previous : Course.create(id,author,world);
         var b=base.edit().name(name).status(CourseStatus.DRAFT).region(world,box).start(start).goals(List.of(plan.placed().getLast().exit()))
                 .timeLimit(0).triggers(triggers).route(route.size()>Course.MAX_ROUTE_POINTS ? route.subList(0,Course.MAX_ROUTE_POINTS) : route)
-                .placeable(placeable).lanes(List.of()).module(null).segments(segments).limitTicks(measure ? 0 : Segment.limit(segments,bufferPercent)).failLava(true).failOutside(true);
+                .placeable(placeable).lanes(List.of()).module(null).segments(segments).limitTicks(measure ? 0 : Segment.limit(segments,startTicks,bufferPercent)).failLava(true).failOutside(true);
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) b.loadout(slot,first.loadout().get(slot));
         return b.build();
     }

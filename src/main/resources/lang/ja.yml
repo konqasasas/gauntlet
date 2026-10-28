@@ -291,7 +291,7 @@ editor.generate.reason.overlap: "前のモジュールのブロックと重な�
 editor.generate.reason.no-candidate: "使えるモジュールが足りない（同じモジュールは1回の生成で1度まで）か、難しいモジュールを続けられる上限に当たった"
 editor.generate.reason.no-modules: "モジュールが1つもない（完成していないものは使わない）"
 editor.generate.save-failed: "生成したコースを保存できませんでした。"
-editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。制限時間 <limit>秒（モジュール時間の合計 <total>秒＋バッファ）。/module play <id> で遊べます。"
+editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。制限時間 <limit>秒（モジュール時間の合計 <total>秒とスタートの時間に、バッファを足したもの）。/module play <id> で遊べます。"
 editor.generate.done-measure: "計測用のコース <id> を生成しました（<count>個、シード <seed>、制限時間なし）：<modules>。/module play <id> で遊べます。"
 editor.generate.measured-all: "すべてのモジュールに、今の版の通しの記録が<passes>回以上あります。計測用のコースは作りませんでした。"
 editor.generate.band-conflict: "プロファイル <profile> の難易度帯の決まりを満たせません（<band>）。個数や、ほかの帯との組み合わせを見直してください。ワールドは変えていません。"
@@ -306,6 +306,12 @@ editor.generator.place.name: "コースのスタート：<place>"
 editor.generator.place.lore:
   - "<color:#cdbf9c>クリックで、足元のブロックと今の向きにする（コースは +Z に伸びる）"
   - "<color:#cdbf9c>最初のモジュールのスタートは、ここからスタートのずれだけ離れた位置に置く"
+editor.generator.start-ticks.name: "スタートの時間：<time>秒（<ticks>tick）"
+editor.generator.start-ticks.lore:
+  - "<color:#cdbf9c>コースのスタートから最初のモジュールまでの時間。制限時間＝(モジュール時間の合計＋これ)×(1＋バッファ)"
+  - "<color:#cdbf9c>左：＋1秒　右：−1秒　Shift で1tickずつ　Q：数値を入力"
+editor.prompt.start-ticks: "スタートの時間を入力してください。tick なら 60、秒なら 3s（最大<max>tick）"
+editor.generator.start-ticks-invalid: "0〜<max> の tick 数か、秒（例：3s）を入力してください。"
 editor.generator.offset.name: "スタートのずれ：<value>"
 editor.generator.offset.lore:
   - "<color:#cdbf9c>コースのスタートのブロックから、最初のモジュールのスタートのブロックまで（x y z、整数）"
@@ -401,7 +407,7 @@ editor.generator.measure.lore:
   - "<color:#cdbf9c>難易度の割合とでこぼこはこのプロファイルのまま（難易度帯の決まりと難しい連続の上限は使わない）"
 editor.generator.buffer.name: "バッファ：<value>%"
 editor.generator.buffer.lore:
-  - "<color:#cdbf9c>このプロファイルで生成したコースの制限時間＝モジュール時間の合計×(1＋<value>%)"
+  - "<color:#cdbf9c>このプロファイルで生成したコースの制限時間＝(モジュール時間の合計＋スタートの時間)×(1＋<value>%)"
   - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ　Q：全体の値に戻す"
 editor.generator.buffer-default.name: "バッファ：<value>%（全体の値）"
 editor.generator.buffer-default.lore:

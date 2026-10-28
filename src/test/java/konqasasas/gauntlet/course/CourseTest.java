@@ -75,9 +75,10 @@ class CourseTest {
     @Test void generatedLimitIsTheModuleTimesPlusTheBuffer() {
         Region box=Region.of(0,0,0,1,1,1);
         List<Segment> segments=List.of(new Segment("a",box,200,null,null,0),new Segment("b",box,101,null,null,0));
-        assertEquals(301,Segment.limit(segments,0));
-        assertEquals(332,Segment.limit(segments,10),"301 x 1.1 = 331.1, rounded up");
-        assertEquals(330,Segment.limit(List.of(new Segment("a",box,300,null,null,0)),10),"Exact values are not rounded up");
+        assertEquals(301,Segment.limit(segments,0,0));
+        assertEquals(332,Segment.limit(segments,0,10),"301 x 1.1 = 331.1, rounded up");
+        assertEquals(330,Segment.limit(List.of(new Segment("a",box,300,null,null,0)),0,10),"Exact values are not rounded up");
+        assertEquals(352,Segment.limit(segments,19,10),"(301 + 19 from the start) x 1.1");
     }
     @Test void moduleTimeAndDifficultyDoNotChangeHowItPlays() {
         Course plain=Course.create("m",author,world);
