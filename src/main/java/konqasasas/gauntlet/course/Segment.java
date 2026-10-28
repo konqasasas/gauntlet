@@ -18,12 +18,12 @@ public record Segment(String module,Region box,int ticks,List<ItemRef> loadout,L
         moduleRev=moduleRev==null ? 0 : moduleRev;
     }
     /**
-     * The time limit of a generated course: its modules' times added up with startTicks (from the course's
-     * start to the first module), plus buffer percent of that (rounded up).
+     * The time limit of a generated course: its modules' times added up plus buffer percent of that
+     * (rounded up), then startTicks (from the course's start to the first module, without a buffer).
      */
     public static int limit(List<Segment> segments,int startTicks,double bufferPercent) {
-        long total=segments.stream().mapToLong(Segment::ticks).sum()+Math.max(0,startTicks);
-        return (int)Math.min(Integer.MAX_VALUE,(long)Math.ceil(total*(1+bufferPercent/100)-1e-9));
+        long total=segments.stream().mapToLong(Segment::ticks).sum();
+        return (int)Math.min(Integer.MAX_VALUE,(long)Math.ceil(total*(1+bufferPercent/100)-1e-9)+Math.max(0,startTicks));
     }
     public Segment moved(BlockPos d) { return new Segment(module,box.moved(d),ticks,loadout,counts,moduleRev); }
 }

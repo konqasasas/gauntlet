@@ -78,7 +78,7 @@ class CourseTest {
         assertEquals(301,Segment.limit(segments,0,0));
         assertEquals(332,Segment.limit(segments,0,10),"301 x 1.1 = 331.1, rounded up");
         assertEquals(330,Segment.limit(List.of(new Segment("a",box,300,null,null,0)),0,10),"Exact values are not rounded up");
-        assertEquals(352,Segment.limit(segments,19,10),"(301 + 19 from the start) x 1.1");
+        assertEquals(351,Segment.limit(segments,19,10),"301 x 1.1 rounded up, then 19 from the start without a buffer");
     }
     @Test void moduleTimeAndDifficultyDoNotChangeHowItPlays() {
         Course plain=Course.create("m",author,world);
