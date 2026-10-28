@@ -35,7 +35,7 @@ commands:
     permission: gauntlet.admin
   match:
     description: The match (courses 1, 2, ... open one after another)
-    usage: /match [play <n> | practice <n> | list | start | end | courses <profile>... | menu]
+    usage: /match [play <n> | practice <n> | list | place | roll | start | end | courses <profile>... | menu]
   ranking:
     description: Rankings
     usage: /ranking <course> | /ranking rank <n>

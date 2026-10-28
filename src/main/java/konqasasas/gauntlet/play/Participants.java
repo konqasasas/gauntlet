@@ -113,6 +113,7 @@ public final class Participants implements Listener {
     private RankUps rankUps;
     private konqasasas.gauntlet.replay.ReplayRecorder replays;
     private ModuleTimes moduleTimes;
+    private java.util.function.BiConsumer<Player,Integer> onMatchClear;
 
     public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items,WaterFlows water,
                         Lanes lanes,Spaces spaces,Progress progress) {
@@ -531,14 +532,12 @@ public final class Participants implements Listener {
         Sounds.system(player,Sound.UI_TOAST_CHALLENGE_COMPLETE,1f,1f);
         systemItems(player,session);
     }
-    /** An official clear of a match course: the next course is open (or it was the last). */
+    /** An official clear of a match course: told to the match (which moves the player on). */
     private void matchCleared(Player player,Course course) {
         int n=GeneratedCourses.matchIndex(course.id());
-        if(n==0) return;
-        Course next=courses.get(GeneratedCourses.matchId(n+1));
-        if(next!=null && next.status()==CourseStatus.DONE) Msg.send(player,"match.next",Msg.arg("n",n+1));
-        else Msg.send(player,"match.all-cleared");
+        if(n>0 && onMatchClear!=null) onMatchClear.accept(player,n);
     }
+    public void onMatchClear(java.util.function.BiConsumer<Player,Integer> listener) { onMatchClear=listener; }
     /** An official clear of an era's boss raises the rank (never lowers it). */
     private void rankUp(Player player,Course course) {
         Era era=spaces.era(course);

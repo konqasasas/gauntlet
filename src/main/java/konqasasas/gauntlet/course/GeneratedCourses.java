@@ -15,8 +15,8 @@ import org.bukkit.plugin.java.JavaPlugin;
  * /module generate <profile> [seed]: builds a course out of modules at the master
  * place (for testing) and saves it as the course gen_<profile>, playable like any
  * course. Every gen_ course is cleared first: they all share the master place.
- * /module remove clears one. The match (startMatch) generates its courses at the
- * places of their profiles instead, as match_1, match_2, ... A course is never
+ * /module remove clears one. The match rolls its courses (match_1, match_2, ...) for
+ * one place of its own and builds there the one being played. A course is never
  * generated over another generated course it does not replace.
  *
  * The course's start is its own (config generator.place, the block it stands on, and
@@ -39,8 +39,10 @@ public final class GeneratedCourses {
      * Where and as what a course is generated: its id, name (null: from the profile and seed) and status,
      * the block its start stands on and the facing there. replaces: generated courses whose blocks it
      * takes over (cleared first; deleted when deleteReplaced, except the course of the same id).
+     * build: false only saves the definition, without changing the world. quiet: no message when done.
      */
-    private record Target(String id,String name,CourseStatus status,Location place,float yaw,java.util.function.Predicate<Course> replaces,boolean deleteReplaced) {}
+    private record Target(String id,String name,CourseStatus status,Location place,float yaw,java.util.function.Predicate<Course> replaces,boolean deleteReplaced,
+                          boolean build,boolean quiet) {}
     public static final String DEBUG_PREFIX="gen_",MATCH_PREFIX="match_";
 
     public void generate(Player player,String profileName,Long seedArg) { generate(player,profileName,seedArg,false); }
@@ -57,7 +59,7 @@ public final class GeneratedCourses {
         Location place=config==null ? null : parsePlace(config.getString("place",""));
         if(place==null) { Msg.send(player,"editor.generate.no-place"); return; }
         generate(player,profileName,seedArg,measure,new Target(id,null,CourseStatus.DRAFT,place,(float)config.getDouble("start-yaw",0),
-                c -> c.id().startsWith(DEBUG_PREFIX),true));
+                c -> c.id().startsWith(DEBUG_PREFIX),true,true,false));
     }
     /** The id of course n (from 1) of the match. */
     public static String matchId(int n) { return MATCH_PREFIX+n; }
@@ -67,43 +69,85 @@ public final class GeneratedCourses {
         try { return Integer.parseInt(id.substring(MATCH_PREFIX.length())); } catch(NumberFormatException e) { return 0; }
     }
     /**
-     * Starts the match: the profiles of generator.match.courses, in order, each generated at its own place
-     * (profiles.<name>.place) as course 1, 2, ... (match_1, match_2, ...), open to everyone. Match courses
-     * beyond the count are cleared and closed. The definitions are kept, so a new match is a new revision
-     * and clears of an earlier match do not open the next course. Stops at the first course that cannot be made.
+     * Rolls the match: for the profiles of generator.match.courses, in order, a seed each, and the course
+     * it makes at the match place (generator.match.place) saved as match_1, match_2, ... (closed). Nothing
+     * in the world changes: a course is built at the place when someone plays it (one at a time, until lanes).
+     * A new roll is a new revision of each course, so clears of an earlier match do not open the next course.
      */
-    public void startMatch(Player player) {
+    public void rollMatch(Player player) {
         ConfigurationSection config=plugin.getConfig().getConfigurationSection("generator");
         List<String> order=config==null ? List.of() : config.getStringList("match.courses");
         if(order.isEmpty()) { Msg.send(player,"match.no-courses"); return; }
-        List<Location> places=new ArrayList<>();
-        for(String name:order) {
-            ConfigurationSection p=config.getConfigurationSection("profiles."+name);
-            if(p==null) { Msg.send(player,"editor.generate.no-profile",Msg.arg("profile",name)); return; }
-            Location place=parsePlace(p.getString("place",""));
-            if(place==null) { Msg.send(player,"match.no-place",Msg.arg("profile",name)); return; }
-            places.add(place);
-        }
+        Location place=matchPlace();
+        if(place==null) { Msg.send(player,"match.no-place"); return; }
+        clearBuilt();
+        List<String> rolled=new ArrayList<>();
+        Random random=new Random();
         for(int i=0;i<order.size();i++) {
-            String id=matchId(i+1);
-            ConfigurationSection p=config.getConfigurationSection("profiles."+order.get(i));
-            Course made=generate(player,order.get(i),null,false,new Target(id,Msg.plain(player,"match.course-name",Msg.arg("n",i+1)),CourseStatus.DONE,
-                    places.get(i),(float)p.getDouble("start-yaw",0),c -> c.id().equals(id),false));
-            if(made==null) { Msg.send(player,"match.stopped",Msg.arg("n",i+1)); return; }
+            long seed=random.nextLong();
+            if(generate(player,order.get(i),seed,false,matchTarget(player,i+1,CourseStatus.DRAFT,place,false))==null) {
+                Msg.send(player,"match.stopped",Msg.arg("n",i+1)); return;
+            }
+            rolled.add(order.get(i)+":"+seed);
         }
-        closeMatch(order.size());
-        for(Player online:Bukkit.getOnlinePlayers()) Msg.send(online,"match.started",Msg.arg("count",order.size()));
+        closeFrom(order.size()+1);
+        config.set("match.rolled",rolled); plugin.saveConfig();
+        Msg.send(player,"match.rolled",Msg.arg("count",rolled.size()));
     }
-    /** Ends the match: every match course cleared and closed (definitions kept). */
+    /** Opens the rolled courses and builds course 1 at the match place. */
+    public void startMatch(Player player) {
+        List<String> rolled=plugin.getConfig().getStringList("generator.match.rolled");
+        if(rolled.isEmpty()) { Msg.send(player,"match.not-rolled"); return; }
+        for(int n=1;n<=rolled.size();n++) {
+            Course c=store.get(matchId(n));
+            if(c==null) { Msg.send(player,"match.not-rolled"); return; }
+            try { store.save(c.withStatus(CourseStatus.DONE)); }
+            catch(IOException|RuntimeException e) { Msg.send(player,"editor.generate.save-failed"); plugin.getLogger().log(Level.SEVERE,"Cannot open "+c.id(),e); return; }
+        }
+        if(!buildMatch(player,1)) return;
+        for(Player online:Bukkit.getOnlinePlayers()) Msg.send(online,"match.started",Msg.arg("count",rolled.size()));
+    }
+    /** Ends the match: the course at the place cleared, every match course closed (definitions and the roll kept). */
     public void endMatch(Player player) {
-        closeMatch(0);
+        clearBuilt();
+        closeFrom(1);
         Msg.send(player,"match.ended");
     }
-    /** Match courses after the first keep: cleared and closed. */
-    private void closeMatch(int keep) {
+    /** Course n at the match place now (0: none). */
+    public int builtMatch() { return plugin.getConfig().getInt("generator.match.built",0); }
+    /**
+     * Course n of the roll built at the match place, replacing the one there (same seed, so the same course
+     * unless modules changed since the roll). False when it cannot be (told to the sender).
+     */
+    public boolean buildMatch(org.bukkit.command.CommandSender sender,int n) {
+        if(builtMatch()==n) return true;
+        List<String> rolled=plugin.getConfig().getStringList("generator.match.rolled");
+        Location place=matchPlace();
+        if(n<1 || n>rolled.size() || place==null) { Msg.send(sender,"match.not-rolled"); return false; }
+        String[] entry=rolled.get(n-1).split(":",2);
+        long seed;
+        try { seed=Long.parseLong(entry[1]); } catch(RuntimeException e) { Msg.send(sender,"match.not-rolled"); return false; }
+        Course previous=store.get(matchId(n));
+        CourseStatus status=previous!=null ? previous.status() : CourseStatus.DONE;
+        if(generate(sender,entry[0],seed,false,matchTarget(sender,n,status,place,true))==null) return false;
+        plugin.getConfig().set("generator.match.built",n); plugin.saveConfig();
+        return true;
+    }
+    private Target matchTarget(org.bukkit.command.CommandSender sender,int n,CourseStatus status,Location place,boolean build) {
+        return new Target(matchId(n),Msg.plain(sender,"match.course-name",Msg.arg("n",n)),status,place,
+                (float)plugin.getConfig().getDouble("generator.match.start-yaw",0),c -> c.id().equals(matchId(builtMatch())),false,build,true);
+    }
+    private Location matchPlace() { return parsePlace(plugin.getConfig().getString("generator.match.place","")); }
+    /** The course built at the match place, cleared. */
+    private void clearBuilt() {
+        Course built=store.get(matchId(builtMatch()));
+        if(built!=null) clear(built);
+        plugin.getConfig().set("generator.match.built",0); plugin.saveConfig();
+    }
+    /** Match courses from n on: closed. */
+    private void closeFrom(int n) {
         for(Course c:store.all()) {
-            if(matchIndex(c.id())<=keep || c.status()==CourseStatus.DRAFT) continue;
-            clear(c);
+            if(matchIndex(c.id())<n || c.status()==CourseStatus.DRAFT) continue;
             try { store.save(c.withStatus(CourseStatus.DRAFT)); }
             catch(IOException|RuntimeException e) { plugin.getLogger().log(Level.WARNING,"Cannot close match course "+c.id(),e); }
         }
@@ -119,7 +163,7 @@ public final class GeneratedCourses {
     }
 
     /** Generates the profile's course as the target; the course saved, or null (the player was told why). */
-    private Course generate(Player player,String profileName,Long seedArg,boolean measure,Target target) {
+    private Course generate(org.bukkit.command.CommandSender player,String profileName,Long seedArg,boolean measure,Target target) {
         ConfigurationSection config=plugin.getConfig().getConfigurationSection("generator");
         ConfigurationSection p=config==null ? null : config.getConfigurationSection("profiles."+profileName);
         if(p==null) { Msg.send(player,"editor.generate.no-profile",Msg.arg("profile",profileName)); return null; }
@@ -170,11 +214,13 @@ public final class GeneratedCourses {
         Region box=box(plan,startBlock);
         for(Course other:store.all()) {
             if(other.segments().isEmpty() || other.region()==null || target.replaces().test(other)) continue;
-            if(matchIndex(other.id())>0 && other.status()==CourseStatus.DRAFT) continue;
+            // Closed match courses take nothing; the match's courses all share its place.
+            if(matchIndex(other.id())>0 && (other.status()==CourseStatus.DRAFT || matchIndex(id)>0)) continue;
             if(other.world().equals(world.getUID()) && overlap(box,other.region())) { Msg.send(player,"editor.generate.overlap",Msg.arg("id",id),Msg.arg("other",other.id())); return null; }
         }
         // Clear the courses this replaces (the one of the same id is kept as a definition, for its records), and the boxes the new one takes.
         Course previous=store.get(id);
+        if(target.build()) {
         for(Course old:store.all()) {
             if(old.segments().isEmpty() || !target.replaces().test(old)) continue;
             clear(old);
@@ -185,8 +231,10 @@ public final class GeneratedCourses {
         world.getBlockAt(startBlock.x(),startBlock.y(),startBlock.z()).setBlockData(jointBlock,false);
         for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,pieces.stream().filter(x -> x.id().equals(placed.piece().id())).findFirst().orElseThrow(),placed);
         for(BlockPos j:plan.joints()) world.getBlockAt(j.x(),j.y(),j.z()).setBlockData(jointBlock,false);
+        }
 
-        Course course=build(target,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,box,Math.max(0,config.getInt("start-ticks",0)),Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",10))),measure);
+        UUID author=player instanceof Player p2 ? p2.getUniqueId() : new UUID(0,0);
+        Course course=build(target,profileName,seed,author,world.getUID(),plan,sources,previous,courseStart,box,Math.max(0,config.getInt("start-ticks",0)),Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",10))),measure);
         try {
             if(previous==null) store.create(course);
             else store.save(course.sameGameplay(previous) ? course : course.edit().rev(previous.rev()+1).build());
@@ -194,7 +242,7 @@ public final class GeneratedCourses {
             Msg.send(player,"editor.generate.save-failed"); plugin.getLogger().log(Level.SEVERE,"Cannot save generated course "+id,e); return null;
         }
         int total=course.segments().stream().mapToInt(Segment::ticks).sum();
-        Msg.send(player,measure ? "editor.generate.done-measure" : "editor.generate.done",Msg.arg("id",id),Msg.arg("count",plan.placed().size()),Msg.arg("seed",seed),
+        if(!target.quiet()) Msg.send(player,measure ? "editor.generate.done-measure" : "editor.generate.done",Msg.arg("id",id),Msg.arg("count",plan.placed().size()),Msg.arg("seed",seed),
                 Msg.arg("limit",konqasasas.gauntlet.play.RunClock.seconds(course.limitTicks())),Msg.arg("total",konqasasas.gauntlet.play.RunClock.seconds(total)),
                 Msg.arg("modules",String.join(" → ",plan.placed().stream().map(x -> x.piece().id()+"("+x.piece().difficulty()+")").toList())));
         return store.get(id);

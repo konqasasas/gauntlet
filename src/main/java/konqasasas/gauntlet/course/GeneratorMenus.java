@@ -168,12 +168,6 @@ public final class GeneratorMenus {
         menu.button(4,Msg.icon(player,Material.SLIME_BALL,"editor.generator.bumpiness",Msg.arg("value",p.bumpiness())),
                 e -> change(player,name,q -> new Generator.Profile(q.modules(),q.weights(),Math.clamp(q.bumpiness()+step(e,4)*.5,0,20),q.bands())));
         menu.button(6,Msg.icon(player,Material.SPYGLASS,"editor.generator.samples",samples(player,p)),e -> openProfile(player,name));
-        String profilePlace=config().getString("profiles."+name+".place","");
-        menu.button(7,Msg.icon(player,Material.COMPASS,"editor.generator.profile-place",Msg.arg("place",profilePlace.isBlank() ? "—" : profilePlace)),e -> {
-            if(!editor.admin(player)) return;
-            setProfilePlace(player,name);
-            openProfile(player,name);
-        });
         ConfigurationSection section=config().getConfigurationSection("profiles."+name);
         boolean own=section!=null && section.contains("buffer-percent");
         int buffer=(int)Math.round(own ? section.getDouble("buffer-percent") : config().getDouble("buffer-percent",10));
@@ -228,15 +222,6 @@ public final class GeneratorMenus {
         });
         menu.open(player);
     }
-    /** The profile's place (where the match generates it): the block under the player's feet, facing as they do. */
-    void setProfilePlace(Player player,String name) {
-        Block under=player.getLocation().subtract(0,.01,0).getBlock();
-        String place=under.getWorld().getName()+" "+under.getX()+" "+under.getY()+" "+under.getZ();
-        save("profiles."+name+".place",place);
-        save("profiles."+name+".start-yaw",Math.round(player.getLocation().getYaw()));
-        editor.tell(player,"editor.generator.profile-place-set",Msg.arg("profile",name),Msg.arg("place",place));
-    }
-
     // ---- Match: which profiles become courses 1, 2, ... ----
     void openMatch(Player player) {
         if(!editor.admin(player)) return;
@@ -245,9 +230,7 @@ public final class GeneratorMenus {
         Menu menu=new Menu(3,Msg.plain(player,"editor.match.title"));
         for(int i=0;i<Math.min(order.size(),MAX_MATCH_COURSES);i++) {
             int index=i; String name=order.get(i);
-            String place=config().getString("profiles."+name+".place","");
-            ItemStack icon=Msg.icon(player,place.isBlank() ? Material.PAPER : Material.FILLED_MAP,"editor.match.course",
-                    Msg.arg("n",i+1),Msg.arg("profile",name),Msg.arg("place",place.isBlank() ? Msg.plain(player,"editor.match.no-place") : place));
+            ItemStack icon=Msg.icon(player,Material.FILLED_MAP,"editor.match.course",Msg.arg("n",i+1),Msg.arg("profile",name));
             icon.setAmount(i+1);
             menu.button(i,icon,e -> {
                 List<String> next=new ArrayList<>(config().getStringList("match.courses"));
@@ -266,7 +249,15 @@ public final class GeneratorMenus {
             save("match.courses",next); openMatch(player);
         });
         menu.button(18,Msg.icon(player,Material.ARROW,"editor.generator.back"),e -> openSettings(player));
-        menu.button(22,Msg.icon(player,Material.EMERALD_BLOCK,"editor.match.start",Msg.arg("count",order.size())),e -> {
+        String place=config().getString("match.place","");
+        menu.button(19,Msg.icon(player,Material.COMPASS,"editor.match.place",Msg.arg("place",place.isBlank() ? Msg.plain(player,"editor.match.no-place") : place)),e -> {
+            player.closeInventory(); player.performCommand("match place");
+        });
+        menu.button(21,Msg.icon(player,Material.ENDER_EYE,"editor.match.roll",Msg.arg("rolled",config().getStringList("match.rolled").size())),e -> {
+            if(!e.isShiftClick() || !editor.admin(player)) return;
+            player.closeInventory(); generated.rollMatch(player);
+        });
+        menu.button(22,Msg.icon(player,Material.EMERALD_BLOCK,"editor.match.start",Msg.arg("count",config().getStringList("match.rolled").size())),e -> {
             if(!e.isShiftClick() || !editor.admin(player)) return;
             player.closeInventory(); generated.startMatch(player);
         });
@@ -330,7 +321,7 @@ public final class GeneratorMenus {
 
     // ---- Text ----
     /** "難易度4〜5を1〜2個" */
-    static String describe(Player player,Generator.Band band) {
+    static String describe(org.bukkit.command.CommandSender player,Generator.Band band) {
         String levels=band.from()==band.to() ? String.valueOf(band.from()) : band.from()+"〜"+band.to();
         String count=band.min()==band.max() ? String.valueOf(band.min()) : band.min()+"〜"+band.max();
         return Msg.plain(player,"editor.generator.band-text",Msg.arg("levels",levels),Msg.arg("count",count));
