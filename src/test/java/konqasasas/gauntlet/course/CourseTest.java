@@ -79,6 +79,13 @@ class CourseTest {
         assertEquals(332,Segment.limit(segments,10),"301 x 1.1 = 331.1, rounded up");
         assertEquals(330,Segment.limit(List.of(new Segment("a",box,300,null,null,0)),10),"Exact values are not rounded up");
     }
+    @Test void moduleTimeAndDifficultyDoNotChangeHowItPlays() {
+        Course plain=Course.create("m",author,world);
+        Course module=plain.edit().module(Module.standard()).build();
+        assertTrue(module.sameGameplay(module.edit().module(module.module().withTicks(345).withDifficulty(4)).build()));
+        assertFalse(module.sameGameplay(module.edit().module(module.module().withCount(0,5)).build()));
+        assertFalse(plain.sameGameplay(module),"Turning it into a module does");
+    }
     @Test void oldFourSlotLoadouts() {
         Course four=new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,
                 Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null,null,null,null,null,null);
