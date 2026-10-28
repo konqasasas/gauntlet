@@ -101,7 +101,7 @@ public final class GeneratedCourses {
         for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,pieces.stream().filter(x -> x.id().equals(placed.piece().id())).findFirst().orElseThrow(),placed);
         for(BlockPos j:plan.joints()) world.getBlockAt(j.x(),j.y(),j.z()).setBlockData(jointBlock,false);
 
-        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,config.getDouble("buffer-percent",10)),measure);
+        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",10))),measure);
         try {
             if(previous==null) store.create(course);
             else store.save(course.sameGameplay(previous) ? course : course.edit().rev(previous.rev()+1).build());
@@ -123,8 +123,7 @@ public final class GeneratedCourses {
         for(Generator.Placed placed:plan.placed()) {
             Course moved=asPlaced(sources.get(placed.piece().id()),placed);
             Course source=sources.get(placed.piece().id()); Module m=source.module();
-            int buffer=m.bufferPercent()!=null ? m.bufferPercent() : (int)Math.round(bufferPercent);
-            segments.add(new Segment(placed.piece().id(),moved.region(),m.ticks(),moved.loadout(),m.counts(),source.rev(),buffer));
+            segments.add(new Segment(placed.piece().id(),moved.region(),m.ticks(),moved.loadout(),m.counts(),source.rev()));
             for(Trigger t:moved.triggers()) if(triggers.stream().noneMatch(x -> x.pos().equals(t.pos()))) triggers.add(t);
             route.addAll(moved.route());
             placeable.addAll(moved.placeable());

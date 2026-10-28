@@ -147,6 +147,15 @@ public final class GeneratorMenus {
         menu.button(4,Msg.icon(player,Material.SLIME_BALL,"editor.generator.bumpiness",Msg.arg("value",p.bumpiness())),
                 e -> change(player,name,q -> new Generator.Profile(q.modules(),q.weights(),Math.clamp(q.bumpiness()+step(e,4)*.5,0,20),q.bands())));
         menu.button(6,Msg.icon(player,Material.SPYGLASS,"editor.generator.samples",samples(player,p)),e -> openProfile(player,name));
+        ConfigurationSection section=config().getConfigurationSection("profiles."+name);
+        boolean own=section!=null && section.contains("buffer-percent");
+        int buffer=(int)Math.round(own ? section.getDouble("buffer-percent") : config().getDouble("buffer-percent",10));
+        menu.button(8,Msg.icon(player,Material.HONEY_BOTTLE,own ? "editor.generator.buffer" : "editor.generator.buffer-default",Msg.arg("value",buffer)),e -> {
+            if(!editor.admin(player)) return;
+            if(e.getClick()==org.bukkit.event.inventory.ClickType.DROP || e.getClick()==org.bukkit.event.inventory.ClickType.CONTROL_DROP) save("profiles."+name+".buffer-percent",null);
+            else save("profiles."+name+".buffer-percent",Math.clamp(buffer+step(e,10),0,500));
+            openProfile(player,name);
+        });
         double total=p.weights().stream().mapToDouble(Double::doubleValue).sum();
         for(int l=0;l<Generator.Profile.LEVELS;l++) {
             int level=l;

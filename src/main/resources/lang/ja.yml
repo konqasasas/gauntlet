@@ -229,7 +229,7 @@ editor.module.difficulty.lore:
   - "<color:#cdbf9c>1〜5。左クリック：＋1　右クリック：−1"
 editor.module.time.name: "モジュール時間：<time>秒（<ticks>tick）"
 editor.module.time.lore:
-  - "<color:#cdbf9c>生成したコースの制限時間は、各モジュールのモジュール時間＋バッファの合計"
+  - "<color:#cdbf9c>生成したコースの制限時間は、モジュール時間の合計にバッファを足したもの"
   - "<color:#cdbf9c>左：＋1秒　右：−1秒　Shift で1tickずつ　Q：数値を入力（手で変えるとロック）"
 editor.module.auto.name: "モジュール時間：自動（中央値）"
 editor.module.auto.lore:
@@ -239,14 +239,6 @@ editor.module.locked.name: "<color:#e2c27a>モジュール時間：ロック中"
 editor.module.locked.lore:
   - "<color:#cdbf9c>手で決めた時間のまま、自動では変わらない"
   - "<color:#cdbf9c>クリック：ロックを外す（記録がたまっていれば、すぐ中央値になる）"
-editor.module.buffer.name: "バッファ：<value>%"
-editor.module.buffer.lore:
-  - "<color:#cdbf9c>生成したコースの制限時間に、このモジュールの時間の<value>%を足す"
-  - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ　Q：全体の値に戻す"
-editor.module.buffer-default.name: "バッファ：<value>%（全体の値）"
-editor.module.buffer-default.lore:
-  - "<color:#cdbf9c>このモジュールの値はなく、全体の値（generator.buffer-percent）を使う"
-  - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ（このモジュールだけの値になる）"
 editor.module.times-none: "<color:#cdbf9c>通しの記録：まだなし"
 editor.module.times-count: "<color:#c9a0e8>通しの記録：<passes>回（<players>人）"
 editor.module.times-values: "<color:#c9a0e8>平均 <mean>　中央値 <median>　遅い方から4分の1 <slow>"
@@ -407,6 +399,14 @@ editor.generator.measure.name: "計測用に生成する"
 editor.generator.measure.lore:
   - "<color:#cdbf9c>制限時間なし。通しの記録が<passes>回に届いていないモジュールだけでつなぐ"
   - "<color:#cdbf9c>難易度の割合とでこぼこはこのプロファイルのまま（難易度帯の決まりと難しい連続の上限は使わない）"
+editor.generator.buffer.name: "バッファ：<value>%"
+editor.generator.buffer.lore:
+  - "<color:#cdbf9c>このプロファイルで生成したコースの制限時間＝モジュール時間の合計×(1＋<value>%)"
+  - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ　Q：全体の値に戻す"
+editor.generator.buffer-default.name: "バッファ：<value>%（全体の値）"
+editor.generator.buffer-default.lore:
+  - "<color:#cdbf9c>このプロファイルの値はなく、全体の値（generator.buffer-percent）を使う"
+  - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ（このプロファイルだけの値になる）"
 editor.generator.play.name: "遊ぶ"
 editor.generator.play.lore: []
 editor.generator.practice.name: "練習する"
