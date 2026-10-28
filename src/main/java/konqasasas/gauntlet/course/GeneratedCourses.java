@@ -234,7 +234,7 @@ public final class GeneratedCourses {
         }
 
         UUID author=player instanceof Player p2 ? p2.getUniqueId() : new UUID(0,0);
-        Course course=build(target,profileName,seed,author,world.getUID(),plan,sources,previous,courseStart,box,Math.max(0,config.getInt("start-ticks",0)),Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",10))),measure);
+        Course course=build(target,profileName,seed,author,world.getUID(),plan,sources,previous,courseStart,box,Math.max(0,config.getInt("start-ticks",0)),Math.max(0,p.getDouble("buffer-percent",config.getDouble("buffer-percent",5))),measure);
         try {
             if(previous==null) store.create(course);
             else store.save(course.sameGameplay(previous) ? course : course.edit().rev(previous.rev()+1).build());

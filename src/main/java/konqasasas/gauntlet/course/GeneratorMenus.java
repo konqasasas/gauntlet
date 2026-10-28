@@ -170,7 +170,7 @@ public final class GeneratorMenus {
         menu.button(6,Msg.icon(player,Material.SPYGLASS,"editor.generator.samples",samples(player,p)),e -> openProfile(player,name));
         ConfigurationSection section=config().getConfigurationSection("profiles."+name);
         boolean own=section!=null && section.contains("buffer-percent");
-        int buffer=(int)Math.round(own ? section.getDouble("buffer-percent") : config().getDouble("buffer-percent",10));
+        int buffer=(int)Math.round(own ? section.getDouble("buffer-percent") : config().getDouble("buffer-percent",5));
         menu.button(8,Msg.icon(player,Material.HONEY_BOTTLE,own ? "editor.generator.buffer" : "editor.generator.buffer-default",Msg.arg("value",buffer)),e -> {
             if(!editor.admin(player)) return;
             if(e.getClick()==org.bukkit.event.inventory.ClickType.DROP || e.getClick()==org.bukkit.event.inventory.ClickType.CONTROL_DROP) save("profiles."+name+".buffer-percent",null);
