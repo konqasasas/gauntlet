@@ -226,15 +226,18 @@ public final class Participants implements Listener {
      */
     public boolean mayStart(Player player,Course course) {
         if(player.hasPermission(ADMIN)) return true;
-        int n=GeneratedCourses.matchIndex(course.id());
-        if(n>1) {
-            Course before=courses.get(GeneratedCourses.matchId(n-1));
-            return before!=null && before.status()==CourseStatus.DONE && runs.stats(before.id(),before.rev(),player.getUniqueId()).clears()>0;
-        }
+        if(GeneratedCourses.matchIndex(course.id())>1) return matchReached(player,course);
         Era era=spaces.era(course);
         if(era==null) return true;
         if(progress.rank(player.getUniqueId())<era.requiredRank()) return false;
         return era.first(course.id()) || progress.reached(player.getUniqueId(),course.id());
+    }
+    /** Course n of the match is open to the player: course 1, or course n-1 of this match cleared officially (builders too). */
+    public boolean matchReached(Player player,Course course) {
+        int n=GeneratedCourses.matchIndex(course.id());
+        if(n<=1) return true;
+        Course before=courses.get(GeneratedCourses.matchId(n-1));
+        return before!=null && before.status()==CourseStatus.DONE && runs.stats(before.id(),before.rev(),player.getUniqueId()).clears()>0;
     }
     /** A waiting player whose turn came. */
     private void admitted(Player player,String course,boolean practice) {

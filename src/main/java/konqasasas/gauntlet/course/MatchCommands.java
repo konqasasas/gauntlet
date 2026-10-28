@@ -62,7 +62,8 @@ public final class MatchCommands implements CommandExecutor,TabCompleter {
                 List<Course> open=generated.matchCourses();
                 if(open.isEmpty()) { Msg.send(player,"match.none"); return true; }
                 int furthest=1;
-                for(int i=0;i<open.size();i++) if(participants.mayStart(player,open.get(i))) furthest=i+1;
+                // By clears, for builders too (who may enter any course with play <n>).
+                for(int i=0;i<open.size();i++) if(participants.matchReached(player,open.get(i))) furthest=i+1;
                 play(player,furthest,false);
             }
             case "play","practice" -> {
@@ -75,7 +76,7 @@ public final class MatchCommands implements CommandExecutor,TabCompleter {
                 List<Course> open=generated.matchCourses();
                 if(open.isEmpty()) { Msg.send(player,"match.none"); return true; }
                 for(int i=0;i<open.size();i++)
-                    Msg.send(player,participants.mayStart(player,open.get(i)) ? "match.list-open" : "match.list-locked",Msg.arg("n",i+1));
+                    Msg.send(player,participants.matchReached(player,open.get(i)) ? "match.list-open" : "match.list-locked",Msg.arg("n",i+1));
             }
             case "roll" -> { if(editor.admin(player)) generated.rollMatch(player); }
             case "start" -> { if(editor.admin(player)) generated.startMatch(player); }
