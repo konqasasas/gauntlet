@@ -73,6 +73,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             database=Database.open(data.resolve("gauntlet.db"),getLogger());
             LegacyImport.run(database,data,getLogger());
             runs=new RunLog(database); runs.load();
+            ModuleTimes moduleTimes=new ModuleTimes(database); moduleTimes.load();
             progress=new Progress(database); progress.load();
             cosmetics=new konqasasas.gauntlet.cosmetic.Cosmetics(database,konqasasas.gauntlet.cosmetic.Catalog.load(getClassLoader(),data.resolve("cosmetics.yml")));
             cosmetics.load();
@@ -135,6 +136,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             recorder.start();
             water.onChange(recorder::changed);
             participants.replays(recorder);
+            participants.moduleTimes(moduleTimes);
             replayViewer=new konqasasas.gauntlet.replay.ReplayViewer(this,replayStore,courseStore,participants::active);
             replayViewer.start();
             nameTags=new NameTags(this,display,playerData,participants::active);
@@ -153,6 +155,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             lanes.start();
             ghosts.start();
             courses=new CourseEditor(this,courseStore,templateStore,freeTriggers,courseItems,new NamespacedKey(this,"tool"),participants,lanes,spaces,freePlaceable);
+            courses.moduleTimes=moduleTimes;
             courses.start();
             new ModuleCommands(this,courses,generated).start();
             kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint,

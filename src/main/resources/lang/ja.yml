@@ -212,7 +212,7 @@ editor.kit.console: "ゲーム内で /gauntlet kit を実行してください�
 editor.kit.usage: "/gauntlet kit で設置用ブロックを受け取れます。/gauntlet trigger でコース外のトリガーを登録・一覧します。/gauntlet rank [プレイヤー] [0〜11] でランクを確認・設定します。/gauntlet placeable でキットの設置制限を切り替えます（Shift＋左クリックでも）。/gauntlet marker で設置可能箇所マーカーを受け取れます。"
 editor.edit.module.name: "モジュール（自動生成の部品）"
 editor.edit.module.lore:
-  - "<color:#cdbf9c>難易度 <difficulty>　モジュール時間 <seconds>秒"
+  - "<color:#cdbf9c>難易度 <difficulty>　モジュール時間 <time>秒"
   - "<color:#cdbf9c>クリック：モジュールの設定"
 editor.edit.module-off.name: "モジュール：なし"
 editor.edit.module-off.lore:
@@ -227,10 +227,15 @@ editor.module.off.lore:
 editor.module.difficulty.name: "難易度：<value>"
 editor.module.difficulty.lore:
   - "<color:#cdbf9c>1〜5。左クリック：＋1　右クリック：−1"
-editor.module.seconds.name: "モジュール時間：<value>秒"
-editor.module.seconds.lore:
-  - "<color:#cdbf9c>このモジュールに入ると残り時間に足される（コースの中で持ち越し）"
-  - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ"
+editor.module.time.name: "モジュール時間：<time>秒（<ticks>tick）"
+editor.module.time.lore:
+  - "<color:#cdbf9c>生成したコースの制限時間は、モジュール時間の合計にバッファを足したもの"
+  - "<color:#cdbf9c>左：＋1秒　右：−1秒　Shift で1tickずつ　Q：数値を入力"
+editor.module.times-none: "<color:#cdbf9c>通しの記録：まだなし"
+editor.module.times-count: "<color:#c9a0e8>通しの記録：<passes>回（<players>人）"
+editor.module.times-values: "<color:#c9a0e8>平均 <mean>　中央値 <median>　遅い方から4分の1 <slow>"
+editor.module.ticks-invalid: "1〜<max> の tick 数か、秒（例：12.35s）を入力してください。"
+editor.prompt.module-ticks: "モジュール時間を入力してください。tick なら 247、秒なら 12.35s（最大<max>tick）"
 editor.module.count.name: "<slot>番の数：<value>"
 editor.module.count.lore:
   - "<color:#cdbf9c>アイテム：<item>（初期装備の<slot>番）"
@@ -253,7 +258,7 @@ editor.modules.previous.lore: []
 editor.modules.next.name: "次のページ"
 editor.modules.next.lore: []
 editor.modules.removed: "生成したコース <id> を消しました（置いたブロックは空気に戻しました）。"
-editor.modules.entry: "<color:#c9a0e8>難易度 <difficulty>　モジュール時間 <seconds>秒"
+editor.modules.entry: "<color:#c9a0e8>難易度 <difficulty>　モジュール時間 <time>秒"
 editor.modules.create.name: "モジュールを作る"
 editor.modules.create.lore:
   - "<color:#cdbf9c>IDをチャットで入力。作り方はコースと同じ（+Z に進む形）"
@@ -271,14 +276,14 @@ editor.modules.profile-set: "プロファイル <profile> を <modules>個、分
 editor.modules.profile-removed: "プロファイル <profile> を消しました。"
 editor.generate.no-profile: "生成のプロファイル <profile> がありません。/module profile で作れます。"
 editor.generate.bad-profile: "生成のプロファイル <profile> の値がおかしいです（個数は1以上、割合は0以上で合計が0より大きい、でこぼこは0以上）。"
-editor.generate.no-place: "試験場所が未設定か、ワールドが読み込まれていません。試験場所に立って /module place で決めてください。"
+editor.generate.no-place: "コースのスタートが未設定か、ワールドが読み込まれていません。スタートにしたい場所に立って /module place で決めてください。"
 editor.generate.stuck: "<index>個目（難易度<difficulty>）で置けるモジュールがなく、止まりました：<reason>（使えるモジュール<modules>個）。ワールドは変えていません。"
 editor.generate.reason.height: "ワールドの高さからはみ出す"
 editor.generate.reason.overlap: "前のモジュールのブロックと重なる"
 editor.generate.reason.no-candidate: "使えるモジュールが足りない（同じモジュールは1回の生成で1度まで）か、難しいモジュールを続けられる上限に当たった"
 editor.generate.reason.no-modules: "モジュールが1つもない（完成していないものは使わない）"
 editor.generate.save-failed: "生成したコースを保存できませんでした。"
-editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。/module play <id> で遊べます。"
+editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。制限時間 <limit>秒（モジュール時間の合計 <total>秒＋バッファ）。/module play <id> で遊べます。"
 editor.generate.band-conflict: "プロファイル <profile> の難易度帯の決まりを満たせません（<band>）。個数や、ほかの帯との組み合わせを見直してください。ワールドは変えていません。"
 editor.modules.generator.name: "生成の設定"
 editor.modules.generator.lore:
@@ -287,9 +292,16 @@ editor.modules.generator.lore:
 editor.generator.title: "生成の設定"
 editor.generator.on: "あり"
 editor.generator.off: "なし"
-editor.generator.place.name: "試験場所：<place>"
+editor.generator.place.name: "コースのスタート：<place>"
 editor.generator.place.lore:
-  - "<color:#cdbf9c>クリックで、足元のブロックにする（ここから +Z に伸びる）"
+  - "<color:#cdbf9c>クリックで、足元のブロックと今の向きにする（コースは +Z に伸びる）"
+  - "<color:#cdbf9c>最初のモジュールのスタートは、ここからスタートのずれだけ離れた位置に置く"
+editor.generator.offset.name: "スタートのずれ：<value>"
+editor.generator.offset.lore:
+  - "<color:#cdbf9c>コースのスタートのブロックから、最初のモジュールのスタートのブロックまで（x y z、整数）"
+  - "<color:#cdbf9c>クリックでチャットに入力。0 0 0 ならコースのスタートがそのままモジュールのスタート"
+editor.prompt.start-offset: "スタートのずれを x y z の整数で入力してください（例：0 0 3）"
+editor.generate.bad-offset: "スタートのずれは x y z の3つの整数で入力してください（例：0 0 3）。"
 editor.generator.hard-from.name: "難しいモジュール：難易度<value>以上"
 editor.generator.hard-from.lore:
   - "<color:#cdbf9c>左クリックで上げる、右クリックで下げる"

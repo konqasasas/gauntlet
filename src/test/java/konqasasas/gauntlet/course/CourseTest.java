@@ -35,7 +35,7 @@ class CourseTest {
         Course course=Course.create("c",author,world).toggleGoal(new BlockPos(1,2,3)).toggleGoal(new BlockPos(4,5,6));
         assertTrue(course.isGoal(1,2,3)); assertTrue(course.isGoal(4,5,6)); assertFalse(course.isGoal(1,2,4));
         assertEquals(List.of(new BlockPos(4,5,6)),course.toggleGoal(new BlockPos(1,2,3)).goals());
-        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null,null,null,null,null).goals());
+        assertEquals(List.of(),new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,null,null,null,null,null,null,null,null,null,null,null).goals());
     }
     @Test void timeLimitIsClampedAndStatusCycles() {
         Course course=Course.create("c",author,world);
@@ -72,9 +72,16 @@ class CourseTest {
         assertEquals(List.of("problem.placeable-outside"),one.edit().togglePlaceable(new BlockPos(20,0,0)).build().problems().stream()
                 .filter(p -> p.startsWith("problem.placeable")).toList());
     }
+    @Test void generatedLimitIsTheModuleTimesPlusTheBuffer() {
+        Region box=Region.of(0,0,0,1,1,1);
+        List<Segment> segments=List.of(new Segment("a",box,200,null,null,0),new Segment("b",box,101,null,null,0));
+        assertEquals(301,Segment.limit(segments,0));
+        assertEquals(332,Segment.limit(segments,10),"301 x 1.1 = 331.1, rounded up");
+        assertEquals(330,Segment.limit(List.of(new Segment("a",box,300,null,null,0)),10),"Exact values are not rounded up");
+    }
     @Test void oldFourSlotLoadouts() {
         Course four=new Course("c","c",CourseStatus.DRAFT,author,world,null,null,null,30,
-                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null,null,null,null,null);
+                Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0),new ItemRef("lost",0)),null,null,null,null,null,null,null,null,null,null);
         assertEquals(Arrays.asList(ItemRef.scaffold(),null,new ItemRef("t",0)),four.loadout(),"The old fourth slot is dropped");
         assertEquals(0,four.rev()); assertEquals(List.of(),four.route());
     }

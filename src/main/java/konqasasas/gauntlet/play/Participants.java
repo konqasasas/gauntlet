@@ -68,8 +68,13 @@ public final class Participants implements Listener {
         Vector waitAt=new Vector();
         /** The goal block reached (in this lane), where a fall after the goal goes back to. */
         BlockPos goalAt;
-        /** Generated courses: the module entered last (index into segments) and the time earned so far (ticks). */
-        int segment=-1; long budget;
+        /** Generated courses: the module entered last (index into segments). */
+        int segment=-1;
+        /**
+         * The module being timed (a segment, or a module course played alone): since which client tick
+         * (RunClock.received), and whether it is still clean (no save loaded, no flight since entering it).
+         */
+        long passFrom; boolean passClean;
         final RunClock clock=new RunClock();
         int lastClientTick; long startNanos,startedAt; boolean unmeasured,goalReached,flew;
         RunRecord.Reason pendingFail;
@@ -106,6 +111,7 @@ public final class Participants implements Listener {
     private Supplier<Location> waitingSpot=() -> null;
     private RankUps rankUps;
     private konqasasas.gauntlet.replay.ReplayRecorder replays;
+    private ModuleTimes moduleTimes;
 
     public Participants(JavaPlugin plugin,CourseStore courses,RunLog runs,PlayerData data,ReturnStore returns,Scaffold scaffold,CourseItems items,WaterFlows water,
                         Lanes lanes,Spaces spaces,Progress progress) {
@@ -126,6 +132,7 @@ public final class Participants implements Listener {
     public void rankUps(RankUps rankUps) { this.rankUps=rankUps; }
     /** Official runs are recorded for replays; only clears are kept. */
     public void replays(konqasasas.gauntlet.replay.ReplayRecorder recorder) { replays=recorder; }
+    public void moduleTimes(ModuleTimes times) { moduleTimes=times; }
     public void start() {
         plugin.getServer().getPluginManager().registerEvents(this,plugin);
         plugin.getServer().getPluginManager().registerEvents(mobs,plugin);
@@ -306,17 +313,18 @@ public final class Participants implements Listener {
         restartClock(session,0);
         Spot s=course.start(); session.waitAt=new Vector(s.x(),s.y(),s.z()); session.goalAt=null;
         // A generated course starts in its first module, with that module's items and time.
-        session.segment=-1; session.budget=0;
+        session.segment=-1;
         if(!course.segments().isEmpty()) enterSegment(player,session,course,0);
+        else beginPass(session);
     }
     /**
      * Entering a module of a generated course: its items replace slots 1-3 (a count
-     * other than 0 gives that many, not refilled) and its time is added to what is left.
+     * other than 0 gives that many, not refilled). Its time counts from here.
      */
     private void enterSegment(Player player,Session session,Course course,int index) {
         Segment segment=course.segments().get(index);
         session.segment=index;
-        session.budget+=segment.seconds()*20L;
+        beginPass(session);
         PlayerInventory inventory=player.getInventory();
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) {
             ItemRef ref=segment.loadout().get(slot);
@@ -333,11 +341,30 @@ public final class Participants implements Listener {
     /** The next module, when the player is inside its box. */
     private void advanceSegment(Player player,Session session,Course course,Location at) {
         int next=session.segment+1;
-        if(next<course.segments().size() && course.segments().get(next).box().contains(at.getX(),at.getY(),at.getZ())) enterSegment(player,session,course,next);
+        if(next<course.segments().size() && course.segments().get(next).box().contains(at.getX(),at.getY(),at.getZ())) {
+            finishPass(player,session,course);
+            enterSegment(player,session,course,next);
+        }
     }
-    /** The time allowed so far (ticks): the course's limit, or for a generated course the time its modules gave; 0 = none. */
+    private static void beginPass(Session session) { session.passFrom=session.clock.received(); session.passClean=true; }
+    /**
+     * Leaving the module being timed (into the next one, or at the goal): its time goes to the module
+     * times when nothing reset it on the way and the clock was running from its start.
+     */
+    private void finishPass(Player player,Session session,Course course) {
+        if(moduleTimes==null || !session.passClean || session.unmeasured || session.clock.phase()==RunClock.Phase.WAITING) return;
+        session.passClean=false;
+        long ticks=session.clock.received()-session.passFrom;
+        if(ticks<=0) return;
+        if(!course.segments().isEmpty()) {
+            if(session.segment<0) return;
+            Segment segment=course.segments().get(session.segment);
+            moduleTimes.add(segment.module(),segment.moduleRev(),player.getUniqueId(),ticks,session.practice,true);
+        } else if(course.module()!=null) moduleTimes.add(course.id(),course.rev(),player.getUniqueId(),ticks,session.practice,false);
+    }
+    /** The time limit (ticks; 0 = none): a generated course's is fixed when it was generated. */
     private static long limitTicks(Course course,Session session) {
-        return course.segments().isEmpty() ? course.timeLimitSeconds()*20L : session.budget;
+        return course.segments().isEmpty() ? course.timeLimitSeconds()*20L : course.limitTicks();
     }
     private void restartClock(Session session,double along) {
         session.clock.reset(); session.unmeasured=false; session.goalReached=false; session.flew=false;
@@ -417,7 +444,7 @@ public final class Participants implements Listener {
         water.restore(player,save.water());
         player.getInventory().setHeldItemSlot(0);
         restartClock(session,save.along());
-        session.segment=save.segment();
+        session.segment=save.segment(); session.passClean=false;
         systemItems(player,session);
     }
     private void switchMode(Player player,Session session) {
@@ -458,6 +485,7 @@ public final class Participants implements Listener {
         return id;
     }
     private void goal(Player player,Session session,Course course) {
+        finishPass(player,session,course);
         boolean timed=session.clock.phase()==RunClock.Phase.RUNNING;
         session.clock.stop(); session.goalReached=true;
         session.furthest=session.route.total(); session.along=session.route.total();
@@ -538,9 +566,11 @@ public final class Participants implements Listener {
         }
         if(session.clock.tick(moved)) {
             session.startNanos=System.nanoTime(); session.startedAt=System.currentTimeMillis();
+            // The module being timed starts with the run, not when the player was put at the start.
+            session.passFrom=session.clock.received();
             if(replays!=null && !session.practice) replays.begin(player,course);
         }
-        if(player.isFlying()) session.flew=true;
+        if(player.isFlying()) { session.flew=true; session.passClean=false; }
         if(session.clock.phase()!=RunClock.Phase.WAITING && !session.goalReached) {
             if(session.route.usable()) {
                 session.along=session.route.locate(at.getX(),at.getY(),at.getZ(),session.along);

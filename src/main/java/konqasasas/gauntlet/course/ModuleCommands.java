@@ -18,7 +18,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   /module play <profile> | practice <profile>  play the generated course (official / practice)
  *   /module remove <profile>                   clear the generated course and delete it
  *   /module settings                           what generation uses now
- *   /module place                              the test place: the block under your feet
+ *   /module place                              the course's start: the block under your feet, facing as you do
  *   /module set <key> <value>                  hard-from, max-hard-streak, joint, joint-length, joint-block
  *   /module profile <name> <modules> <w1> <w2> <w3> <w4> <w5> [bumpiness] | /module profile remove <name>
  *     (w1-w5: the weights of difficulties 1-5, any scale; bumpiness 0 = easy to hard in order, more = more ups and downs)
@@ -62,6 +62,7 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
                 Block under=player.getLocation().subtract(0,.01,0).getBlock();
                 String place=under.getWorld().getName()+" "+under.getX()+" "+under.getY()+" "+under.getZ();
                 save("generator.place",place);
+                save("generator.start-yaw",Math.round(player.getLocation().getYaw()));
                 Msg.send(player,"editor.modules.place-set",Msg.arg("place",place));
             }
             case "set" -> {

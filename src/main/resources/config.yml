@@ -85,8 +85,11 @@ eras:
 
 # 自動生成の試作（/module generate <プロファイル> [シード]）。モジュールは /module で作る。下の値は /module place・set・profile でも変えられる
 generator:
-  # 試験場所。"ワールド名 x y z"：最初のモジュールのスタートのブロックを置く位置。コースは +Z に向かって伸びる
+  # コースのスタート。"ワールド名 x y z"：スタートで立つブロック。コースは +Z に向かって伸びる。start-yaw はスタートでの向き（0 が +Z）
   place: ""
+  start-yaw: 0
+  # コースのスタートのブロックから、最初のモジュールのスタートのブロックまでのずれ（"x y z"、整数）
+  start-offset: "0 0 0"
   # この難易度以上を「難しい」とし、続けて置くのは max-hard-streak 個まで
   hard-from: 4
   max-hard-streak: 2
@@ -95,6 +98,8 @@ generator:
   # platform のときの足場の長さ（ブロック）と、足場のブロック
   joint-length: 3
   joint-block: "minecraft:smooth_stone"
+  # 生成したコースの制限時間＝モジュール時間の合計×(1＋buffer-percent/100)。生成した時点で決まり、あとで変えても作り直すまで変わらない
+  buffer-percent: 10
   # プロファイル。modules 何個つなぐか / distribution 難易度1〜5の割合（比。合計100でなくてよい）/
   # bumpiness でこぼこ（0 なら易しい順にきれいに並ぶ。大きいほど順番が入れ替わり、起伏が増える。1〜2くらいが目安）/
   # bands 難易度帯の決まり（任意）。"4-5:1-2" なら難易度4〜5を1個以上2個以下。ゲーム内の /module menu で編集できる

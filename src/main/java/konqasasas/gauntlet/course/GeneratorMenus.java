@@ -42,8 +42,17 @@ public final class GeneratorMenus {
         menu.button(0,Msg.icon(player,Material.COMPASS,"editor.generator.place",Msg.arg("place",g.getString("place","—"))),e -> {
             Block under=player.getLocation().subtract(0,.01,0).getBlock();
             save("place",under.getWorld().getName()+" "+under.getX()+" "+under.getY()+" "+under.getZ());
+            save("start-yaw",Math.round(player.getLocation().getYaw()));
             openSettings(player);
         });
+        String offset=g.getString("start-offset","0 0 0");
+        menu.button(1,Msg.icon(player,Material.LEAD,"editor.generator.offset",Msg.arg("value",offset)),
+                e -> editor.prompts.ask(player,"editor.prompt.start-offset",text -> {
+                    BlockPos d=GeneratedCourses.parseOffset(text);
+                    if(d==null) { editor.tell(player,"editor.generate.bad-offset"); return; }
+                    save("start-offset",d.x()+" "+d.y()+" "+d.z());
+                    openSettings(player);
+                }));
         int hard=g.getInt("hard-from",4),streak=g.getInt("max-hard-streak",2);
         menu.button(2,Msg.icon(player,Material.BLAZE_POWDER,"editor.generator.hard-from",Msg.arg("value",hard)),e -> {
             save("hard-from",Math.clamp(hard+step(e,1),Module.MIN_DIFFICULTY,Module.MAX_DIFFICULTY)); openSettings(player);

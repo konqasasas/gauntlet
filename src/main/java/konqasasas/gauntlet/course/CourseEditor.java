@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.*;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.*;
 import org.bukkit.inventory.*;
@@ -55,6 +56,8 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
     private final EraMenus eraMenus;
     /** The generator's settings, set by /module once it starts. */
     GeneratorMenus generatorMenus;
+    /** Times through modules, shown next to each module's time (null: not shown). */
+    public konqasasas.gauntlet.data.ModuleTimes moduleTimes;
     /** The course each builder last opened, shown while holding the wand. */
     private final Map<UUID,String> editing=new HashMap<>();
     private BukkitTask outlines;
@@ -167,7 +170,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
             ItemStack icon=courseIcon(player,module);
             icon.editMeta(meta -> {
                 List<Component> lore=new ArrayList<>(Objects.requireNonNullElse(meta.lore(),List.of()));
-                lore.addFirst(line(player,"editor.modules.entry",Msg.arg("difficulty",module.module().difficulty()),Msg.arg("seconds",module.module().seconds())));
+                lore.addFirst(line(player,"editor.modules.entry",Msg.arg("difficulty",module.module().difficulty()),Msg.arg("time",RunClock.seconds(module.module().ticks()))));
                 meta.lore(lore);
             });
             menu.button(i,icon,e -> openEdit(player,module.id()));
@@ -277,7 +280,7 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
                 Msg.arg("waiting",lanes.waitingFor(space)),Msg.arg("era",era==null ? "" : era.name())),
                 e -> { if(era!=null && e.isRightClick()) eraMenus.openEra(player,era.id()); else openLanes(player,space.key(),() -> openEdit(player,id)); });
         menu.button(32,Msg.icon(player,course.module()==null ? Material.GRAY_DYE : Material.PURPLE_DYE,course.module()==null ? "editor.edit.module-off" : "editor.edit.module",
-                Msg.arg("difficulty",course.module()==null ? 0 : course.module().difficulty()),Msg.arg("seconds",course.module()==null ? 0 : course.module().seconds())),
+                Msg.arg("difficulty",course.module()==null ? 0 : course.module().difficulty()),Msg.arg("time",RunClock.seconds(course.module()==null ? 0 : course.module().ticks()))),
                 e -> openModule(player,id));
         menu.button(31,Msg.icon(player,Material.NETHER_STAR,course.problems().isEmpty() ? "editor.edit.play" : "editor.edit.play-blocked"),
                 e -> { if(admin(player)) participants.enter(player,id,e.isRightClick()); });
@@ -449,8 +452,11 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         if(m!=null) {
             menu.button(11,Msg.icon(player,Material.BLAZE_POWDER,"editor.module.difficulty",Msg.arg("value",m.difficulty())),
                     e -> changeModule(player,id,x -> x.withDifficulty(x.difficulty()+(e.isRightClick() ? -1 : 1))));
-            menu.button(12,Msg.icon(player,Material.CLOCK,"editor.module.seconds",Msg.arg("value",m.seconds())),
-                    e -> changeModule(player,id,x -> x.withSeconds(x.seconds()+(e.isShiftClick() ? 10 : 1)*(e.isRightClick() ? -1 : 1))));
+            menu.button(12,Msg.icon(player,Material.CLOCK,"editor.module.time",moduleTimeLines(player,course),
+                    Msg.arg("time",RunClock.seconds(m.ticks())),Msg.arg("ticks",m.ticks())),e -> {
+                if(e.getClick()==ClickType.DROP || e.getClick()==ClickType.CONTROL_DROP) askModuleTicks(player,id);
+                else changeModule(player,id,x -> x.withTicks(x.ticks()+(e.isShiftClick() ? 1 : 20)*(e.isRightClick() ? -1 : 1)));
+            });
             for(int slot=0;slot<Course.COURSE_SLOTS;slot++) {
                 int index=slot; int count=m.counts().get(slot);
                 menu.button(14+slot,Msg.icon(player,Material.CHEST,"editor.module.count",Msg.arg("slot",slot+1),Msg.arg("item",items.name(player,course.loadout().get(slot))),
@@ -461,6 +467,30 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
         menu.label(22,Msg.icon(player,Material.BOOK,"editor.module.help"));
         menu.button(18,Msg.icon(player,Material.ARROW,"editor.back"),e -> openEdit(player,id));
         menu.open(player);
+    }
+    /** The clean passes through this revision of the module, as a guide for its time. */
+    private List<Component> moduleTimeLines(Player player,Course course) {
+        var summary=moduleTimes==null ? null : moduleTimes.summary(course.id(),course.rev());
+        if(summary==null) return List.of(line(player,"editor.module.times-none"));
+        return List.of(line(player,"editor.module.times-count",Msg.arg("passes",summary.passes()),Msg.arg("players",summary.players())),
+                line(player,"editor.module.times-values",Msg.arg("mean",ticksText(summary.mean())),Msg.arg("median",ticksText(summary.median())),
+                        Msg.arg("slow",ticksText(summary.slowQuarter()))));
+    }
+    /** A time in ticks (possibly fractional) as seconds with its ticks: 12.35s (247t). */
+    private static String ticksText(double ticks) { return String.format(Locale.ROOT,"%.2fs (%dt)",ticks/20,Math.round(ticks)); }
+    /** Q on the time: type it, in ticks (247) or seconds (12.35s). */
+    private void askModuleTicks(Player player,String id) {
+        prompts.ask(player,"editor.prompt.module-ticks",text -> {
+            String t=text.strip().toLowerCase(Locale.ROOT);
+            int ticks;
+            try {
+                ticks=t.endsWith("s") || t.endsWith("秒") ? (int)Math.round(Double.parseDouble(t.replace("秒","").replace("s","").strip())*20)
+                        : Integer.parseInt(t.replace("t","").strip());
+            } catch(NumberFormatException e) { ticks=-1; }
+            if(ticks<1 || ticks>Module.MAX_TICKS) { tell(player,"editor.module.ticks-invalid",Msg.arg("max",Module.MAX_TICKS)); return; }
+            int value=ticks;
+            changeModule(player,id,x -> x.withTicks(value));
+        },Msg.arg("max",Module.MAX_TICKS));
     }
     private void changeModule(Player player,String id,UnaryOperator<Module> change) {
         if(save(player,id,c -> c.module()==null ? c : c.edit().module(change.apply(c.module())).build())) openModule(player,id);

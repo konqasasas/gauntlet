@@ -18,12 +18,13 @@ import java.util.*;
  *
  * module marks a course used as a piece of generated courses (null = an ordinary
  * course). segments are the modules a generated course is made of, in order:
- * entering one hands out its items and adds its time to what is left.
+ * entering one hands out its items. limitTicks is a generated course's time limit,
+ * fixed when it was generated (its modules' times plus the buffer); 0 = none.
  */
 public record Course(String id,String name,CourseStatus status,UUID author,UUID world,Region region,Spot start,
                      List<BlockPos> goals,int timeLimitSeconds,List<ItemRef> loadout,List<Trigger> triggers,
                      Boolean failLava,Boolean failOutside,Integer rev,List<RoutePoint> route,List<BlockPos> placeable,List<BlockPos> lanes,
-                     Module module,List<Segment> segments) {
+                     Module module,List<Segment> segments,Integer limitTicks) {
     public static final int DEFAULT_TIME_LIMIT=30,MAX_TIME_LIMIT=600,MAX_NAME_LENGTH=32,COURSE_SLOTS=3,MAX_ROUTE_POINTS=200,MAX_LANES=64;
     public Course {
         if(!CourseStore.validId(id) || name==null || name.isBlank() || name.length()>MAX_NAME_LENGTH
@@ -49,9 +50,11 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         if(lanes.size()+1>MAX_LANES || lanes.contains(BlockPos.ZERO) || new HashSet<>(lanes).size()!=lanes.size())
             throw new IllegalArgumentException("Invalid lanes");
         segments=segments==null ? List.of() : List.copyOf(segments);
+        limitTicks=limitTicks==null ? 0 : limitTicks;
+        if(limitTicks<0) throw new IllegalArgumentException("Negative limit");
     }
     public static Course create(String id,UUID author,UUID world) {
-        return new Course(id,id,CourseStatus.DRAFT,author,world,null,null,null,DEFAULT_TIME_LIMIT,null,null,null,null,0,null,null,null,null,null);
+        return new Course(id,id,CourseStatus.DRAFT,author,world,null,null,null,DEFAULT_TIME_LIMIT,null,null,null,null,0,null,null,null,null,null,0);
     }
 
     public Builder edit() { return new Builder(this); }
@@ -60,12 +63,12 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         private String name; private CourseStatus status; private UUID world; private Region region; private Spot start;
         private List<BlockPos> goals; private int timeLimit; private List<ItemRef> loadout; private List<Trigger> triggers;
         private boolean failLava,failOutside; private int rev; private List<RoutePoint> route; private List<BlockPos> placeable,lanes;
-        private Module module; private List<Segment> segments;
+        private Module module; private List<Segment> segments; private int limitTicks;
         private Builder(Course c) {
             base=c; name=c.name; status=c.status; world=c.world; region=c.region; start=c.start; goals=new ArrayList<>(c.goals);
             timeLimit=c.timeLimitSeconds; loadout=new ArrayList<>(c.loadout); triggers=new ArrayList<>(c.triggers);
             failLava=c.failLava; failOutside=c.failOutside; rev=c.rev; route=new ArrayList<>(c.route); placeable=new ArrayList<>(c.placeable);
-            lanes=new ArrayList<>(c.lanes); module=c.module; segments=new ArrayList<>(c.segments);
+            lanes=new ArrayList<>(c.lanes); module=c.module; segments=new ArrayList<>(c.segments); limitTicks=c.limitTicks;
         }
         public Builder name(String v) { name=v; return this; }
         public Builder status(CourseStatus v) { status=v; return this; }
@@ -98,12 +101,14 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
         /** null: not a module. */
         public Builder module(Module v) { module=v; return this; }
         public Builder segments(List<Segment> v) { segments=new ArrayList<>(v); return this; }
+        /** A generated course's limit (ticks; 0 = none). */
+        public Builder limitTicks(int v) { limitTicks=Math.max(0,v); return this; }
         public Builder goals(List<BlockPos> v) { goals=new ArrayList<>(v); return this; }
         public Builder triggers(List<Trigger> v) { triggers=new ArrayList<>(v); return this; }
         public Builder route(List<RoutePoint> v) { route=new ArrayList<>(v); return this; }
         public Builder placeable(List<BlockPos> v) { placeable=new ArrayList<>(v); return this; }
         public Course build() {
-            return new Course(base.id,name,status,base.author,world,region,start,goals,timeLimit,loadout,triggers,failLava,failOutside,rev,route,placeable,lanes,module,segments);
+            return new Course(base.id,name,status,base.author,world,region,start,goals,timeLimit,loadout,triggers,failLava,failOutside,rev,route,placeable,lanes,module,segments,limitTicks);
         }
     }
     public Course withName(String value) { return edit().name(value).build(); }
@@ -119,7 +124,7 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
                 && goals.equals(other.goals) && timeLimitSeconds==other.timeLimitSeconds && loadout.equals(other.loadout)
                 && unnamed(triggers).equals(unnamed(other.triggers)) && failLava.equals(other.failLava) && failOutside.equals(other.failOutside)
                 && route.equals(other.route) && placeable.equals(other.placeable)
-                && Objects.equals(module,other.module) && segments.equals(other.segments);
+                && Objects.equals(module,other.module) && segments.equals(other.segments) && limitTicks.equals(other.limitTicks);
     }
     /** Trigger names are labels for builders only. */
     private static List<Trigger> unnamed(List<Trigger> triggers) { return triggers.stream().map(t -> t.withName(null)).toList(); }
@@ -152,7 +157,7 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
                 s==null ? null : new Spot(2*a+1-s.x(),s.y(),s.z(),-s.yaw(),s.pitch()),
                 goals.stream().map(g -> g.mirrorX(a)).toList(),timeLimitSeconds,loadout,triggers.stream().map(t -> t.mirrorX(a)).toList(),
                 failLava,failOutside,rev,route.stream().map(p -> new RoutePoint(2*a+1-p.x(),p.y(),p.z())).toList(),
-                placeable.stream().map(p -> p.mirrorX(a)).toList(),lanes,module,segments);
+                placeable.stream().map(p -> p.mirrorX(a)).toList(),lanes,module,segments,limitTicks);
     }
     /** Every position moved by d (the definition for a lane at that offset). */
     public Course moved(BlockPos d) {
@@ -161,7 +166,7 @@ public record Course(String id,String name,CourseStatus status,UUID author,UUID 
                 s==null ? null : new Spot(s.x()+d.x(),s.y()+d.y(),s.z()+d.z(),s.yaw(),s.pitch()),
                 goals.stream().map(g -> g.plus(d)).toList(),timeLimitSeconds,loadout,triggers.stream().map(t -> t.moved(d)).toList(),
                 failLava,failOutside,rev,route.stream().map(p -> new RoutePoint(p.x()+d.x(),p.y()+d.y(),p.z()+d.z())).toList(),
-                placeable.stream().map(p -> p.plus(d)).toList(),null,module,segments.stream().map(s2 -> s2.moved(d)).toList());
+                placeable.stream().map(p -> p.plus(d)).toList(),null,module,segments.stream().map(s2 -> s2.moved(d)).toList(),limitTicks);
     }
     /** What still has to be set before the course can be played, as message keys. */
     public List<String> problems() {

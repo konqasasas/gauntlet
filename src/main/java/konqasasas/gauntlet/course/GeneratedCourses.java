@@ -13,9 +13,14 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /**
  * /gauntlet generate <profile> [seed]: builds a course out of modules at the test
- * place (config generator.place) and saves it as the course gen_<profile>, playable
+ * place and saves it as the course gen_<profile>, playable
  * like any course. Every course generated before (of any profile) is cleared first:
  * they all share the test place. /module remove clears one.
+ *
+ * The course's start is its own (config generator.place, the block it stands on, and
+ * start-yaw), not the first module's: the first module's start block goes at
+ * start-offset from it. Both are whole blocks (a module's start is floored), so the
+ * offset is whole too.
  *
  * Copying: the boxes of the new modules are emptied, then every module's blocks
  * are copied in order (a later module's start block replaces the earlier goal
@@ -32,9 +37,13 @@ public final class GeneratedCourses {
         if(p==null) { Msg.send(player,"editor.generate.no-profile",Msg.arg("profile",profileName)); return; }
         String id="gen_"+profileName.toLowerCase(Locale.ROOT);
         if(!CourseStore.validId(id)) { Msg.send(player,"editor.generate.no-profile",Msg.arg("profile",profileName)); return; }
-        Location origin=parsePlace(config.getString("place",""));
-        if(origin==null) { Msg.send(player,"editor.generate.no-place"); return; }
-        World world=origin.getWorld();
+        Location place=parsePlace(config.getString("place",""));
+        if(place==null) { Msg.send(player,"editor.generate.no-place"); return; }
+        BlockPos startOffset=parseOffset(config.getString("start-offset","0 0 0"));
+        if(startOffset==null) { Msg.send(player,"editor.generate.bad-offset"); return; }
+        World world=place.getWorld();
+        BlockPos startBlock=new BlockPos(place.getBlockX(),place.getBlockY(),place.getBlockZ());
+        Spot courseStart=new Spot(startBlock.x()+.5,startBlock.y()+1,startBlock.z()+.5,(float)config.getDouble("start-yaw",0),0);
         Generator.Profile profile;
         try { profile=profile(p); }
         catch(IllegalArgumentException e) { Msg.send(player,"editor.generate.bad-profile",Msg.arg("profile",profileName)); return; }
@@ -58,7 +67,7 @@ public final class GeneratedCourses {
             sources.put(c.id(),c);
         }
         Generator.Plan plan;
-        try { plan=Generator.plan(pieces,profile,settings,new BlockPos(origin.getBlockX(),origin.getBlockY(),origin.getBlockZ()),seed); }
+        try { plan=Generator.plan(pieces,profile,settings,startBlock.plus(startOffset),seed); }
         catch(Generator.BandConflict e) { Msg.send(player,"editor.generate.band-conflict",Msg.arg("profile",profileName),Msg.arg("band",GeneratorMenus.describe(player,e.band))); return; }
         if(!plan.ok()) {
             Msg.send(player,"editor.generate.stuck",Msg.arg("index",plan.failedAt()+1),Msg.arg("difficulty",plan.target()),
@@ -73,41 +82,47 @@ public final class GeneratedCourses {
             if(!old.id().equals(id)) try { store.delete(old.id()); } catch(IOException e) { plugin.getLogger().log(Level.WARNING,"Cannot delete generated course "+old.id(),e); }
         }
         for(Generator.Placed placed:plan.placed()) fill(world,placed.region(),Material.AIR.createBlockData());
+        // Something to stand on at the course's start (the first module's start block when there is no offset).
+        world.getBlockAt(startBlock.x(),startBlock.y(),startBlock.z()).setBlockData(jointBlock,false);
         for(Generator.Placed placed:plan.placed()) copy(Bukkit.getWorld(sources.get(placed.piece().id()).world()),world,pieces.stream().filter(x -> x.id().equals(placed.piece().id())).findFirst().orElseThrow(),placed);
         for(BlockPos j:plan.joints()) world.getBlockAt(j.x(),j.y(),j.z()).setBlockData(jointBlock,false);
 
-        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous);
+        Course course=build(id,profileName,seed,player.getUniqueId(),world.getUID(),plan,sources,previous,courseStart,startBlock,Math.max(0,config.getDouble("buffer-percent",10)));
         try {
             if(previous==null) store.create(course);
             else store.save(course.sameGameplay(previous) ? course : course.edit().rev(previous.rev()+1).build());
         } catch(IOException|RuntimeException e) {
             Msg.send(player,"editor.generate.save-failed"); plugin.getLogger().log(Level.SEVERE,"Cannot save generated course "+id,e); return;
         }
+        int total=course.segments().stream().mapToInt(Segment::ticks).sum();
         Msg.send(player,"editor.generate.done",Msg.arg("id",id),Msg.arg("count",plan.placed().size()),Msg.arg("seed",seed),
+                Msg.arg("limit",konqasasas.gauntlet.play.RunClock.seconds(course.limitTicks())),Msg.arg("total",konqasasas.gauntlet.play.RunClock.seconds(total)),
                 Msg.arg("modules",String.join(" → ",plan.placed().stream().map(x -> x.piece().id()+"("+x.piece().difficulty()+")").toList())));
     }
 
     /** Everything of the modules moved into place, as one course. */
-    private Course build(String id,String profile,long seed,UUID author,UUID world,Generator.Plan plan,Map<String,Course> sources,Course previous) {
+    private Course build(String id,String profile,long seed,UUID author,UUID world,Generator.Plan plan,Map<String,Course> sources,Course previous,
+                         Spot start,BlockPos startBlock,double bufferPercent) {
         List<Segment> segments=new ArrayList<>();
         List<Trigger> triggers=new ArrayList<>(); List<RoutePoint> route=new ArrayList<>(); List<BlockPos> placeable=new ArrayList<>();
         Region box=null;
         for(Generator.Placed placed:plan.placed()) {
             Course moved=asPlaced(sources.get(placed.piece().id()),placed);
-            Module m=sources.get(placed.piece().id()).module();
-            segments.add(new Segment(placed.piece().id(),moved.region(),m.seconds(),moved.loadout(),m.counts()));
+            Course source=sources.get(placed.piece().id()); Module m=source.module();
+            segments.add(new Segment(placed.piece().id(),moved.region(),m.ticks(),moved.loadout(),m.counts(),source.rev()));
             for(Trigger t:moved.triggers()) if(triggers.stream().noneMatch(x -> x.pos().equals(t.pos()))) triggers.add(t);
             route.addAll(moved.route());
             placeable.addAll(moved.placeable());
             box=box==null ? moved.region() : union(box,moved.region());
         }
         for(BlockPos j:plan.joints()) box=union(box,new Region(j.x(),j.y(),j.z(),j.x(),j.y()+3,j.z()));
+        box=union(box,new Region(startBlock.x(),startBlock.y(),startBlock.z(),startBlock.x(),startBlock.y()+3,startBlock.z()));
         Course first=asPlaced(sources.get(plan.placed().getFirst().piece().id()),plan.placed().getFirst());
         String name=("生成 "+profile+" #"+Long.toHexString(seed)).substring(0,Math.min(Course.MAX_NAME_LENGTH,("生成 "+profile+" #"+Long.toHexString(seed)).length()));
         Course base=previous!=null ? previous : Course.create(id,author,world);
-        var b=base.edit().name(name).status(CourseStatus.DRAFT).region(world,box).start(first.start()).goals(List.of(plan.placed().getLast().exit()))
+        var b=base.edit().name(name).status(CourseStatus.DRAFT).region(world,box).start(start).goals(List.of(plan.placed().getLast().exit()))
                 .timeLimit(0).triggers(triggers).route(route.size()>Course.MAX_ROUTE_POINTS ? route.subList(0,Course.MAX_ROUTE_POINTS) : route)
-                .placeable(placeable).lanes(List.of()).module(null).segments(segments).failLava(true).failOutside(true);
+                .placeable(placeable).lanes(List.of()).module(null).segments(segments).limitTicks(Segment.limit(segments,bufferPercent)).failLava(true).failOutside(true);
         for(int slot=0;slot<Course.COURSE_SLOTS;slot++) b.loadout(slot,first.loadout().get(slot));
         return b.build();
     }
@@ -182,7 +197,14 @@ public final class GeneratedCourses {
             } else target.setBlockData(data,false);
         }
     }
-    /** "world x y z": where the first module's start block goes. */
+    /** "dx dy dz" (whole blocks): from the course's start block to the first module's start block; null when malformed. */
+    static BlockPos parseOffset(String offset) {
+        String[] p=offset.strip().split("\s+");
+        if(p.length!=3) return null;
+        try { return new BlockPos(Integer.parseInt(p[0]),Integer.parseInt(p[1]),Integer.parseInt(p[2])); }
+        catch(NumberFormatException e) { return null; }
+    }
+    /** "world x y z": the block the course's start stands on. */
     private static Location parsePlace(String place) {
         String[] p=place.strip().split("\\s+");
         if(p.length!=4) return null;

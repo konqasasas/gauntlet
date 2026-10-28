@@ -19,6 +19,22 @@ class CourseStoreTest {
         assertEquals(course,new CourseStore(dir).get("rank1-01"));
         assertTrue(Files.readString(dir.resolve("rank1-01.json")).contains("はじめの一歩"),"Names stay human-readable");
     }
+    @Test void moduleAndSegmentSecondsFromOlderFilesBecomeTicks() throws Exception {
+        Course module=Course.create("m",author,world).edit().module(Module.standard()).build();
+        Course generated=Course.create("gen_test",author,world).edit()
+                .segments(List.of(new Segment("m",Region.of(0,0,0,1,1,1),100,null,null,3))).limitTicks(110).build();
+        var store=new CourseStore(dir); store.create(module); store.create(generated);
+        // As written before times were ticks.
+        Files.writeString(dir.resolve("m.json"),Files.readString(dir.resolve("m.json")).replace("\"ticks\": 200","\"seconds\": 12"));
+        Files.writeString(dir.resolve("gen_test.json"),Files.readString(dir.resolve("gen_test.json"))
+                .replace("\"ticks\": 100","\"seconds\": 5").replaceAll(",\\s*\"moduleRev\": 3","").replaceAll(",\\s*\"limitTicks\": 110",""));
+        var loaded=new CourseStore(dir);
+        assertEquals(List.of(),loaded.invalidFiles());
+        assertEquals(240,loaded.get("m").module().ticks());
+        Segment segment=loaded.get("gen_test").segments().getFirst();
+        assertEquals(100,segment.ticks()); assertEquals(0,segment.moduleRev());
+        assertEquals(0,loaded.get("gen_test").limitTicks(),"An older generated course has no limit until it is generated again");
+    }
     @Test void createRefusesExistingIdAndSaveRequiresExistingCourse() throws Exception {
         var store=new CourseStore(dir); store.create(Course.create("a",author,world));
         assertThrows(IOException.class,() -> store.create(Course.create("a",author,world)));

@@ -27,13 +27,28 @@ public final class CourseStore {
             for(Path file:files.filter(f -> f.getFileName().toString().endsWith(".json")).sorted().toList()) {
                 String id=file.getFileName().toString().replaceFirst("\\.json$","");
                 try {
-                    CourseFile saved=gson.fromJson(Files.readString(file),CourseFile.class);
+                    JsonObject json=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
+                    secondsToTicks(json);
+                    CourseFile saved=gson.fromJson(json,CourseFile.class);
                     if(saved==null || saved.format()!=1 || saved.course()==null || !saved.course().id().equals(id))
                         throw new IllegalArgumentException("Unsupported format or id mismatch");
                     courses.put(id,saved.course());
                 } catch(IOException|RuntimeException e) { invalidFiles.add(file.getFileName()+": "+e.getMessage()); }
             }
         }
+    }
+    /** Module and segment times were whole seconds before they were ticks. */
+    static void secondsToTicks(JsonObject file) {
+        JsonObject course=file.has("course") && file.get("course").isJsonObject() ? file.getAsJsonObject("course") : null;
+        if(course==null) return;
+        if(course.has("module") && course.get("module").isJsonObject()) convert(course.getAsJsonObject("module"));
+        if(course.has("segments") && course.get("segments").isJsonArray())
+            for(JsonElement e:course.getAsJsonArray("segments")) if(e.isJsonObject()) convert(e.getAsJsonObject());
+    }
+    private static void convert(JsonObject o) {
+        if(o.has("ticks") || !o.has("seconds")) return;
+        o.addProperty("ticks",o.get("seconds").getAsInt()*20);
+        o.remove("seconds");
     }
     public static boolean validId(String id) { return id!=null && ID.matcher(id).matches(); }
     public List<String> invalidFiles() { return List.copyOf(invalidFiles); }

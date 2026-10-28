@@ -32,6 +32,8 @@ public final class RunClock {
     public long elapsed() {
         return switch(phase) { case WAITING -> 0; case RUNNING -> count-startCount; case FINISHED -> result; };
     }
+    /** Every client tick end received so far, never reset (for timing parts of a run, such as a module). */
+    public long received() { return count; }
     public void reset() { phase=Phase.WAITING; pendingAction=false; armed=false; }
     public static String seconds(long ticks) { return String.format("%d.%02d",ticks/20,(ticks%20)*5); }
 }
