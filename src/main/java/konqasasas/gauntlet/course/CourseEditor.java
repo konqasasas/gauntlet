@@ -469,6 +469,15 @@ public final class CourseEditor implements Listener,CommandExecutor,TabCompleter
                         e -> changeModule(player,id,x -> x.withCount(index,x.counts().get(index)+(e.isShiftClick() ? 10 : 1)*(e.isRightClick() ? -1 : 1))));
             }
         }
+        if(m!=null) {
+            Integer own=m.bufferPercent();
+            int fallback=(int)Math.round(plugin.getConfig().getDouble("generator.buffer-percent",10));
+            menu.button(20,Msg.icon(player,Material.HONEY_BOTTLE,own==null ? "editor.module.buffer-default" : "editor.module.buffer",
+                    Msg.arg("value",own==null ? fallback : own)),e -> {
+                if(e.getClick()==ClickType.DROP || e.getClick()==ClickType.CONTROL_DROP) changeModule(player,id,x -> x.withBufferPercent(null));
+                else changeModule(player,id,x -> x.withBufferPercent((x.bufferPercent()==null ? fallback : x.bufferPercent())+(e.isShiftClick() ? 10 : 1)*(e.isRightClick() ? -1 : 1)));
+            });
+        }
         menu.label(22,Msg.icon(player,Material.BOOK,"editor.module.help"));
         menu.button(18,Msg.icon(player,Material.ARROW,"editor.back"),e -> openEdit(player,id));
         menu.open(player);

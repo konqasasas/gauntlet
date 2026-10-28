@@ -123,7 +123,8 @@ public final class GeneratedCourses {
         for(Generator.Placed placed:plan.placed()) {
             Course moved=asPlaced(sources.get(placed.piece().id()),placed);
             Course source=sources.get(placed.piece().id()); Module m=source.module();
-            segments.add(new Segment(placed.piece().id(),moved.region(),m.ticks(),moved.loadout(),m.counts(),source.rev()));
+            int buffer=m.bufferPercent()!=null ? m.bufferPercent() : (int)Math.round(bufferPercent);
+            segments.add(new Segment(placed.piece().id(),moved.region(),m.ticks(),moved.loadout(),m.counts(),source.rev(),buffer));
             for(Trigger t:moved.triggers()) if(triggers.stream().noneMatch(x -> x.pos().equals(t.pos()))) triggers.add(t);
             route.addAll(moved.route());
             placeable.addAll(moved.placeable());
@@ -131,6 +132,9 @@ public final class GeneratedCourses {
         }
         for(BlockPos j:plan.joints()) box=union(box,new Region(j.x(),j.y(),j.z(),j.x(),j.y()+3,j.z()));
         box=union(box,new Region(startBlock.x(),startBlock.y(),startBlock.z(),startBlock.x(),startBlock.y()+3,startBlock.z()));
+        // Past the goal: the last module's goal block and the 3 blocks beyond it (+Z), so running on after the goal stays inside.
+        BlockPos goal=plan.placed().getLast().exit();
+        box=union(box,new Region(goal.x(),goal.y(),goal.z(),goal.x(),goal.y()+3,goal.z()+3));
         Course first=asPlaced(sources.get(plan.placed().getFirst().piece().id()),plan.placed().getFirst());
         String full=(measure ? "計測 " : "生成 ")+profile+" #"+Long.toHexString(seed);
         String name=full.substring(0,Math.min(Course.MAX_NAME_LENGTH,full.length()));

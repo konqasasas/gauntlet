@@ -22,7 +22,7 @@ class CourseStoreTest {
     @Test void moduleAndSegmentSecondsFromOlderFilesBecomeTicks() throws Exception {
         Course module=Course.create("m",author,world).edit().module(Module.standard()).build();
         Course generated=Course.create("gen_test",author,world).edit()
-                .segments(List.of(new Segment("m",Region.of(0,0,0,1,1,1),100,null,null,3))).limitTicks(110).build();
+                .segments(List.of(new Segment("m",Region.of(0,0,0,1,1,1),100,null,null,3,null))).limitTicks(110).build();
         var store=new CourseStore(dir); store.create(module); store.create(generated);
         // As written before times were ticks.
         Files.writeString(dir.resolve("m.json"),Files.readString(dir.resolve("m.json")).replace("\"ticks\": 200","\"seconds\": 12"));
