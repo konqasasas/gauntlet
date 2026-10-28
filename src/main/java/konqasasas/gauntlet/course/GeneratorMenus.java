@@ -19,7 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  * right click (with Shift, by more). Everything is saved at once and used by the next generation.
  */
 public final class GeneratorMenus {
-    private static final int MAX_PROFILES=18,MAX_BANDS=8,SAMPLES=4;
+    private static final int MAX_PROFILES=18,MAX_BANDS=8,SAMPLES=4,MAX_MATCH_COURSES=18;
     private static final Material[] LEVEL_ICONS={Material.LIME_CONCRETE,Material.YELLOW_CONCRETE,Material.ORANGE_CONCRETE,Material.RED_CONCRETE,Material.PURPLE_CONCRETE};
     private final JavaPlugin plugin;
     private final CourseEditor editor;
@@ -98,6 +98,7 @@ public final class GeneratorMenus {
             save("joint-block",hand.getType().createBlockData().getAsString());
             openSettings(player);
         });
+        menu.button(8,Msg.icon(player,Material.GOLDEN_HELMET,"editor.generator.match",Msg.arg("count",g.getStringList("match.courses").size())),e -> openMatch(player));
         List<String> names=profileNames();
         for(int i=0;i<Math.min(names.size(),MAX_PROFILES);i++) {
             String name=names.get(i);
@@ -167,6 +168,12 @@ public final class GeneratorMenus {
         menu.button(4,Msg.icon(player,Material.SLIME_BALL,"editor.generator.bumpiness",Msg.arg("value",p.bumpiness())),
                 e -> change(player,name,q -> new Generator.Profile(q.modules(),q.weights(),Math.clamp(q.bumpiness()+step(e,4)*.5,0,20),q.bands())));
         menu.button(6,Msg.icon(player,Material.SPYGLASS,"editor.generator.samples",samples(player,p)),e -> openProfile(player,name));
+        String profilePlace=config().getString("profiles."+name+".place","");
+        menu.button(7,Msg.icon(player,Material.COMPASS,"editor.generator.profile-place",Msg.arg("place",profilePlace.isBlank() ? "—" : profilePlace)),e -> {
+            if(!editor.admin(player)) return;
+            setProfilePlace(player,name);
+            openProfile(player,name);
+        });
         ConfigurationSection section=config().getConfigurationSection("profiles."+name);
         boolean own=section!=null && section.contains("buffer-percent");
         int buffer=(int)Math.round(own ? section.getDouble("buffer-percent") : config().getDouble("buffer-percent",10));
@@ -219,6 +226,55 @@ public final class GeneratorMenus {
             editor.tell(player,"editor.modules.profile-removed",Msg.arg("profile",name));
             openSettings(player);
         });
+        menu.open(player);
+    }
+    /** The profile's place (where the match generates it): the block under the player's feet, facing as they do. */
+    void setProfilePlace(Player player,String name) {
+        Block under=player.getLocation().subtract(0,.01,0).getBlock();
+        String place=under.getWorld().getName()+" "+under.getX()+" "+under.getY()+" "+under.getZ();
+        save("profiles."+name+".place",place);
+        save("profiles."+name+".start-yaw",Math.round(player.getLocation().getYaw()));
+        editor.tell(player,"editor.generator.profile-place-set",Msg.arg("profile",name),Msg.arg("place",place));
+    }
+
+    // ---- Match: which profiles become courses 1, 2, ... ----
+    void openMatch(Player player) {
+        if(!editor.admin(player)) return;
+        List<String> order=new ArrayList<>(config().getStringList("match.courses"));
+        List<String> names=profileNames();
+        Menu menu=new Menu(3,Msg.plain(player,"editor.match.title"));
+        for(int i=0;i<Math.min(order.size(),MAX_MATCH_COURSES);i++) {
+            int index=i; String name=order.get(i);
+            String place=config().getString("profiles."+name+".place","");
+            ItemStack icon=Msg.icon(player,place.isBlank() ? Material.PAPER : Material.FILLED_MAP,"editor.match.course",
+                    Msg.arg("n",i+1),Msg.arg("profile",name),Msg.arg("place",place.isBlank() ? Msg.plain(player,"editor.match.no-place") : place));
+            icon.setAmount(i+1);
+            menu.button(i,icon,e -> {
+                List<String> next=new ArrayList<>(config().getStringList("match.courses"));
+                if(index>=next.size()) { openMatch(player); return; }
+                if(e.isShiftClick()) next.remove(index);
+                else if(!names.isEmpty()) {
+                    int at=names.indexOf(next.get(index));
+                    next.set(index,names.get(Math.floorMod(at+(e.isRightClick() ? -1 : 1),names.size())));
+                }
+                save("match.courses",next); openMatch(player);
+            });
+        }
+        if(order.size()<MAX_MATCH_COURSES && !names.isEmpty()) menu.button(Math.min(order.size(),MAX_MATCH_COURSES-1),Msg.icon(player,Material.WRITABLE_BOOK,"editor.match.add"),e -> {
+            List<String> next=new ArrayList<>(config().getStringList("match.courses"));
+            next.add(next.isEmpty() ? names.getFirst() : next.getLast());
+            save("match.courses",next); openMatch(player);
+        });
+        menu.button(18,Msg.icon(player,Material.ARROW,"editor.generator.back"),e -> openSettings(player));
+        menu.button(22,Msg.icon(player,Material.EMERALD_BLOCK,"editor.match.start",Msg.arg("count",order.size())),e -> {
+            if(!e.isShiftClick() || !editor.admin(player)) return;
+            player.closeInventory(); generated.startMatch(player);
+        });
+        menu.button(24,Msg.icon(player,Material.REDSTONE_BLOCK,"editor.match.end",Msg.arg("open",generated.matchCourses().size())),e -> {
+            if(!e.isShiftClick() || !editor.admin(player)) return;
+            player.closeInventory(); generated.endMatch(player);
+        });
+        menu.label(26,Msg.icon(player,Material.BOOK,"editor.match.help"));
         menu.open(player);
     }
     private void play(Player player,String name,boolean practice) {

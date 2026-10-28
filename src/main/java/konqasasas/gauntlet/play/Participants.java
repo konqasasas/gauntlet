@@ -219,10 +219,19 @@ public final class Participants implements Listener {
         Msg.send(player,practice ? "play.enter.practice" : "play.enter.official",Msg.arg("course",course.name()));
         if(space.laneCount()>1) Msg.send(player,"play.lane.entered",Msg.arg("lane",lane+1),Msg.arg("count",space.laneCount()));
     }
-    /** In an era (with the rank it needs), the first course is open to all and the others once reached (builders: all). */
+    /**
+     * In an era (with the rank it needs), the first course is open to all and the others once reached (builders: all).
+     * In the match, course n+1 once course n of this match (its current revision) was cleared in an official run.
+     */
     public boolean mayStart(Player player,Course course) {
+        if(player.hasPermission(ADMIN)) return true;
+        int n=GeneratedCourses.matchIndex(course.id());
+        if(n>1) {
+            Course before=courses.get(GeneratedCourses.matchId(n-1));
+            return before!=null && before.status()==CourseStatus.DONE && runs.stats(before.id(),before.rev(),player.getUniqueId()).clears()>0;
+        }
         Era era=spaces.era(course);
-        if(era==null || player.hasPermission(ADMIN)) return true;
+        if(era==null) return true;
         if(progress.rank(player.getUniqueId())<era.requiredRank()) return false;
         return era.first(course.id()) || progress.reached(player.getUniqueId(),course.id());
     }
@@ -517,9 +526,18 @@ public final class Participants implements Listener {
                     : Msg.text(player,"play.goal.best",Msg.arg("best",time(player,best)),Msg.arg("diff",time(player,ticks-best)));
             Msg.send(player,"play.goal.chat",Msg.arg("course",course.name()),Msg.arg("time",time),Msg.arg("ticks",ticks),Msg.arg("comparison",comparison));
             rankUp(player,course);
+            matchCleared(player,course);
         }
         Sounds.system(player,Sound.UI_TOAST_CHALLENGE_COMPLETE,1f,1f);
         systemItems(player,session);
+    }
+    /** An official clear of a match course: the next course is open (or it was the last). */
+    private void matchCleared(Player player,Course course) {
+        int n=GeneratedCourses.matchIndex(course.id());
+        if(n==0) return;
+        Course next=courses.get(GeneratedCourses.matchId(n+1));
+        if(next!=null && next.status()==CourseStatus.DONE) Msg.send(player,"match.next",Msg.arg("n",n+1));
+        else Msg.send(player,"match.all-cleared");
     }
     /** An official clear of an era's boss raises the rank (never lowers it). */
     private void rankUp(Player player,Course course) {

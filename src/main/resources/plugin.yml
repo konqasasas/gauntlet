@@ -33,6 +33,9 @@ commands:
     description: Modules for generated courses (builders)
     usage: /module [menu | generate <profile> [seed] | play <profile> | practice <profile> | remove <profile> | settings | place | set <key> <value> | profile <name> <modules> <w1> <w2> <w3> <w4> <w5> [bumpiness]]
     permission: gauntlet.admin
+  match:
+    description: The match (courses 1, 2, ... open one after another)
+    usage: /match [play <n> | practice <n> | list | start | end | courses <profile>... | menu]
   ranking:
     description: Rankings
     usage: /ranking <course> | /ranking rank <n>

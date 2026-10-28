@@ -160,6 +160,7 @@ public final class ParkourGauntletPlugin extends JavaPlugin implements Listener,
             generated.moduleTimes(moduleTimes);
             courses.start();
             new ModuleCommands(this,courses,generated).start();
+            new MatchCommands(this,courses,generated,participants).start();
             kit=new KitRuns(this,participants,freeTriggers,courseItems,this::kitPlayer,this::savePoint,
                     freePlaceable,item -> tools.kind(item)==ToolItems.Kind.SCAFFOLD,this::retry);
             kit.start();

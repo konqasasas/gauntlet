@@ -273,7 +273,7 @@ editor.modules.create.lore:
 editor.modules.back.name: "モジュールの一覧へ"
 editor.modules.back.lore: []
 editor.prompt.new-module: "新しいモジュールのIDを入力してください（英小文字・数字・_・-、32文字まで）"
-editor.modules.usage: "/module | menu（生成の設定の画面） | generate プロファイル [シード] | measure プロファイル [シード]（計測用） | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 難易度1〜5の割合（5つ） [でこぼこ] | profile remove 名前"
+editor.modules.usage: "/module | menu（生成の設定の画面） | place [プロファイル]（足元をマスターの場所／プロファイルの場所に） | generate プロファイル [シード] | measure プロファイル [シード]（計測用） | play プロファイル | practice プロファイル | remove プロファイル | settings | place | set 項目 値 | profile 名前 個数 難易度1〜5の割合（5つ） [でこぼこ] | profile remove 名前"
 editor.modules.settings: "生成の設定：試験場所 <place>　難しい=難易度<hard>以上（続けて<streak>個まで）　つなぎ目 <joint>（長さ<length>、<block>）"
 editor.modules.profile-line: "<color:#cdbf9c>・プロファイル <profile>：<modules>個、分布 <distribution>、でこぼこ <bumpiness>"
 editor.modules.not-generated: "<profile> の生成したコースがありません。先に /module generate で作ってください。"
@@ -294,6 +294,7 @@ editor.generate.save-failed: "生成したコースを保存できませんで�
 editor.generate.done: "コース <id> を生成しました（<count>個、シード <seed>）：<modules>。制限時間 <limit>秒（モジュール時間の合計 <total>秒にバッファを足し、スタートの時間を足したもの）。/module play <id> で遊べます。"
 editor.generate.done-measure: "計測用のコース <id> を生成しました（<count>個、シード <seed>、制限時間なし）：<modules>。/module play <id> で遊べます。"
 editor.generate.measured-all: "すべてのモジュールに、今の版の通しの記録が<passes>回以上あります。計測用のコースは作りませんでした。"
+editor.generate.overlap: "<id> を作る場所に、ほかの生成したコース <other> があります。場所を変えるか、先に消してください。ワールドは変えていません。"
 editor.generate.band-conflict: "プロファイル <profile> の難易度帯の決まりを満たせません（<band>）。個数や、ほかの帯との組み合わせを見直してください。ワールドは変えていません。"
 editor.modules.generator.name: "生成の設定"
 editor.modules.generator.lore:
@@ -413,6 +414,35 @@ editor.generator.buffer-default.name: "バッファ：<value>%（全体の値）
 editor.generator.buffer-default.lore:
   - "<color:#cdbf9c>このプロファイルの値はなく、全体の値（generator.buffer-percent）を使う"
   - "<color:#cdbf9c>左：＋1　右：−1　Shift で10ずつ（このプロファイルだけの値になる）"
+editor.generator.profile-place.name: "このプロファイルの場所：<place>"
+editor.generator.profile-place.lore:
+  - "<color:#cdbf9c>競技開始のとき、このプロファイルのコースをここに生成する"
+  - "<color:#cdbf9c>クリックで、足元のブロックと今の向きにする（/module place プロファイル でも同じ）"
+editor.generator.profile-place-set: "プロファイル <profile> の場所を足元のブロック（<place>）にしました。"
+editor.generator.match.name: "<color:#e2c27a>競技（コース<count>個）"
+editor.generator.match.lore:
+  - "<color:#cdbf9c>クリック：どのプロファイルをコース1、2…にするか決めて、競技を始める"
+editor.match.title: "競技のコース"
+editor.match.course.name: "コース<n>：<profile>"
+editor.match.course.lore:
+  - "<color:#cdbf9c>場所：<place>"
+  - "<color:#cdbf9c>左：次のプロファイル　右：前のプロファイル　Shift＋クリック：このコースを外す"
+editor.match.no-place: "未設定（プロファイルの画面で決める）"
+editor.match.add.name: "コースを足す"
+editor.match.add.lore:
+  - "<color:#cdbf9c>最後のコースと同じプロファイルで足す。クリックで変えられる"
+editor.match.start.name: "<color:#9be08b>競技を始める（コース<count>個）"
+editor.match.start.lore:
+  - "<color:#cdbf9c>Shift＋クリック：それぞれのプロファイルの場所に、コース1から順に生成する"
+  - "<color:#cdbf9c>前の競技のコースは作り直す。前の競技のクリアは、新しい競技の解放に数えない"
+editor.match.end.name: "<color:#e08b8b>競技を終える（今 <open>個）"
+editor.match.end.lore:
+  - "<color:#cdbf9c>Shift＋クリック：競技のコースを全部消して閉じる（記録は残る）"
+editor.match.help.name: "競技の流れ"
+editor.match.help.lore:
+  - "<color:#cdbf9c>コース1を本番でクリアした人だけ、コース2に入れる（以下同じ）"
+  - "<color:#cdbf9c>落ちたら今いるコースの最初から。プレイヤーは /match で入る"
+  - "<color:#cdbf9c>/module generate はマスターの場所に作る（デバッグ用。競技とは別）"
 editor.generator.play.name: "遊ぶ"
 editor.generator.play.lore: []
 editor.generator.practice.name: "練習する"
@@ -1067,3 +1097,18 @@ editor.describe.mob: "mob：<mob>"
 editor.describe.mob-at: "<color:#cdbf9c>位置：<spot>"
 editor.describe.sound: "サウンド：<sound>（<volume> / <pitch>）"
 editor.describe.water: "水：<count>マス（<time>）"
+match.usage: "/match（入れるいちばん先のコース） | play 番号 | practice 番号 | list"
+match.none: "今は競技が開かれていません。"
+match.no-course: "コース<n>はありません。"
+match.locked: "コース<n>は、コース<before>を本番でクリアすると入れます。"
+match.list-open: "<color:#9be08b>コース<n>：入れる"
+match.list-locked: "<color:#cdbf9c>コース<n>：まだ（前のコースをクリアすると入れる）"
+match.next: "<color:#e2c27a>コース<n>に進めるようになりました。</color><click:run_command:'/match'><color:#9be08b><u>［コース<n>へ］</u></color></click>"
+match.all-cleared: "<color:#e2c27a>すべてのコースをクリアしました！"
+match.course-name: "コース<n>"
+match.started: "<color:#e2c27a>競技が始まりました（コース<count>個）。/match で挑戦できます。"
+match.ended: "競技を終えました。コースを消して閉じました。"
+match.stopped: "コース<n>を作れなかったので、そこで止めました。コース<n>より前は作り直してあります。"
+match.no-courses: "競技のコースが決まっていません。/match menu か /match courses プロファイル… で決めてください。"
+match.no-place: "プロファイル <profile> の場所が決まっていません。その場所に立って /module place <profile> で決めてください。"
+match.courses-set: "競技のコースを決めました：<courses>"

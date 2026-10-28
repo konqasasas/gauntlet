@@ -19,7 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   /module play <profile> | practice <profile>  play the generated course (official / practice)
  *   /module remove <profile>                   clear the generated course and delete it
  *   /module settings                           what generation uses now
- *   /module place                              the course's start: the block under your feet, facing as you do
+ *   /module place [profile]                    the master place (or the profile's place, used by the match): the block under your feet, facing as you do
  *   /module set <key> <value>                  hard-from, max-hard-streak, joint, joint-length, joint-block
  *   /module profile <name> <modules> <w1> <w2> <w3> <w4> <w5> [bumpiness] | /module profile remove <name>
  *     (w1-w5: the weights of difficulties 1-5, any scale; bumpiness 0 = easy to hard in order, more = more ups and downs)
@@ -60,6 +60,10 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
             case "settings" -> settings(player);
             case "menu" -> editor.generatorMenus.openSettings(player);
             case "place" -> {
+                if(args.length==2) {
+                    if(!plugin.getConfig().isConfigurationSection("generator.profiles."+args[1])) { Msg.send(player,"editor.generate.no-profile",Msg.arg("profile",args[1])); return true; }
+                    editor.generatorMenus.setProfilePlace(player,args[1]); return true;
+                }
                 Block under=player.getLocation().subtract(0,.01,0).getBlock();
                 String place=under.getWorld().getName()+" "+under.getX()+" "+under.getY()+" "+under.getZ();
                 save("generator.place",place);
@@ -142,7 +146,7 @@ public final class ModuleCommands implements CommandExecutor,TabCompleter {
         List<String> all=new ArrayList<>();
         ConfigurationSection profiles=plugin.getConfig().getConfigurationSection("generator.profiles");
         if(args.length==1) all.addAll(List.of("menu","generate","measure","play","practice","remove","settings","place","set","profile"));
-        else if(args.length==2 && Set.of("generate","measure","play","practice","remove").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
+        else if(args.length==2 && Set.of("generate","measure","play","practice","remove","place").contains(args[0].toLowerCase(Locale.ROOT)) && profiles!=null) all.addAll(profiles.getKeys(false));
         else if(args.length==2 && args[0].equalsIgnoreCase("set")) all.addAll(KEYS);
         else if(args.length==3 && args[0].equalsIgnoreCase("set") && args[1].equalsIgnoreCase("joint")) all.addAll(List.of("none","platform"));
         else if(args.length==2 && args[0].equalsIgnoreCase("profile")) { all.add("remove"); if(profiles!=null) all.addAll(profiles.getKeys(false)); }
